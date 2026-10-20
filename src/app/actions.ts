@@ -15,6 +15,7 @@ import { nowIso, toIsoDate, todayLocal } from "@/lib/dates";
 import { DICTS } from "@/lib/i18n";
 import { getDict } from "@/lib/i18n-server";
 import { buildRecords, commitImport, previewImport } from "@/lib/importer";
+import { reviewCall } from "@/lib/reviews";
 import { formatPhone, normalizePhone, readTable, str } from "@/lib/sheets";
 import { applyStatusUpdates, canWorkCompany, logCall, logVisit, relatedTasks, type CallInput } from "@/lib/workflow";
 
@@ -442,6 +443,23 @@ export async function logCallAction(_: ActionState, form: FormData): Promise<Act
   }
   revalidatePath("/calls", "layout");
   return { ok: true, message: t.callSaved };
+}
+
+// Supervisors and administrators mark a call as reviewed, with an optional comment the agent will see.
+export async function reviewCallAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const u = await assertUser(MANAGERS);
+  const { t } = await getDict();
+  const id = Number(form.get("attemptId"));
+  const comment = String(form.get("comment") ?? "");
+  try {
+    const a = await reviewCall(u, id, comment);
+    await logActivity(u, "call.reviewed", { campaignId: a.campaignId, entity: "call", entityId: a.id, summary: comment.trim() ? "Con comentario" : "Sin comentario" });
+  } catch {
+    return { error: "Not found" };
+  }
+  revalidatePath("/reviews", "layout");
+  revalidatePath("/calls", "layout");
+  return { ok: true, message: t.reviewSaved };
 }
 
 export async function addPhoneAction(_: ActionState, form: FormData): Promise<ActionState> {

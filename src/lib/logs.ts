@@ -2,12 +2,13 @@ import "server-only";
 import { and, desc, eq, gte, like, lte, or, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { activityLog, errorLog } from "@/db/schema";
+import { localDayEnd, localDayStart } from "./dates";
 
 export type LogFilters = { action?: string; user?: string; q?: string; from?: string; to?: string; source?: string };
 
 // Dates in the filters are local (UTC-4) days; stored times are UTC.
-const startOf = (d: string) => new Date(`${d}T04:00:00Z`).toISOString();
-const endOf = (d: string) => new Date(new Date(`${d}T04:00:00Z`).getTime() + 86400000 - 1).toISOString();
+const startOf = localDayStart;
+const endOf = localDayEnd;
 
 export async function activityRows(f: LogFilters, limit: number, offset = 0) {
   const w: SQL[] = [];

@@ -163,8 +163,12 @@ export const callAttempts = sqliteTable(
     isResponsible: integer("is_responsible", { mode: "boolean" }),
     whatsappSent: integer("whatsapp_sent", { mode: "boolean" }).notNull().default(false),
     notes: text("notes"),
+    // Review by a supervisor or administrator
+    reviewedAt: text("reviewed_at"),
+    reviewedBy: integer("reviewed_by").references(() => users.id),
+    reviewComment: text("review_comment"),
   },
-  (t) => [index("attempts_company").on(t.companyId), index("attempts_campaign").on(t.campaignId)],
+  (t) => [index("attempts_company").on(t.companyId), index("attempts_campaign").on(t.campaignId), index("attempts_called_at").on(t.calledAt)],
 );
 
 // Result of an attempt for each establishment of the company ("se tipifica cada establecimiento").

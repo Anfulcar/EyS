@@ -16,5 +16,5 @@ export default async function CampaignDashboard({ params }: { params: Promise<{ 
   const now = new Date(todayLocal()).getTime();
   const progress = Math.min(100, Math.max(0, Math.round(((now - start) / Math.max(1, end - start)) * 100)));
   const daysLeft = Math.max(0, Math.round((end - now) / 86400000));
-  return <StatsView s={s} t={t} lang={lang} period={{ progress, daysLeft }} />;
+  return <StatsView s={s} t={t} lang={lang} period={{ progress, daysLeft }} listHref={`/campaigns/${id}/list`} />;
 }

@@ -141,30 +141,72 @@ test("main journey: campaign → upload → assign → calls → visit → dashb
   expect(download.status()).toBe(404);
   expect((await page.goto("/logs"))?.status()).toBe(404);
 
-  // Administrator: dashboard and export
+  // Agent: "Llamadas realizadas" shows only their own calls, without the review form
+  await page.goto("/reviews");
+  await expect(page.locator("tbody tr")).toHaveCount(3);
+  await page.locator("tbody tr", { hasText: "Tienda Tres" }).getByRole("link").first().click();
+  await expect(page.getByRole("heading", { name: "Resumen de la llamada" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Marcar como revisada" })).toHaveCount(0);
+  const tiendaCall = page.url();
+
+  // Administrator: dashboard numbers open the list of establishments
   await signIn(page, "admin", NEW_PW);
   await page.goto(campaignUrl);
   await expect(page.getByText("Llamados al menos 1 vez")).toBeVisible();
+  await page.getByRole("link", { name: /Requieren visita/ }).first().click();
+  await expect(page.getByRole("heading", { name: /Requieren visita/ })).toBeVisible();
+  await expect(page.getByText("Tienda Tres", { exact: true })).toBeVisible();
+  await expect(page.getByText("Buceo Uno", { exact: true })).toHaveCount(0);
+  const list = await page.request.get(page.url().replace(/\/campaigns\/(\d+)\/list\?/, "/api/list?campaign=$1&"));
+  expect(list.status()).toBe(200);
+
+  // Administrator: reviews a call with a comment
+  await page.goto("/reviews?review=no");
+  await expect(page.locator("tbody tr")).toHaveCount(3);
+  await page.goto(tiendaCall);
+  await page.fill("#review-comment", "Buen manejo de la objeción.");
+  await page.getByRole("button", { name: "Marcar como revisada" }).click();
+  await expect(page.getByText("Revisión guardada.")).toBeVisible();
+  await page.goto("/reviews?review=no");
+  await expect(page.locator("tbody tr")).toHaveCount(2);
+
+  // Administrator: export with chosen sheets and columns
   await page.goto(campaignUrl + "/export");
-  const [file] = await Promise.all([page.waitForEvent("download"), page.getByRole("link", { name: /Descargar/ }).first().click()]);
+  await page.locator("summary", { hasText: "Matriz de seguimiento" }).getByText("Elegir columnas").click();
+  await page.locator("label", { hasText: /^RUT$/ }).locator("input").uncheck();
+  await page.locator("summary", { hasText: "Visitas" }).locator("input[name=sheet]").uncheck();
+  const [file] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Descargar Excel" }).click()]);
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.readFile((await file.path())!);
+  expect(wb.getWorksheet("Visitas")).toBeUndefined();
   const sheet = wb.getWorksheet("Matriz de seguimiento")!;
-  const names = sheet.getColumn(5).values.map(String);
+  expect(sheet.getRow(1).values).not.toContain("RUT");
+  const names = sheet.getColumn(4).values.map(String); // "Nombre comercial" (RUT left out)
   expect(names).toContain("Buceo Uno");
-  const results = sheet.getColumn(31).values.map(String); // "Llamada 1 resultado"
+  const results = sheet.getColumn(30).values.map(String); // "Llamada 1 resultado"
   expect(results).toContain("En operación – iniciará solicitud (compromiso)");
+  const calls = wb.getWorksheet("Llamadas")!;
+  expect(calls.getColumn(23).values.map(String)).toContain("Buen manejo de la objeción.");
+  // The old full download still works
+  expect((await page.request.get(campaignUrl.replace("/campaigns/", "/api/campaigns/") + "/export")).status()).toBe(200);
 
   // Activity log: administrators see who did what
   await page.goto("/logs");
-  for (const what of ["Llamada registrada", "Visita registrada", "Usuario creado", "Carga de establecimientos", "Asignación de tareas", "Descarga de datos"]) {
+  for (const what of ["Llamada registrada", "Llamada revisada", "Visita registrada", "Usuario creado", "Carga de establecimientos", "Asignación de tareas", "Descarga de datos"]) {
     await expect(page.locator("td", { hasText: what }).first()).toBeVisible();
   }
+
+  // Agent: sees the review comment in the task history
+  await signIn(page, "agente1", "Agente-Clave-1");
+  await page.goto(tiendaCall);
+  await expect(page.getByText("Buen manejo de la objeción.")).toBeVisible();
+  await page.getByRole("link", { name: "Abrir la tarea" }).click();
+  await expect(page.locator("ol li").first()).toContainText("Buen manejo de la objeción.");
 
   // Losing the connection shows a clear message instead of failing silently
   await page.goto("/account");
   await page.context().setOffline(true);
-  await page.fill("input[name=current]", NEW_PW);
+  await page.fill("input[name=current]", "Agente-Clave-1");
   await page.fill("input[name=next]", "Otra-Clave-123");
   await page.fill("input[name=confirm]", "Otra-Clave-123");
   await page.getByRole("button", { name: "Guardar" }).click();

@@ -30,6 +30,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       (await db.select({ n: sql<number>`count(*)` }).from(companies).where(eq(companies.assignedUserId, user.id)))[0].n > 0);
   const nav: NavItem[] = [
     ...(hasCalls ? [{ href: "/calls", label: t.navCalls, icon: "calls" as const, badge: (await attentionSummary(user!.id)).total }] : []),
+    ...(role && role !== "inspector" ? [{ href: "/reviews", label: t.navReviews, icon: "reviews" as const }] : []),
     ...(isManager ? [{ href: "/campaigns", label: t.navCampaigns, icon: "campaigns" as const }] : []),
     ...(role && role !== "agent" ? [{ href: "/visits", label: t.navVisits, icon: "visits" as const }] : []),
     ...(isManager ? [{ href: "/stats", label: t.navStats, icon: "stats" as const }] : []),

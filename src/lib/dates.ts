@@ -61,3 +61,11 @@ export function toIsoDate(v: unknown): string | null {
   if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`; // dd/mm/yyyy
   return null;
 }
+
+// First and last instant (UTC ISO) of a local (UTC-4) day, for "from / to" date filters.
+export function localDayStart(isoDate: string) {
+  return new Date(`${isoDate}T04:00:00Z`).toISOString();
+}
+export function localDayEnd(isoDate: string) {
+  return new Date(new Date(`${isoDate}T04:00:00Z`).getTime() + 86400000 - 1).toISOString();
+}

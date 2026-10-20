@@ -227,6 +227,13 @@ export async function seedDemo(client, env = process.env) {
       args: [campaignId, t.estId, t.e.estatusRnt, shiftDays(-2), userIds["demo.admin"]],
     });
   }
+  // Two calls already reviewed by the supervisor (one with a comment), so "Llamadas realizadas" shows both states.
+  await client.execute({
+    sql: `UPDATE call_attempts SET reviewed_at = ?, reviewed_by = ?, review_comment = CASE WHEN id = (SELECT min(id) FROM call_attempts WHERE campaign_id = ?)
+          THEN 'Buen manejo: confirmó la fecha de compromiso con el responsable.' ELSE NULL END
+          WHERE id IN (SELECT id FROM call_attempts WHERE campaign_id = ? ORDER BY id LIMIT 2)`,
+    args: [shiftIso(-1), userIds["demo.supervisor"], campaignId, campaignId],
+  });
   // Establishments with no valid phone go straight to visit
   for (const t of tasks.filter((x) => !x.e.telefono)) {
     await setTask(t, { status: "visit", attempts: 0, code: null });
