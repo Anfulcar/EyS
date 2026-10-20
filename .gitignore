@@ -9,3 +9,7 @@ next-env.d.ts
 local.db*
 .vercel
 .DS_Store
+e2e.db*
+tests/e2e/.fixtures/
+playwright-report/
+test-results/

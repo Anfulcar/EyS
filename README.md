@@ -39,6 +39,17 @@ npm run dev                    # http://localhost:3000
 Schema changes: edit `src/db/schema.ts`, then `npm run db:generate` and commit the new file in `drizzle/`.
 Migrations run automatically on every build (`npm run build` → `scripts/migrate.mjs`).
 
+## Checks (run before every push; GitHub runs the same on every pull request)
+
+```bash
+npm ci
+npm run typecheck   # type check
+npm run lint        # code style and common mistakes
+npm test            # rule tests (call workflow, upload, dates) on a throw-away database
+npm run build       # same production build as Vercel
+npm run test:e2e    # browser test of the main journey (Playwright, made-up data)
+```
+
 ## Deploy (Vercel + Turso)
 
 1. **Turso**: create a database and a token.
