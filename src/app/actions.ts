@@ -70,51 +70,79 @@ export async function changePasswordAction(_: ActionState, form: FormData): Prom
 
 // ---------- Users ----------
 
+const USERNAME_RE = /^[a-z0-9._-]{3,40}$/;
+
+// Default temporary password: "<username>123". Users must change it at first login.
+function defaultPassword(username: string) {
+  return `${username}123`;
+}
+
 export async function createUserAction(_: ActionState, form: FormData): Promise<ActionState> {
   await assertUser(["admin"]);
   const { t } = await getDict();
   const parsed = z
     .object({
-      username: z.string().trim().toLowerCase().regex(/^[a-z0-9._-]{3,40}$/),
+      username: z.string().trim().toLowerCase().regex(USERNAME_RE),
       name: z.string().trim().min(2).max(80),
       role: z.enum(Object.keys(ROLES) as [string, ...string[]]),
-      password: z.string().min(8),
+      password: z.string().optional().default(""),
     })
     .safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") };
   const exists = await db.query.users.findFirst({ where: eq(users.username, parsed.data.username) });
   if (exists) return { error: t.usernameTaken };
+  const password = parsed.data.password.trim() || defaultPassword(parsed.data.username);
   await db.insert(users).values({
     username: parsed.data.username,
     name: parsed.data.name,
     role: parsed.data.role,
-    passwordHash: await bcrypt.hash(parsed.data.password, 10),
+    passwordHash: await bcrypt.hash(password, 10),
     mustChangePassword: true,
   });
   revalidatePath("/users");
-  return { ok: true, message: t.saved };
+  return { ok: true, message: `${t.saved}: ${parsed.data.username} / ${password}` };
 }
 
-export async function updateUserAction(form: FormData) {
+export async function editUserAction(_: ActionState, form: FormData): Promise<ActionState> {
   const me = await assertUser(["admin"]);
-  const id = Number(form.get("id"));
-  const role = String(form.get("role") ?? "");
-  const active = form.get("active");
-  const set: Partial<typeof users.$inferInsert> = {};
-  if (role && ROLES[role] && id !== me.id) set.role = role;
-  if (active != null && id !== me.id) set.active = active === "1";
-  if (Object.keys(set).length) await db.update(users).set(set).where(eq(users.id, id));
-  revalidatePath("/users");
-}
-
-export async function resetPasswordAction(_: ActionState, form: FormData): Promise<ActionState> {
-  await assertUser(["admin"]);
   const { t } = await getDict();
-  const id = Number(form.get("id"));
-  const password = String(form.get("password") ?? "");
-  if (password.length < 8) return { error: t.passwordTooShort };
-  await db.update(users).set({ passwordHash: await bcrypt.hash(password, 10), mustChangePassword: true, failedLogins: 0, lockedUntil: null }).where(eq(users.id, id));
-  return { ok: true, message: t.saved };
+  const parsed = z
+    .object({
+      id: z.coerce.number().int(),
+      username: z.string().trim().toLowerCase().regex(USERNAME_RE),
+      name: z.string().trim().min(2).max(80),
+      role: z.enum(Object.keys(ROLES) as [string, ...string[]]),
+      active: z.enum(["1", "0"]),
+      password: z.string().optional().default(""),
+      resetDefault: z.string().optional(),
+    })
+    .safeParse(Object.fromEntries(form));
+  if (!parsed.success) return { error: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") };
+  const d = parsed.data;
+  const target = await db.query.users.findFirst({ where: eq(users.id, d.id) });
+  if (!target) return { error: "Not found" };
+  if (d.username !== target.username) {
+    const taken = await db.query.users.findFirst({ where: eq(users.username, d.username) });
+    if (taken) return { error: t.usernameTaken };
+  }
+  const set: Partial<typeof users.$inferInsert> = { username: d.username, name: d.name };
+  // An admin cannot demote or deactivate themselves (avoids locking everyone out).
+  if (d.id !== me.id) {
+    set.role = d.role;
+    set.active = d.active === "1";
+  }
+  let newPassword: string | null = null;
+  if (d.resetDefault) newPassword = defaultPassword(d.username);
+  else if (d.password.trim()) newPassword = d.password.trim();
+  if (newPassword) {
+    set.passwordHash = await bcrypt.hash(newPassword, 10);
+    set.mustChangePassword = true;
+    set.failedLogins = 0;
+    set.lockedUntil = null;
+  }
+  await db.update(users).set(set).where(eq(users.id, d.id));
+  revalidatePath("/users");
+  return { ok: true, message: newPassword ? `${t.saved}. ${t.password}: ${newPassword}` : t.saved };
 }
 
 // ---------- Campaigns ----------
@@ -134,7 +162,7 @@ export async function createCampaignAction(_: ActionState, form: FormData): Prom
   const u = await assertUser(["admin"]);
   const parsed = campaignSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") };
-  const [c] = await db.insert(campaigns).values({ ...parsed.data, createdBy: u.id }).returning();
+  const [c] = await db.insert(campaigns).values({ ...parsed.data, status: "active", createdBy: u.id }).returning();
   redirect(`/campaigns/${c.id}/import`);
 }
 

@@ -1,5 +1,6 @@
-import { and, asc, eq, gt, inArray, isNull, lte, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNull, lte, ne, or, sql, type SQL } from "drizzle-orm";
 import Link from "next/link";
+import { RefreshButton } from "@/components/RefreshButton";
 import { Empty, PriorityBadge, StatusBadge } from "@/components/ui";
 import { db } from "@/db";
 import { campaigns, companies, establishments, phones, users } from "@/db/schema";
@@ -20,10 +21,9 @@ export default async function CallsPage({ searchParams }: { searchParams: Promis
   const today = todayLocal();
   const now = nowIso();
 
-  const active = await db
-    .select()
-    .from(campaigns)
-    .where(and(eq(campaigns.status, "active"), lte(campaigns.startDate, today), sql`${campaigns.endDate} >= ${today}`));
+  // Every campaign that is not closed: draft or out-of-dates campaigns are shown with a warning instead of hidden.
+  const active = await db.select().from(campaigns).where(ne(campaigns.status, "closed"));
+  const warnings = active.filter((c) => c.status !== "active" || today < c.startDate || today > c.endDate);
   const campaignIds = active.map((c) => c.id).filter((id) => !sp.campaign || id === Number(sp.campaign));
 
   const base: SQL[] = [inArray(companies.campaignId, campaignIds.length ? campaignIds : [-1]), eq(companies.assignedUserId, agentId)];
@@ -63,7 +63,10 @@ export default async function CallsPage({ searchParams }: { searchParams: Promis
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <h1>{t.myCallsTitle}</h1>
+        <div className="flex items-center gap-3">
+          <h1>{t.myCallsTitle}</h1>
+          <RefreshButton label={t.refresh} />
+        </div>
         <form className="flex flex-wrap gap-2">
           <input type="hidden" name="tab" value={tab} />
           {active.length > 1 && (
@@ -80,6 +83,11 @@ export default async function CallsPage({ searchParams }: { searchParams: Promis
           {(active.length > 1 || isManager) && <button className="btn-secondary">{t.filter}</button>}
         </form>
       </div>
+      {warnings.map((c) => (
+        <p key={c.id} className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          {c.name}: {c.status === "draft" ? t.campaignDraftWarning : t.outsideDates}
+        </p>
+      ))}
       <div className="flex gap-1 overflow-x-auto border-b border-slate-200">
         {TABS.map((k) => (
           <Link key={k} href={qs({ tab: k })} className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium ${tab === k ? "border-brand-600 text-brand-700" : "border-transparent text-slate-500 hover:text-slate-800"}`}>

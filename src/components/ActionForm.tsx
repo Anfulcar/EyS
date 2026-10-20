@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef } from "react";
 import { useFormStatus } from "react-dom";
 import type { ActionState } from "@/app/actions";
@@ -14,9 +15,12 @@ type Props = {
 export function ActionForm({ action, children, className, resetOnSuccess }: Props) {
   const [state, formAction] = useActionState(action, null);
   const ref = useRef<HTMLFormElement>(null);
+  const router = useRouter();
   useEffect(() => {
-    if (state?.ok && resetOnSuccess) ref.current?.reset();
-  }, [state, resetOnSuccess]);
+    if (!state?.ok) return;
+    if (resetOnSuccess) ref.current?.reset();
+    router.refresh();
+  }, [state, resetOnSuccess, router]);
   return (
     <form ref={ref} action={formAction} className={className}>
       {children}
