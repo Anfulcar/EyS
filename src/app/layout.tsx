@@ -24,6 +24,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     ...(isManager ? [{ href: "/stats", label: t.navStats, icon: "stats" as const }] : []),
     ...(role === "admin" ? [{ href: "/users", label: t.navUsers, icon: "users" as const }] : []),
     ...(role === "admin" ? [{ href: "/logs", label: t.navLogs, icon: "logs" as const }] : []),
+    ...(role ? [{ href: "/help", label: t.navHelp, icon: "help" as const }] : []),
   ];
   const showNav = !!user && !user.mustChangePassword;
 

@@ -46,7 +46,7 @@ Always include, in plain language:
 
 ## Manual
 
-- The in-app manual (`/help`) must be updated **in the same pull request** for every change that alters what
+- The in-app manual (`/help`, content in `src/lib/manual.ts`) must be updated **in the same pull request** for every change that alters what
   people see or do, with a dated line in its **"What's new" / "Novedades"** section.
 
 ## Security habits (always)

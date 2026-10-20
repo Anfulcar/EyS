@@ -101,6 +101,10 @@ test("main journey: campaign → upload → assign → calls → visit → dashb
 
   // Agent cannot open the administration screens or downloads: they answer "not found"
   await signIn(page, "agente1", "Agente-Clave-1");
+  await page.goto("/help");
+  await expect(page.getByRole("heading", { name: "Registrar una llamada" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Novedades" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Administración/ })).toHaveCount(0); // admin-only section hidden
   const screen = await page.goto(campaignUrl);
   expect(screen?.status()).toBe(404);
   await expect(page.getByText("No encontrado")).toBeVisible();
