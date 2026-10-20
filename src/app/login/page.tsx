@@ -1,6 +1,8 @@
 import { PhoneCall } from "lucide-react";
 import { redirect } from "next/navigation";
+import { DEMO_USERS } from "../../../scripts/seed-demo.mjs";
 import { currentUser, homeFor } from "@/lib/auth";
+import { ROLES } from "@/lib/catalog";
 import { getDict } from "@/lib/i18n-server";
 import { loginAction } from "../actions";
 
@@ -30,6 +32,14 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         </div>
         <button className="btn w-full">{t.login}</button>
       </form>
+      {process.env.SEED_DEMO === "true" && (
+        <div className="mt-4 rounded-2xl bg-amber-50 p-4 text-sm text-amber-900 ring-1 ring-amber-200">
+          <p className="font-medium">{t.demoUsers}</p>
+          <ul className="mt-2 space-y-1 font-mono text-xs">
+            {DEMO_USERS.map((u) => <li key={u.username}>{u.username} <span className="font-sans text-amber-700">· {ROLES[u.role]?.[lang]}</span></li>)}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

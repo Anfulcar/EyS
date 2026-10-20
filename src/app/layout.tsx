@@ -1,4 +1,4 @@
-import { LogOut, PhoneCall } from "lucide-react";
+import { FlaskConical, LogOut, PhoneCall } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Avatar } from "@/components/Avatar";
@@ -82,6 +82,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               </div>
               {showNav && <div className="px-3 pb-2"><Nav items={nav} mobile /></div>}
             </header>
+            {process.env.SEED_DEMO === "true" && (
+              <div className="flex items-center justify-center gap-2 bg-amber-100 px-4 py-2 text-center text-xs font-medium text-amber-900">
+                <FlaskConical className="h-4 w-4 shrink-0" /> {t.demoBanner}
+              </div>
+            )}
             <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:py-8">{children}</main>
             <ConnectionBanner retryLabel={t.retry} />
           </div>

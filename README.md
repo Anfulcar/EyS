@@ -63,7 +63,7 @@ Changes apply to the **next** deployment: Deployments → ⋯ on the latest one 
 |---|---|---|---|
 | `TURSO_DATABASE_URL` | Production | `libsql://…` address of the **live** database | Turso dashboard → Databases → your database → copy the URL (or `turso db show <name> --url`) |
 | `TURSO_AUTH_TOKEN` | Production | access token of the live database | Turso dashboard → your database → **Generate Token** (or `turso db tokens create <name>`) |
-| `AUTH_SECRET` | Production **and** Preview (different values) | a long random text that signs sign-in sessions | Generate one at https://generate-secret.vercel.app/32 or with `openssl rand -base64 32` |
+| `AUTH_SECRET` | Production (Preview gets its own, see below) | a long random text that signs sign-in sessions | Generate one at https://generate-secret.vercel.app/32 or with `openssl rand -base64 32` |
 | `ADMIN_USERNAME` | Production | first administrator's username, e.g. `admin` | You choose it |
 | `ADMIN_PASSWORD` | Production | temporary password for the first administrator (8+ characters) | You choose it; it must be changed at first sign-in. You can delete it after the first sign-in |
 | `ADMIN_NAME` | Production | display name (optional) | You choose it |
@@ -72,6 +72,32 @@ Rules:
 - **Never** paste these values anywhere else (code, chat, email, documents). If one leaks, create a new one
   (new token in Turso / new `AUTH_SECRET`), replace it in Vercel and redeploy.
 - **Preview** deployments (one per pull request) must never use the live database.
+
+### Preview sites with demo data (one per pull request)
+
+Every pull request gets its own preview site from Vercel. Previews run in **demo mode** on a **separate
+demo database**: made-up people for every role and a sample campaign, reloaded on every deployment.
+Demo mode refuses to run on the live site, on a database that already holds real data, or without
+a demo password.
+
+One-time setup:
+1. **Turso** → create a second database, e.g. `eys-demo` (Databases → *Create Database*). Copy its URL and
+   generate a token for it.
+2. **Vercel** → Settings → Environment Variables → add these with **only "Preview"** ticked:
+
+   | Key | Value |
+   |---|---|
+   | `TURSO_DATABASE_URL` | URL of the **demo** database (`libsql://eys-demo-…`) |
+   | `TURSO_AUTH_TOKEN` | token of the **demo** database |
+   | `AUTH_SECRET` | a **different** random text from production |
+   | `SEED_DEMO` | `true` |
+   | `DEMO_PASSWORD` | a password of your choice (8+ characters), shared by all demo users |
+
+3. Redeploy any preview. Sign in with `demo.admin`, `demo.supervisor`, `demo.agente1`, `demo.agente2` or
+   `demo.inspector` and the `DEMO_PASSWORD`. A yellow bar on every page says it is a demo site.
+
+`SEED_DEMO` must **never** be set for Production. If it is, the live deployment stops with an error instead
+of touching data.
 
 ## Health check
 
