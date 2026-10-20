@@ -1,3 +1,4 @@
+import { isRecentAuth } from "@/lib/session";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
@@ -22,5 +23,17 @@ describe("no secrets in the repository examples", () => {
       if (!line.trim() || line.startsWith("#")) continue;
       expect(line).toMatch(/^[A-Z0-9_]+=$/);
     }
+  });
+});
+
+
+describe("password asked again for sensitive actions", () => {
+  const now = Date.parse("2026-10-20T15:00:00Z");
+  it("is not needed within 10 minutes of typing the password", () => {
+    expect(isRecentAuth(now - 9 * 60_000, now, 10)).toBe(true);
+  });
+  it("is needed after 10 minutes, or when the time is unknown", () => {
+    expect(isRecentAuth(now - 11 * 60_000, now, 10)).toBe(false);
+    expect(isRecentAuth(undefined, now, 10)).toBe(false);
   });
 });

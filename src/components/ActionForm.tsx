@@ -1,10 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useRef } from "react";
+import { startTransition, useActionState, useCallback, useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import type { ActionState } from "@/app/actions";
 import { withConnectionCheck } from "@/lib/connection";
+import { ReauthPrompt } from "./ReauthPrompt";
 
 type Props = {
   action: (s: ActionState, f: FormData) => Promise<ActionState>;
@@ -14,19 +15,38 @@ type Props = {
 };
 
 export function ActionForm({ action, children, className, resetOnSuccess }: Props) {
-  const [state, formAction] = useActionState(withConnectionCheck(action), null);
+  // Keeps what was submitted, so it can be sent again after the password is confirmed
+  // (the browser resets the form fields after each submission).
+  const lastSubmitted = useRef<FormData | null>(null);
+  const [state, formAction] = useActionState(
+    withConnectionCheck((s: ActionState, f: FormData) => {
+      lastSubmitted.current = f;
+      return action(s, f);
+    }),
+    null,
+  );
   const ref = useRef<HTMLFormElement>(null);
   const router = useRouter();
+  const [askPassword, setAskPassword] = useState(false);
   useEffect(() => {
+    setAskPassword(!!state?.needsReauth);
     if (!state?.ok) return;
     if (resetOnSuccess) ref.current?.reset();
     router.refresh();
   }, [state, resetOnSuccess, router]);
+  const continueAction = useCallback(() => {
+    setAskPassword(false);
+    const data = lastSubmitted.current;
+    if (data) startTransition(() => formAction(data));
+  }, [formAction]);
   return (
-    <form ref={ref} action={formAction} className={className}>
-      {children}
-      <Message state={state} />
-    </form>
+    <>
+      <form ref={ref} action={formAction} className={className}>
+        {children}
+        {!askPassword && <Message state={state} />}
+      </form>
+      {askPassword && <ReauthPrompt onConfirmed={continueAction} />}
+    </>
   );
 }
 

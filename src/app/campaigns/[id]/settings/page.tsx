@@ -28,10 +28,10 @@ export default async function SettingsPage({ params }: { params: Promise<{ id: s
         {c.status === "active" && (
           <form action={setCampaignStatusAction}><input type="hidden" name="id" value={id} /><input type="hidden" name="status" value="closed" /><button className="btn-secondary">{t.closeCampaign}</button></form>
         )}
-        <form action={deleteCampaignAction} className="ml-auto">
+        <ActionForm action={deleteCampaignAction} className="ml-auto">
           <input type="hidden" name="id" value={id} />
           <ConfirmButton message={t.deleteCampaignConfirm}>{t.deleteCampaign}</ConfirmButton>
-        </form>
+        </ActionForm>
       </div>
     </div>
   );

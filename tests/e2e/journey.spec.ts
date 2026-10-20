@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import ExcelJS from "exceljs";
+import { SignJWT } from "jose";
 import { FIXTURE } from "./global-setup";
 
 const ADMIN_PW = process.env.E2E_ADMIN_PASSWORD!;
@@ -146,4 +147,33 @@ test("health check and security headers", async ({ request }) => {
   expect(page.headers()["content-security-policy"]).toContain("frame-ancestors 'none'");
   expect(page.headers()["x-frame-options"]).toBe("DENY");
   expect(page.headers()["x-content-type-options"]).toBe("nosniff");
+});
+
+test("sensitive actions ask for the password again after 10 minutes", async ({ page, context, baseURL }) => {
+  await signIn(page, "admin", NEW_PW);
+  // Pretend the administrator typed their password 11 minutes ago.
+  const token = await new SignJWT({ uid: 1, role: "admin", name: "Admin Prueba", mcp: false, authAt: Date.now() - 11 * 60_000 })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime("1h")
+    .sign(new TextEncoder().encode(process.env.E2E_AUTH_SECRET!));
+  await context.addCookies([{ name: "eys_session", value: token, url: baseURL! }]);
+
+  await page.goto("/users");
+  const row = page.locator("tr", { has: page.locator("td", { hasText: /^agente1$/ }) });
+  await row.getByText("Editar").click();
+  await row.locator("select[name=role]").selectOption("supervisor");
+  await row.getByRole("button", { name: "Guardar" }).click();
+
+  // The server refuses until the password is confirmed; then the change goes through.
+  await expect(row.getByText("Confirme su contraseña")).toBeVisible();
+  await row.locator("input[name=password][type=password]").fill("contraseña-equivocada");
+  await row.getByRole("button", { name: "Confirmar y continuar" }).click();
+  await expect(row.getByText("La contraseña actual es incorrecta")).toBeVisible();
+  await row.locator("input[name=password][type=password]").fill(NEW_PW);
+  await row.getByRole("button", { name: "Confirmar y continuar" }).click();
+  await expect(row.locator("td", { hasText: /^Supervisor$/ })).toBeVisible();
+
+  await page.goto("/logs?action=user.role_changed");
+  await expect(page.locator("td", { hasText: "agente1: agent → supervisor" })).toBeVisible();
 });

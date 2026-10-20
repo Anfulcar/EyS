@@ -4,12 +4,13 @@ import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/db";
 import { users, type User } from "@/db/schema";
-import { readSession, SESSION_COOKIE, SESSION_HOURS, signSession } from "./session";
+import { isRecentAuth, readSession, SESSION_COOKIE, SESSION_HOURS, signSession } from "./session";
 
 export type Role = "admin" | "supervisor" | "agent" | "inspector";
 
+// Call only right after the person typed their password: it restarts the "recent sign-in" clock.
 export async function setSessionCookie(user: User) {
-  const token = await signSession({ uid: user.id, role: user.role, name: user.name, mcp: user.mustChangePassword });
+  const token = await signSession({ uid: user.id, role: user.role, name: user.name, mcp: user.mustChangePassword, authAt: Date.now() });
   (await cookies()).set(SESSION_COOKIE, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
@@ -67,4 +68,10 @@ export function homeFor(role: string) {
   if (role === "agent") return "/calls";
   if (role === "inspector") return "/visits";
   return "/campaigns";
+}
+
+// True when the person typed their password within the last few minutes (see REAUTH_MINUTES, default 10).
+export async function recentlyAuthenticated() {
+  const s = await readSession((await cookies()).get(SESSION_COOKIE)?.value);
+  return isRecentAuth(s?.authAt);
 }
