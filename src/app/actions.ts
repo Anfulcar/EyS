@@ -8,6 +8,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/db";
 import { campaigns, companies, establishments, importLogs, phones, users } from "@/db/schema";
+import { logActivity, logError } from "@/lib/audit";
 import { assertUser, clearSession, homeFor, MANAGERS, setSessionCookie } from "@/lib/auth";
 import { CALL_CODES, PHONE_KINDS, PHONE_REASONS, PRIORITY_ORDER, ROLES, SIGTUR_STATUSES, VISIT_CODES } from "@/lib/catalog";
 import { nowIso, toIsoDate, todayLocal } from "@/lib/dates";
@@ -25,8 +26,14 @@ export async function loginAction(form: FormData) {
   const username = String(form.get("username") ?? "").trim().toLowerCase();
   const password = String(form.get("password") ?? "");
   const u = await db.query.users.findFirst({ where: eq(users.username, username) });
-  if (!u || !u.active) redirect("/login?error=1");
-  if (u.lockedUntil && u.lockedUntil > nowIso()) redirect("/login?error=locked");
+  if (!u || !u.active) {
+    await logActivity(null, "login.failed", { entity: "user", summary: `Usuario: ${username.slice(0, 40)} (no existe o inactivo)` });
+    redirect("/login?error=1");
+  }
+  if (u.lockedUntil && u.lockedUntil > nowIso()) {
+    await logActivity(u, "login.locked", { entity: "user", entityId: u.id, summary: `Intento durante el bloqueo: ${u.username}` });
+    redirect("/login?error=locked");
+  }
   const ok = await bcrypt.compare(password, u.passwordHash);
   if (!ok) {
     const failed = u.failedLogins + 1;
@@ -34,14 +41,19 @@ export async function loginAction(form: FormData) {
       .update(users)
       .set({ failedLogins: failed >= 5 ? 0 : failed, lockedUntil: failed >= 5 ? new Date(Date.now() + 15 * 60000).toISOString() : null })
       .where(eq(users.id, u.id));
+    await logActivity(u, failed >= 5 ? "login.locked" : "login.failed", { entity: "user", entityId: u.id, summary: `${u.username}: contraseña incorrecta (${failed}/5)` });
     redirect(failed >= 5 ? "/login?error=locked" : "/login?error=1");
   }
   await db.update(users).set({ failedLogins: 0, lockedUntil: null }).where(eq(users.id, u.id));
   await setSessionCookie(u);
+  await logActivity(u, "login.success", { entity: "user", entityId: u.id, summary: u.username });
   redirect(u.mustChangePassword ? "/account?force=1" : homeFor(u.role));
 }
 
 export async function logoutAction() {
+  const { currentUser } = await import("@/lib/auth");
+  const u = await currentUser();
+  if (u) await logActivity(u, "logout", { entity: "user", entityId: u.id });
   await clearSession();
   redirect("/login");
 }
@@ -64,6 +76,7 @@ export async function changePasswordAction(_: ActionState, form: FormData): Prom
   if (!(await bcrypt.compare(current, u.passwordHash))) return { error: t.wrongPassword };
   await db.update(users).set({ passwordHash: await bcrypt.hash(next, 10), mustChangePassword: false }).where(eq(users.id, u.id));
   await setSessionCookie({ ...u, mustChangePassword: false });
+  await logActivity(u, "password.changed", { entity: "user", entityId: u.id, summary: u.mustChangePassword ? "Cambio obligatorio del primer ingreso" : "Cambio voluntario" });
   if (u.mustChangePassword) redirect(homeFor(u.role));
   return { ok: true, message: t.passwordChanged };
 }
@@ -78,7 +91,7 @@ function defaultPassword(username: string) {
 }
 
 export async function createUserAction(_: ActionState, form: FormData): Promise<ActionState> {
-  await assertUser(["admin"]);
+  const me = await assertUser(["admin"]);
   const { t } = await getDict();
   const parsed = z
     .object({
@@ -92,13 +105,14 @@ export async function createUserAction(_: ActionState, form: FormData): Promise<
   const exists = await db.query.users.findFirst({ where: eq(users.username, parsed.data.username) });
   if (exists) return { error: t.usernameTaken };
   const password = parsed.data.password.trim() || defaultPassword(parsed.data.username);
-  await db.insert(users).values({
+  const [created] = await db.insert(users).values({
     username: parsed.data.username,
     name: parsed.data.name,
     role: parsed.data.role,
     passwordHash: await bcrypt.hash(password, 10),
     mustChangePassword: true,
-  });
+  }).returning({ id: users.id });
+  await logActivity(me, "user.created", { entity: "user", entityId: created.id, summary: `${parsed.data.username} (${parsed.data.role})` });
   revalidatePath("/users");
   return { ok: true, message: `${t.saved}: ${parsed.data.username} / ${password}` };
 }
@@ -141,6 +155,11 @@ export async function editUserAction(_: ActionState, form: FormData): Promise<Ac
     set.lockedUntil = null;
   }
   await db.update(users).set(set).where(eq(users.id, d.id));
+  const who = { entity: "user", entityId: d.id };
+  if (set.role && set.role !== target.role) await logActivity(me, "user.role_changed", { ...who, summary: `${d.username}: ${target.role} → ${set.role}` });
+  if (set.active != null && set.active !== target.active) await logActivity(me, "user.status_changed", { ...who, summary: `${d.username}: ${set.active ? "activado" : "desactivado"}` });
+  if (newPassword) await logActivity(me, "user.password_reset", { ...who, summary: `${d.username}${d.resetDefault ? " (contraseña predeterminada)" : ""}` });
+  if (d.username !== target.username || d.name !== target.name) await logActivity(me, "user.updated", { ...who, summary: `${target.username} → ${d.username}, ${d.name}` });
   revalidatePath("/users");
   return { ok: true, message: newPassword ? `${t.saved}. ${t.password}: ${newPassword}` : t.saved };
 }
@@ -163,33 +182,39 @@ export async function createCampaignAction(_: ActionState, form: FormData): Prom
   const parsed = campaignSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") };
   const [c] = await db.insert(campaigns).values({ ...parsed.data, status: "active", createdBy: u.id }).returning();
+  await logActivity(u, "campaign.created", { campaignId: c.id, entity: "campaign", entityId: c.id, summary: c.name });
   redirect(`/campaigns/${c.id}/import`);
 }
 
 export async function updateCampaignAction(_: ActionState, form: FormData): Promise<ActionState> {
-  await assertUser(["admin"]);
+  const u = await assertUser(["admin"]);
   const { t } = await getDict();
   const id = Number(form.get("id"));
   const parsed = campaignSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") };
   await db.update(campaigns).set(parsed.data).where(eq(campaigns.id, id));
+  await logActivity(u, "campaign.updated", { campaignId: id, entity: "campaign", entityId: id, summary: `${parsed.data.name} (${parsed.data.startDate} – ${parsed.data.endDate})` });
   revalidatePath(`/campaigns/${id}`, "layout");
   return { ok: true, message: t.saved };
 }
 
 export async function setCampaignStatusAction(form: FormData) {
-  await assertUser(["admin"]);
+  const u = await assertUser(["admin"]);
   const id = Number(form.get("id"));
   const status = String(form.get("status"));
   if (!["draft", "active", "closed"].includes(status)) return;
   await db.update(campaigns).set({ status }).where(eq(campaigns.id, id));
+  await logActivity(u, "campaign.status_changed", { campaignId: id, entity: "campaign", entityId: id, summary: status });
   revalidatePath(`/campaigns/${id}`, "layout");
   revalidatePath("/campaigns");
 }
 
 export async function deleteCampaignAction(form: FormData) {
-  await assertUser(["admin"]);
-  await db.delete(campaigns).where(eq(campaigns.id, Number(form.get("id"))));
+  const u = await assertUser(["admin"]);
+  const id = Number(form.get("id"));
+  const c = await db.query.campaigns.findFirst({ where: eq(campaigns.id, id) });
+  await db.delete(campaigns).where(eq(campaigns.id, id));
+  if (c) await logActivity(u, "campaign.deleted", { entity: "campaign", entityId: id, summary: c.name });
   redirect("/campaigns");
 }
 
@@ -246,6 +271,7 @@ export async function commitUploadAction(_: ActionState, form: FormData): Promis
   }
   const r = await commitImport(campaignId, b.records, mapped);
   await db.insert(importLogs).values({ campaignId, kind: "establishments", fileName: file.name, rows: rows.length, inserted: r.inserted, updated: r.updated, skipped: b.errors.length, userId: u.id });
+  await logActivity(u, "upload.establishments", { campaignId, entity: "file", summary: `${file.name}: ${r.inserted} nuevos, ${r.updated} actualizados, ${b.errors.length} omitidos` });
   revalidatePath(`/campaigns/${campaignId}`, "layout");
   return { ok: true, message: `${t.importDone}: ${r.inserted} ${t.inserted}, ${r.updated} ${t.updated}, ${b.errors.length} ${t.skipped}. ${r.companies} ${t.companies.toLowerCase()}.` };
 }
@@ -253,7 +279,7 @@ export async function commitUploadAction(_: ActionState, form: FormData): Promis
 // ---------- Assignment ----------
 
 export async function assignAction(_: ActionState, form: FormData): Promise<ActionState> {
-  await assertUser(MANAGERS);
+  const me = await assertUser(MANAGERS);
   const { t } = await getDict();
   const campaignId = Number(form.get("campaignId"));
   const strategy = String(form.get("strategy"));
@@ -304,15 +330,18 @@ export async function assignAction(_: ActionState, form: FormData): Promise<Acti
       await db.update(companies).set({ assignedUserId: a }).where(inArray(companies.id, ids.slice(i, i + 500)));
     }
   }
+  await logActivity(me, "assignment.run", { campaignId, summary: `${assignment.size} tareas · método: ${strategy} · alcance: ${scope}` });
   revalidatePath(`/campaigns/${campaignId}`, "layout");
   return { ok: true, message: `${assignment.size} ${t.assignedCount}` };
 }
 
 export async function reassignCompanyAction(form: FormData) {
-  await assertUser(MANAGERS);
+  const me = await assertUser(MANAGERS);
   const id = Number(form.get("companyId"));
   const userId = Number(form.get("userId")) || null;
-  await db.update(companies).set({ assignedUserId: userId }).where(eq(companies.id, id));
+  const [c] = await db.update(companies).set({ assignedUserId: userId }).where(eq(companies.id, id)).returning();
+  const to = userId ? await db.query.users.findFirst({ where: eq(users.id, userId) }) : null;
+  if (c) await logActivity(me, "task.reassigned", { campaignId: c.campaignId, entity: "task", entityId: id, summary: `${c.key} → ${to?.name ?? "sin asignar"}` });
   revalidatePath("/campaigns", "layout");
 }
 
@@ -339,8 +368,15 @@ export async function logCallAction(_: ActionState, form: FormData): Promise<Act
     for (const id of extra) if (!(await canWorkCompany(u, id))) return { error: "Not found" };
     await logCall(u, input);
     for (const id of extra) await logCall(u, { ...input, companyId: id, phoneId: null });
+    const failed = !input.contacted || input.attended === false;
+    const result = failed ? (input.contacted ? "10" : input.noContactCode) : [...new Set(input.results.map((r) => r.code))].join(", ");
+    await logActivity(u, "call.logged", {
+      campaignId: main.campaignId, entity: "task", entityId: main.id,
+      summary: `${main.key}${extra.length ? ` (+${extra.length} misma empresa)` : ""} · resultado: ${result}`,
+    });
   } catch (e) {
     const msg = (e as Error).message;
+    if (msg !== "commitmentRequired") await logError("action", `Registrar llamada: ${msg}`, { userId: u.id, path: "/calls", detail: (e as Error).stack ?? null });
     return { error: msg === "commitmentRequired" ? t.commitmentRequired : msg };
   }
   revalidatePath("/calls", "layout");
@@ -379,6 +415,7 @@ export async function addPhoneAction(_: ActionState, form: FormData): Promise<Ac
     replacesPhoneId: kind === "substitute" ? replaces : null,
     addedBy: u.id,
   });
+  await logActivity(u, "phone.added", { campaignId: company.campaignId, entity: "task", entityId: companyId, summary: `${company.key}: ${formatPhone(raw)} (${kind}, ${reason})` });
   // A new number reopens a company that went to visit for lack of a working phone.
   if (company.status === "visit" && company.failedAttempts > 0) {
     await db.update(companies).set({ status: "retry", failedAttempts: 0, nextActionAt: null }).where(eq(companies.id, companyId));
@@ -395,13 +432,15 @@ export async function logVisitAction(_: ActionState, form: FormData): Promise<Ac
   const code = String(form.get("code"));
   if (!VISIT_CODES[code]) return { error: t.visitResult };
   const visitDate = toIsoDate(String(form.get("visitDate"))) ?? todayLocal();
+  const establishmentId = Number(form.get("establishmentId"));
   await logVisit(u, {
-    establishmentId: Number(form.get("establishmentId")),
+    establishmentId,
     visitDate,
     code,
     commitmentDate: toIsoDate(String(form.get("commitmentDate") ?? "")),
     notes: str(form.get("notes")),
   });
+  await logActivity(u, "visit.logged", { entity: "establishment", entityId: establishmentId, summary: `${visitDate} · resultado: ${code}` });
   revalidatePath("/visits");
   return { ok: true, message: t.saved };
 }
@@ -409,7 +448,7 @@ export async function logVisitAction(_: ActionState, form: FormData): Promise<Ac
 // ---------- Email tracking ----------
 
 export async function markEmailsSentAction(_: ActionState, form: FormData): Promise<ActionState> {
-  await assertUser(MANAGERS);
+  const u = await assertUser(MANAGERS);
   const { t } = await getDict();
   const campaignId = Number(form.get("campaignId"));
   const date = toIsoDate(String(form.get("date"))) ?? todayLocal();
@@ -418,6 +457,7 @@ export async function markEmailsSentAction(_: ActionState, form: FormData): Prom
   if (status) where.push(eq(establishments.estatusRnt, status));
   if (form.get("onlyUnsent")) where.push(isNull(establishments.correoEnviadoFecha));
   const res = await db.update(establishments).set({ correoEnviadoFecha: date }).where(and(...where)).returning({ id: establishments.id });
+  await logActivity(u, "emails.marked_sent", { campaignId, summary: `${res.length} establecimientos · fecha ${date}${status ? ` · ${status}` : ""}` });
   revalidatePath(`/campaigns/${campaignId}`, "layout");
   return { ok: true, message: `${res.length} ${t.updated}` };
 }
@@ -437,6 +477,7 @@ export async function uploadBouncesAction(_: ActionState, form: FormData): Promi
   const ids = ests.filter((e) => e.correo && set.has(e.correo.trim().toLowerCase())).map((e) => e.id);
   for (let i = 0; i < ids.length; i += 500) await db.update(establishments).set({ correoRebotado: "Sí" }).where(inArray(establishments.id, ids.slice(i, i + 500)));
   await db.insert(importLogs).values({ campaignId, kind: "bounces", fileName: file.name, rows: rows.length, updated: ids.length, skipped: emails.length - ids.length, userId: u.id });
+  await logActivity(u, "upload.bounces", { campaignId, entity: "file", summary: `${file.name}: ${ids.length} marcados como rebotados` });
   revalidatePath(`/campaigns/${campaignId}`, "layout");
   return { ok: true, message: `${ids.length} ${t.updated}` };
 }
@@ -471,6 +512,7 @@ export async function uploadStatusAction(_: ActionState, form: FormData): Promis
       : [Number(target)];
   const r = await applyStatusUpdates(u, ids, updates);
   await db.insert(importLogs).values({ campaignId: target === "all" ? null : Number(target), kind: "status", fileName: file.name, rows: rows.length, updated: r.updated, skipped: r.notFound, userId: u.id });
+  await logActivity(u, "upload.status", { campaignId: target === "all" ? null : Number(target), entity: "file", summary: `${file.name}: ${r.updated} estatus actualizados, ${r.notFound} no encontrados` });
   revalidatePath("/campaigns", "layout");
   return { ok: true, message: `${r.updated} ${t.statusUpdated}, ${r.notFound} ${t.skipped}` };
 }

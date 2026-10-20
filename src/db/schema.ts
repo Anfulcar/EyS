@@ -239,3 +239,37 @@ export const appMeta = sqliteTable("app_meta", {
   key: text("key").primaryKey(),
   value: text("value").notNull(),
 });
+
+// Who did what, when (visible to administrators).
+export const activityLog = sqliteTable(
+  "activity_log",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    at: text("at").notNull().default(now),
+    userId: integer("user_id"),
+    userName: text("user_name"),
+    action: text("action").notNull(),
+    campaignId: integer("campaign_id"),
+    entity: text("entity"),
+    entityId: text("entity_id"),
+    summary: text("summary"),
+    ip: text("ip"),
+  },
+  (t) => [index("activity_at").on(t.at), index("activity_action").on(t.action)],
+);
+
+// Errors on the server or in the browser (visible to administrators).
+export const errorLog = sqliteTable(
+  "error_log",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    at: text("at").notNull().default(now),
+    source: text("source").notNull(),
+    userId: integer("user_id"),
+    path: text("path"),
+    message: text("message").notNull(),
+    digest: text("digest"),
+    detail: text("detail"),
+  },
+  (t) => [index("errors_at").on(t.at)],
+);

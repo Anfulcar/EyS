@@ -1,6 +1,7 @@
 import { asc, eq } from "drizzle-orm";
 import ExcelJS from "exceljs";
 import { db } from "@/db";
+import { logActivity } from "@/lib/audit";
 import { callAttempts, callResults, campaigns, companies, establishments, phones, statusChanges, users, visits } from "@/db/schema";
 import { MANAGERS, notFoundResponse, routeUser } from "@/lib/auth";
 import { codeMatrixText, label, MATRIX_COLUMNS, OBSTACLES, PHONE_KINDS, PHONE_REASONS } from "@/lib/catalog";
@@ -11,8 +12,10 @@ const d = (v: string | null | undefined) =>
   v ? (v.length === 10 ? new Date(`${v}T12:00:00Z`) : new Date(new Date(v).getTime() - 4 * 3600000)) : null;
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
-  if (!(await routeUser(MANAGERS))) return notFoundResponse();
+  const user = await routeUser(MANAGERS);
+  if (!user) return notFoundResponse();
   const id = Number((await params).id);
+  await logActivity(user, "export.downloaded", { campaignId: id, entity: "campaign", entityId: id, summary: "Matriz completa (Excel)" });
   const c = await db.query.campaigns.findFirst({ where: eq(campaigns.id, id) });
   if (!c) return notFoundResponse();
   const [ests, results, vis, ph, people, changes, comps] = await Promise.all([

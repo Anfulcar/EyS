@@ -1,10 +1,10 @@
 "use client";
 
-import { BarChart3, Megaphone, MapPin, Phone, Users } from "lucide-react";
+import { BarChart3, Megaphone, MapPin, Phone, ScrollText, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const ICONS = { calls: Phone, campaigns: Megaphone, visits: MapPin, stats: BarChart3, users: Users };
+const ICONS = { calls: Phone, campaigns: Megaphone, visits: MapPin, stats: BarChart3, users: Users, logs: ScrollText };
 export type NavItem = { href: string; label: string; icon: keyof typeof ICONS };
 
 export function Nav({ items, mobile }: { items: NavItem[]; mobile?: boolean }) {

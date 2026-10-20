@@ -163,3 +163,36 @@ export const MATRIX_COLUMNS: MatrixColumn[] = [
 ];
 
 export const PRIORITY_ORDER: Record<string, number> = { P1: 1, P2: 2, P3: 3 };
+
+export const ACTIVITY_LABELS: Record<string, L> = {
+  "login.success": { es: "Inicio de sesión", en: "Signed in" },
+  "login.failed": { es: "Inicio de sesión fallido", en: "Failed sign-in" },
+  "login.locked": { es: "Cuenta bloqueada por intentos", en: "Account locked (attempts)" },
+  logout: { es: "Cierre de sesión", en: "Signed out" },
+  "password.changed": { es: "Cambio de contraseña", en: "Password changed" },
+  "user.created": { es: "Usuario creado", en: "User created" },
+  "user.updated": { es: "Usuario editado", en: "User edited" },
+  "user.role_changed": { es: "Cambio de rol", en: "Role changed" },
+  "user.status_changed": { es: "Usuario activado/desactivado", en: "User activated/deactivated" },
+  "user.password_reset": { es: "Contraseña restablecida", en: "Password reset" },
+  "campaign.created": { es: "Campaña creada", en: "Campaign created" },
+  "campaign.updated": { es: "Campaña editada", en: "Campaign edited" },
+  "campaign.status_changed": { es: "Estado de campaña", en: "Campaign status" },
+  "campaign.deleted": { es: "Campaña eliminada", en: "Campaign deleted" },
+  "upload.establishments": { es: "Carga de establecimientos", en: "Establishments uploaded" },
+  "upload.bounces": { es: "Carga de correos rebotados", en: "Bounced emails uploaded" },
+  "upload.status": { es: "Carga de estatus SIGTUR", en: "SIGTUR status uploaded" },
+  "emails.marked_sent": { es: "Envío de correo registrado", en: "Email send logged" },
+  "assignment.run": { es: "Asignación de tareas", en: "Tasks assigned" },
+  "task.reassigned": { es: "Tarea reasignada", en: "Task reassigned" },
+  "call.logged": { es: "Llamada registrada", en: "Call logged" },
+  "phone.added": { es: "Número agregado", en: "Number added" },
+  "visit.logged": { es: "Visita registrada", en: "Visit logged" },
+  "export.downloaded": { es: "Descarga de datos", en: "Data downloaded" },
+};
+
+export const ERROR_SOURCES: Record<string, L> = {
+  server: { es: "Servidor", en: "Server" },
+  action: { es: "Acción", en: "Action" },
+  browser: { es: "Navegador", en: "Browser" },
+};
