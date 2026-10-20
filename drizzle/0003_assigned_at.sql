@@ -1,0 +1,1 @@
+ALTER TABLE `companies` ADD `assigned_at` text;

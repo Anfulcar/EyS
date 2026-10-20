@@ -1,11 +1,11 @@
 "use client";
 
-import { BarChart3, CircleHelp, Megaphone, MapPin, Phone, ScrollText, Users } from "lucide-react";
+import { BarChart3, CircleHelp, ClipboardCheck, Megaphone, MapPin, Phone, ScrollText, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const ICONS = { calls: Phone, campaigns: Megaphone, visits: MapPin, stats: BarChart3, users: Users, logs: ScrollText, help: CircleHelp };
-export type NavItem = { href: string; label: string; icon: keyof typeof ICONS };
+const ICONS = { calls: Phone, reviews: ClipboardCheck, campaigns: Megaphone, visits: MapPin, stats: BarChart3, users: Users, logs: ScrollText, help: CircleHelp };
+export type NavItem = { href: string; label: string; icon: keyof typeof ICONS; badge?: number };
 
 export function Nav({ items, mobile }: { items: NavItem[]; mobile?: boolean }) {
   const path = usePathname();
@@ -24,6 +24,11 @@ export function Nav({ items, mobile }: { items: NavItem[]; mobile?: boolean }) {
           >
             <Icon className="h-[18px] w-[18px]" strokeWidth={2} />
             {n.label}
+            {!!n.badge && (
+              <span className="ml-auto min-w-[1.5rem] rounded-full bg-mitur-red px-1.5 py-0.5 text-center text-xs font-semibold text-white" aria-label={`${n.badge}`}>
+                {n.badge > 99 ? "99+" : n.badge}
+              </span>
+            )}
           </Link>
         );
       })}

@@ -6,6 +6,8 @@ type Section = { id: string; roles: string[]; title: string; intro?: string; ste
 type L<T> = Record<Lang, T>;
 
 export const WHATS_NEW: { date: string; es: string; en: string }[] = [
+  { date: "2026-10-21", es: "Nuevo «Llamadas realizadas»: cada llamada con su resumen; supervisores y administradores la marcan «Revisada» con un comentario que el agente ve en su historial. «Exportar» permite elegir hojas, columnas y filtros. En los tableros, cada número, barra y fila abre la lista de establecimientos, con descarga en Excel.", en: "New “Calls made”: every call with its summary; supervisors and administrators mark it “Reviewed” with a comment the agent sees in their history. “Export” lets you choose sheets, columns and filters. On dashboards, every number, bar and row opens the list of establishments, with an Excel download." },
+  { date: "2026-10-21", es: "Mis llamadas: contador rojo en el menú y aviso con las llamadas que requieren atención; las nuevas primero y luego las que llevan más días esperando; seguimientos vencidos resaltados en amarillo; filtro por número de intentos. La hora de cada llamada se registra sola al guardar.", en: "My calls: red counter in the menu and a notice with the calls that need attention; new ones first, then those waiting longest; overdue follow-ups highlighted in yellow; filter by number of attempts. Each call's time is recorded automatically on save." },
   { date: "2026-10-20", es: "Logo y colores del Ministerio de Turismo en toda la aplicación. Tableros más claros: arriba las 4 metas del plan con su barra de avance, luego los conteos, los gráficos y las tablas de detalle en pestañas.", en: "Ministerio de Turismo logo and colours throughout the app. Clearer dashboards: the plan's 4 goals with progress bars on top, then counts, charts and detail tables in tabs." },
   { date: "2026-10-20", es: "Pantallas de administración más limpias: «+ Nueva campaña» y «+ Nuevo usuario» en ventanas, lista de tareas compacta con «Asignar tareas» en un panel lateral y asignación de filas seleccionadas, configuración de campaña ordenada. Las tarjetas de campaña muestran los totales correctos.", en: "Cleaner administration screens: “+ New campaign” and “+ New user” in pop-ups, compact task list with “Assign tasks” in a side panel and assignment of ticked rows, tidier campaign settings. Campaign cards show the correct totals." },
   { date: "2026-10-20", es: "Manual de uso en la aplicación (esta página), con esta sección de novedades.", en: "In-app manual (this page), with this What's new section." },
@@ -32,7 +34,9 @@ const ES: Section[] = [
     id: "calls", roles: ["agent", "supervisor", "admin"], title: "Mis llamadas (agentes)",
     intro: "Cada tarjeta es un establecimiento (un RUT) que le asignaron.",
     bullets: [
-      "«Para hoy»: llamadas pendientes y seguimientos que ya tocan. «Programadas»: reintentos y seguimientos de días próximos. «Pasaron a visita» y «Finalizadas»: ya no requieren llamada.",
+      "«Para hoy»: llamadas pendientes y seguimientos que ya tocan. Primero las nuevas (sin llamar), luego las que llevan más días esperando («Pendiente hace 3 días»). Los seguimientos vencidos se resaltan en amarillo. «Programadas»: reintentos y seguimientos de días próximos. «Pasaron a visita» y «Finalizadas»: ya no requieren llamada.",
+      "El número rojo junto a «Mis llamadas» en el menú y el aviso amarillo al entrar indican cuántas llamadas requieren atención. Cada pestaña muestra su cantidad.",
+      "Filtre por número de intentos (sin intentos, 1, 2, 3 o más) con los botones a la derecha de las pestañas.",
       "La etiqueta «+N de la misma empresa» indica otros establecimientos con el mismo RNC.",
       "«Actualizar» recarga la lista sin salir de la página.",
     ],
@@ -45,7 +49,7 @@ const ES: Section[] = [
       "Elija el número marcado y responda: ¿pudo contactar a alguien?, ¿le atendieron?",
       "Si habló con alguien: con quién, su cargo y si es el responsable.",
       "Para cada establecimiento: ¿sigue operando? y la respuesta (iniciará solicitud, ya inició, requiere asistencia, no interesado, cambió dueño). «Iniciará solicitud» exige la fecha de compromiso.",
-      "Pulse «Guardar». La tarea pasa sola al estado que corresponde.",
+      "Pulse «Guardar». La fecha y la hora de la llamada se registran solas en ese momento, y la tarea pasa sola al estado que corresponde.",
     ],
   },
   {
@@ -83,14 +87,24 @@ const ES: Section[] = [
       "«Tareas y asignación»: la lista muestra cada establecimiento con su último resultado. «Asignar tareas» abre un panel con el método (repartir equitativamente, por zona o todo a un agente); los establecimientos de la misma empresa quedan con el mismo agente. También puede marcar filas y usar «Asignar seleccionadas a», o cambiar el agente de una fila (se guarda solo).",
       "«Correos»: registre la fecha de envío del correo masivo y cargue los correos rebotados.",
       "«Actualización de estatus»: cargue el estatus de SIGTUR para medir quién pasó a «En proceso».",
-      "«Exportar»: la Matriz de seguimiento completa en Excel y todas las llamadas en CSV.",
+      "«Exportar»: marque las hojas que quiere (Matriz, Llamadas, Teléfonos, Visitas, Cambios de estatus) y, en «Elegir columnas», las columnas de cada una. Puede filtrar por fechas, agente asignado, zona, prioridad, resultado y estado de la tarea. «Descargar Excel» baja solo lo elegido; su última elección se recuerda en ese navegador. También puede bajar todas las llamadas en CSV.",
     ],
   },
   {
     id: "dashboards", roles: ["supervisor", "admin"], title: "Tableros",
     bullets: [
       "«Tablero» de cada campaña: arriba las 4 metas del plan (llamados, contacto efectivo, compromisos, vencidas → en proceso) con una barra verde si se alcanza la meta y naranja si no; la raya oscura marca la meta. Debajo: conteos y avance del periodo, otras metas, gráficos, y las tablas por agente, zona, prioridad y subsector en pestañas.",
+      "Haga clic en cualquier número, barra, fila o leyenda (por ejemplo «Requieren visita») para ver la lista de establecimientos que lo forman, con el agente y el último resultado. «Descargar (Excel)» baja esa lista.",
       "«Estadísticas globales»: compara todas las campañas y suma sus resultados.",
+    ],
+  },
+  {
+    id: "reviews", roles: ["supervisor", "admin", "agent"], title: "Llamadas realizadas y revisión",
+    bullets: [
+      "«Llamadas realizadas» muestra cada llamada con fecha y hora, agente, establecimiento, número marcado y resultado. Filtre por campaña, fechas, agente, resultado y «Sin revisar» / «Revisada».",
+      "Haga clic en la fecha para abrir el resumen: quién atendió y su cargo, las respuestas, el compromiso, el obstáculo, las notas y si se envió WhatsApp.",
+      "Supervisores y administradores: escriban un comentario (opcional) y pulsen «Marcar como revisada». Pueden actualizar la revisión después.",
+      "Agentes: ven solo sus propias llamadas y el comentario de revisión, también en el historial de la tarea. Una llamada guardada no se puede editar.",
     ],
   },
   {
@@ -125,7 +139,9 @@ const EN: Section[] = [
     id: "calls", roles: ["agent", "supervisor", "admin"], title: "My calls (agents)",
     intro: "Each card is one establishment (one RUT) assigned to you.",
     bullets: [
-      "“Due today”: pending calls and follow-ups that are due. “Scheduled”: retries and follow-ups for coming days. “Sent to visit” and “Done”: no call needed.",
+      "“Due today”: pending calls and follow-ups that are due. New ones (never called) first, then those waiting longest (“Waiting for 3 days”). Overdue follow-ups are highlighted in yellow. “Scheduled”: retries and follow-ups for coming days. “Sent to visit” and “Done”: no call needed.",
+      "The red number next to “My calls” in the menu and the yellow notice on entering show how many calls need attention. Each tab shows its count.",
+      "Filter by number of attempts (none, 1, 2, 3 or more) with the buttons to the right of the tabs.",
       "The “+N of the same company” tag shows other establishments with the same RNC.",
       "“Refresh” reloads the list without leaving the page.",
     ],
@@ -138,7 +154,7 @@ const EN: Section[] = [
       "Choose the number dialed and answer: did you reach anyone? did they attend the call?",
       "If you spoke with someone: who, their role, and whether they are the person in charge.",
       "For each establishment: is it still operating? and the response (will apply, already applied, needs help, not interested, changed owner). “Will apply” requires the commitment date.",
-      "Click “Save”. The task moves to the right status on its own.",
+      "Click “Save”. The date and time of the call are recorded automatically at that moment, and the task moves to the right status on its own.",
     ],
   },
   {
@@ -176,14 +192,24 @@ const EN: Section[] = [
       "“Tasks & assignment”: the list shows each establishment with its last result. “Assign tasks” opens a panel with the method (split evenly, by zone or all to one agent); establishments of the same company stay with the same agent. You can also tick rows and use “Assign selected to”, or change a row's agent (it saves on its own).",
       "“Emails”: log the mass email's send date and upload bounced emails.",
       "“Status update”: upload the SIGTUR status to measure who moved to “En proceso”.",
-      "“Export”: the full tracking Matriz in Excel and every call in CSV.",
+      "“Export”: tick the sheets you want (Matriz, Calls, Phones, Visits, Status changes) and, under “Choose columns”, the columns of each. You can filter by dates, assigned agent, zone, priority, result and task status. “Download Excel” gets only what you chose; your last choice is remembered in that browser. You can also download every call as CSV.",
     ],
   },
   {
     id: "dashboards", roles: ["supervisor", "admin"], title: "Dashboards",
     bullets: [
       "Each campaign's “Dashboard”: the plan's 4 goals on top (called, effective contact, commitments, expired → in process), with a green bar when the target is met and orange when not; the dark mark shows the target. Below: counts and period progress, other goals, charts, and the tables by agent, zone, priority and subsector in tabs.",
+      "Click any number, bar, row or legend (for example “Need a visit”) to see the list of establishments behind it, with the agent and last result. “Download (Excel)” gets that list.",
       "“Global statistics”: compares every campaign and adds up their results.",
+    ],
+  },
+  {
+    id: "reviews", roles: ["supervisor", "admin", "agent"], title: "Calls made and review",
+    bullets: [
+      "“Calls made” shows every call with date and time, agent, establishment, number dialed and result. Filter by campaign, dates, agent, result and “Not reviewed” / “Reviewed”.",
+      "Click the date to open the summary: who answered and their role, the answers, the commitment, the obstacle, the notes and whether a WhatsApp was sent.",
+      "Supervisors and administrators: write a comment (optional) and press “Mark as reviewed”. You can update the review later.",
+      "Agents: see only their own calls and the review comment, also in the task history. A saved call can't be edited.",
     ],
   },
   {

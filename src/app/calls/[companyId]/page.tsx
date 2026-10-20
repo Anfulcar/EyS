@@ -1,5 +1,5 @@
 import { asc, desc, eq, inArray } from "drizzle-orm";
-import { AlertTriangle, ArrowLeft, Building2, FileText, History, Mail, MapPin, Phone, Plus } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Building2, CheckCircle2, FileText, History, Mail, MapPin, Phone, Plus } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
@@ -138,6 +138,13 @@ export default async function TaskPage({ params }: { params: Promise<{ companyId
                         )}
                         {a.whatsappSent && <div className="text-xs text-green-700">WhatsApp ✓</div>}
                         {a.notes && <div className="text-xs text-slate-500">{a.notes}</div>}
+                        {a.reviewedAt && (
+                          <div className="mt-1.5 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs text-emerald-900">
+                            <span className="inline-flex items-center gap-1 font-medium"><CheckCircle2 className="h-3.5 w-3.5" />{t.reviewedByOn.replace("{name}", (a.reviewedBy && names.get(a.reviewedBy)) || "—").replace("{date}", fmtDateTime(a.reviewedAt, lang))}</span>
+                            {a.reviewComment && <div className="mt-0.5 whitespace-pre-line">{a.reviewComment}</div>}
+                          </div>
+                        )}
+                        <Link href={`/reviews/${a.id}`} className="mt-1 inline-block text-xs font-medium text-brand-700 hover:underline">{t.callSummary} →</Link>
                       </div>
                     </li>
                   );

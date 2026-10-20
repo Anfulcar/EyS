@@ -135,8 +135,9 @@ export async function seedDemo(client, env = process.env) {
   for (const e of ests) {
     if (!rncAgent.has(e.rnc)) rncAgent.set(e.rnc, agents[rncAgent.size % 2]);
     const t = await client.execute({
-      sql: "INSERT INTO companies (campaign_id, key, razon_social, rnc, assigned_user_id, priority, zone) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id",
-      args: [campaignId, `RUT:${e.rut}`, e.razonSocial, e.rnc, rncAgent.get(e.rnc), e.prioridad, e.zonaOperativa],
+      sql: "INSERT INTO companies (campaign_id, key, razon_social, rnc, assigned_user_id, assigned_at, priority, zone) VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+      // Assigned on different days, so "days waiting" varies in the demo.
+      args: [campaignId, `RUT:${e.rut}`, e.razonSocial, e.rnc, rncAgent.get(e.rnc), shiftIso(-(tasks.length % 7)), e.prioridad, e.zonaOperativa],
     });
     const companyId = Number(t.rows[0].id);
     const est = await client.execute({
@@ -182,10 +183,11 @@ export async function seedDemo(client, env = process.env) {
 
   const withPhone = tasks.filter((t) => t.e.telefono);
   // Commitments (follow-up in the coming days)
-  for (const t of withPhone.slice(0, 4)) {
+  for (const [i, t] of withPhone.slice(0, 4).entries()) {
     const commitment = shiftDays(3);
     await attempt(t, 1, { contacted: true, code: "01", daysAgo: 2, spoke: "Carmen Rosario", commitment });
-    await setTask(t, { status: "followup", attempts: 1, next: shiftIso(10), code: "01" });
+    // The first one's follow-up is already overdue (highlighted in the agent's list).
+    await setTask(t, { status: "followup", attempts: 1, next: i === 0 ? shiftIso(-2) : shiftIso(10), code: "01" });
     await setEst(t, { code: "01", op: "Sí", commitment, visit: "No", contact: "Carmen Rosario" });
   }
   // No answer once → due again today
@@ -225,6 +227,13 @@ export async function seedDemo(client, env = process.env) {
       args: [campaignId, t.estId, t.e.estatusRnt, shiftDays(-2), userIds["demo.admin"]],
     });
   }
+  // Two calls already reviewed by the supervisor (one with a comment), so "Llamadas realizadas" shows both states.
+  await client.execute({
+    sql: `UPDATE call_attempts SET reviewed_at = ?, reviewed_by = ?, review_comment = CASE WHEN id = (SELECT min(id) FROM call_attempts WHERE campaign_id = ?)
+          THEN 'Buen manejo: confirmó la fecha de compromiso con el responsable.' ELSE NULL END
+          WHERE id IN (SELECT id FROM call_attempts WHERE campaign_id = ? ORDER BY id LIMIT 2)`,
+    args: [shiftIso(-1), userIds["demo.supervisor"], campaignId, campaignId],
+  });
   // Establishments with no valid phone go straight to visit
   for (const t of tasks.filter((x) => !x.e.telefono)) {
     await setTask(t, { status: "visit", attempts: 0, code: null });

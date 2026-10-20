@@ -41,6 +41,8 @@ export const companies = sqliteTable(
     razonSocial: text("razon_social"),
     rnc: text("rnc"),
     assignedUserId: integer("assigned_user_id").references(() => users.id),
+    // When the task was last (re)assigned: used to count how many days a never-called task has waited.
+    assignedAt: text("assigned_at"),
     // pending | retry | followup | visit | done
     status: text("status").notNull().default("pending"),
     attempts: integer("attempts").notNull().default(0),
@@ -161,8 +163,12 @@ export const callAttempts = sqliteTable(
     isResponsible: integer("is_responsible", { mode: "boolean" }),
     whatsappSent: integer("whatsapp_sent", { mode: "boolean" }).notNull().default(false),
     notes: text("notes"),
+    // Review by a supervisor or administrator
+    reviewedAt: text("reviewed_at"),
+    reviewedBy: integer("reviewed_by").references(() => users.id),
+    reviewComment: text("review_comment"),
   },
-  (t) => [index("attempts_company").on(t.companyId), index("attempts_campaign").on(t.campaignId)],
+  (t) => [index("attempts_company").on(t.companyId), index("attempts_campaign").on(t.campaignId), index("attempts_called_at").on(t.calledAt)],
 );
 
 // Result of an attempt for each establishment of the company ("se tipifica cada establecimiento").

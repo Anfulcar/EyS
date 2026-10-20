@@ -31,7 +31,7 @@ export type Stats = {
   attempts: number;
   byCode: { code: string; n: number }[];
   byDay: { day: string; calls: number; contacts: number }[];
-  byAgent: { agent: string; companies: number; done: number; calls: number; contacts: number; commitments: number }[];
+  byAgent: { id: number; agent: string; companies: number; done: number; calls: number; contacts: number; commitments: number }[];
   byZone: Breakdown[];
   byPriority: Breakdown[];
   bySubsector: Breakdown[];
@@ -41,6 +41,21 @@ export type Stats = {
 };
 
 const IN_PROCESS = ["En proceso", "Vigente"];
+type Est = typeof establishments.$inferSelect;
+
+// The rules behind every dashboard number (shared by the counts and by the lists behind them).
+function predicates(visitsByEst: Map<number, string[]>) {
+  const isClosed = (e: Est) => e.finalCode === "05" || (visitsByEst.get(e.id) ?? []).includes("V4") || e.estatusSigturActualizado === "Inactivo (depurado)";
+  const isOperating = (e: Est) => e.enOperacion === "Sí";
+  const isCommitment = (e: Est) => e.finalCode === "01" || !!e.fechaCompromiso;
+  const inProcess = (e: Est) => !!e.estatusSigturActualizado && IN_PROCESS.includes(e.estatusSigturActualizado);
+  const contactedAny = (e: Est) => !!e.finalCode && ["01", "02", "03", "04", "05", "06"].includes(e.finalCode);
+  const today = new Date().toISOString().slice(0, 10);
+  const limitOf = (e: Est) => addBusinessDays(e.fechaCompromiso!, 5);
+  const commitmentDue = (e: Est) => !!e.fechaCompromiso && (limitOf(e) <= today || inProcess(e));
+  const commitmentKept = (e: Est) => commitmentDue(e) && inProcess(e) && (!e.fechaCambioEstatus || e.fechaCambioEstatus <= limitOf(e));
+  return { isClosed, isOperating, isCommitment, inProcess, contactedAny, commitmentDue, commitmentKept };
+}
 
 export async function computeStats(campaignIds: number[]): Promise<Stats> {
   const ids = campaignIds.length ? campaignIds : [-1];
@@ -66,22 +81,9 @@ export async function computeStats(campaignIds: number[]): Promise<Stats> {
   const visitsByEst = new Map<number, string[]>();
   for (const v of vis) visitsByEst.set(v.establishmentId, [...(visitsByEst.get(v.establishmentId) ?? []), v.code]);
 
-  const isClosed = (e: (typeof ests)[0]) => e.finalCode === "05" || (visitsByEst.get(e.id) ?? []).includes("V4") || e.estatusSigturActualizado === "Inactivo (depurado)";
-  const isOperating = (e: (typeof ests)[0]) => e.enOperacion === "Sí";
-  const isCommitment = (e: (typeof ests)[0]) => e.finalCode === "01" || !!e.fechaCompromiso;
-  const inProcess = (e: (typeof ests)[0]) => !!e.estatusSigturActualizado && IN_PROCESS.includes(e.estatusSigturActualizado);
-  const contactedAny = (e: (typeof ests)[0]) => !!e.finalCode && ["01", "02", "03", "04", "05", "06"].includes(e.finalCode);
-
-  const today = new Date().toISOString().slice(0, 10);
-  let commitmentsDue = 0;
-  let commitmentsKept = 0;
-  for (const e of ests) {
-    if (!e.fechaCompromiso) continue;
-    const limit = addBusinessDays(e.fechaCompromiso, 5);
-    if (limit > today && !inProcess(e)) continue; // not due yet
-    commitmentsDue++;
-    if (inProcess(e) && (!e.fechaCambioEstatus || e.fechaCambioEstatus <= limit)) commitmentsKept++;
-  }
+  const { isClosed, isOperating, isCommitment, inProcess, contactedAny, commitmentDue, commitmentKept } = predicates(visitsByEst);
+  const commitmentsDue = ests.filter(commitmentDue).length;
+  const commitmentsKept = ests.filter(commitmentKept).length;
 
   const breakdown = (keyFn: (e: (typeof ests)[0]) => string | null): Breakdown[] => {
     const m = new Map<string, Breakdown>();
@@ -116,11 +118,11 @@ export async function computeStats(campaignIds: number[]): Promise<Stats> {
   }
 
   const names = new Map(people.map((p) => [p.id, p.name]));
-  const agentMap = new Map<number, { agent: string; companies: number; done: number; calls: number; contacts: number; commitments: number }>();
+  const agentMap = new Map<number, Stats["byAgent"][number]>();
   const agentRow = (id: number) => {
     let r = agentMap.get(id);
     if (!r) {
-      r = { agent: names.get(id) ?? `#${id}`, companies: 0, done: 0, calls: 0, contacts: 0, commitments: 0 };
+      r = { id, agent: names.get(id) ?? `#${id}`, companies: 0, done: 0, calls: 0, contacts: 0, commitments: 0 };
       agentMap.set(id, r);
     }
     return r;
@@ -178,5 +180,88 @@ export async function computeStats(campaignIds: number[]): Promise<Stats> {
     byChannel: tally(ests.map((e) => e.canalLogro)),
     byStatus: tally(ests.map((e) => e.estatusSigturActualizado ?? e.estatusRnt)),
     companiesByStatus: tally(comps.map((c) => c.status)),
+  };
+}
+
+// ---------- Lists behind the numbers ----------
+
+export const METRICS = [
+  "all", "called", "effective", "contacted", "typified", "operatingContacted", "commitments", "commitmentsDue", "commitmentsKept",
+  "closed", "needVisit", "notified", "emailsSent", "bounced", "expiredOperating", "expiredInProcess", "noLicenseOperating", "noLicenseApplied",
+] as const;
+export type Metric = (typeof METRICS)[number];
+export const DIMENSIONS = ["code", "status", "estatus", "channel", "zone", "priority", "subsector", "agent"] as const;
+export type Dimension = (typeof DIMENSIONS)[number];
+export type DrillFilter = { metric?: Metric; dim?: Dimension; value?: string };
+
+export async function drillDown(campaignIds: number[], f: DrillFilter) {
+  const ids = campaignIds.length ? campaignIds : [-1];
+  const [ests, results, attempts, comps, vis, people] = await Promise.all([
+    db.select().from(establishments).where(inArray(establishments.campaignId, ids)),
+    db.select({ establishmentId: callResults.establishmentId, attemptId: callResults.attemptId }).from(callResults).where(inArray(callResults.campaignId, ids)),
+    db.select({ id: callAttempts.id, contacted: callAttempts.contacted, attended: callAttempts.attended, isResponsible: callAttempts.isResponsible }).from(callAttempts).where(inArray(callAttempts.campaignId, ids)),
+    db.select().from(companies).where(inArray(companies.campaignId, ids)),
+    db.select({ establishmentId: visits.establishmentId, code: visits.code }).from(visits).where(inArray(visits.campaignId, ids)),
+    db.select({ id: users.id, name: users.name }).from(users),
+  ]);
+  const attemptById = new Map(attempts.map((a) => [a.id, a]));
+  const called = new Set<number>();
+  const effective = new Set<number>();
+  for (const r of results) {
+    called.add(r.establishmentId);
+    const a = attemptById.get(r.attemptId);
+    if (a?.contacted && a.attended !== false && a.isResponsible) effective.add(r.establishmentId);
+  }
+  const visitsByEst = new Map<number, string[]>();
+  for (const v of vis) visitsByEst.set(v.establishmentId, [...(visitsByEst.get(v.establishmentId) ?? []), v.code]);
+  const p = predicates(visitsByEst);
+  const compById = new Map(comps.map((c) => [c.id, c]));
+  const names = new Map(people.map((u) => [u.id, u.name]));
+  const notified = (e: Est) => (!!e.correoEnviadoFecha && e.correoRebotado !== "Sí") || p.contactedAny(e) || visitsByEst.has(e.id);
+  const metricOk: Record<Metric, (e: Est) => boolean> = {
+    all: () => true,
+    called: (e) => called.has(e.id),
+    effective: (e) => effective.has(e.id),
+    contacted: p.contactedAny,
+    typified: (e) => !!e.finalCode,
+    operatingContacted: (e) => p.contactedAny(e) && p.isOperating(e),
+    commitments: p.isCommitment,
+    commitmentsDue: p.commitmentDue,
+    commitmentsKept: p.commitmentKept,
+    closed: p.isClosed,
+    needVisit: (e) => e.requiereVisita === "Sí",
+    notified,
+    emailsSent: (e) => !!e.correoEnviadoFecha,
+    bounced: (e) => e.correoRebotado === "Sí",
+    expiredOperating: (e) => e.estatusRnt === "Vencida" && !p.isClosed(e),
+    expiredInProcess: (e) => e.estatusRnt === "Vencida" && p.inProcess(e),
+    noLicenseOperating: (e) => e.estatusRnt === "Sin licencia" && !p.isClosed(e),
+    noLicenseApplied: (e) => e.estatusRnt === "Sin licencia" && p.inProcess(e),
+  };
+  const dimValue: Record<Dimension, (e: Est) => string | null> = {
+    code: (e) => e.finalCode,
+    status: (e) => compById.get(e.companyId)?.status ?? null,
+    estatus: (e) => e.estatusSigturActualizado ?? e.estatusRnt,
+    channel: (e) => e.canalLogro,
+    zone: (e) => e.zonaOperativa || "—",
+    priority: (e) => e.prioridad || "—",
+    subsector: (e) => e.subsector || "—",
+    agent: (e) => String(compById.get(e.companyId)?.assignedUserId ?? ""),
+  };
+  const metric = f.metric && metricOk[f.metric] ? metricOk[f.metric] : metricOk.all;
+  const rows = ests.filter((e) => metric(e) && (!f.dim || !dimValue[f.dim] || dimValue[f.dim](e) === (f.value ?? "")));
+  return rows
+    .map((e) => {
+      const c = compById.get(e.companyId);
+      return { e, task: c ?? null, agent: c?.assignedUserId ? names.get(c.assignedUserId) ?? null : null };
+    })
+    .sort((a, b) => (a.e.prioridad ?? "").localeCompare(b.e.prioridad ?? "") || (a.e.nombreComercial ?? "").localeCompare(b.e.nombreComercial ?? ""));
+}
+
+export function parseDrill(sp: Record<string, string | undefined>): DrillFilter {
+  return {
+    metric: (METRICS as readonly string[]).includes(sp.m ?? "") ? (sp.m as Metric) : undefined,
+    dim: (DIMENSIONS as readonly string[]).includes(sp.d ?? "") ? (sp.d as Dimension) : undefined,
+    value: sp.v,
   };
 }

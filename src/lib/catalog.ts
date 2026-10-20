@@ -187,6 +187,7 @@ export const ACTIVITY_LABELS: Record<string, L> = {
   "assignment.run": { es: "Asignación de tareas", en: "Tasks assigned" },
   "task.reassigned": { es: "Tarea reasignada", en: "Task reassigned" },
   "call.logged": { es: "Llamada registrada", en: "Call logged" },
+  "call.reviewed": { es: "Llamada revisada", en: "Call reviewed" },
   "phone.added": { es: "Número agregado", en: "Number added" },
   "visit.logged": { es: "Visita registrada", en: "Visit logged" },
   "export.downloaded": { es: "Descarga de datos", en: "Data downloaded" },
