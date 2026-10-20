@@ -16,6 +16,15 @@ const db = drizzle(client);
 await migrate(db, { migrationsFolder: "./drizzle" });
 console.log(`[migrate] migrations applied to ${url.replace(/\?.*$/, "")}`);
 
+if (process.env.SEED_DEMO === "true") {
+  // Preview sites only: reload made-up people and data (see scripts/seed-demo.mjs for the safety locks).
+  const { seedDemo } = await import("./seed-demo.mjs");
+  const r = await seedDemo(client, process.env);
+  console.log(`[demo] demo data reloaded: ${r.users} people, ${r.establishments} establishments`);
+  client.close();
+  process.exit(0);
+}
+
 const { rows } = await client.execute("SELECT COUNT(*) AS n FROM users");
 if (Number(rows[0].n) === 0) {
   const username = (process.env.ADMIN_USERNAME ?? "").trim().toLowerCase();

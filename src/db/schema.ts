@@ -233,3 +233,9 @@ export type Phone = typeof phones.$inferSelect;
 export type CallAttempt = typeof callAttempts.$inferSelect;
 export type CallResult = typeof callResults.$inferSelect;
 export type Visit = typeof visits.$inferSelect;
+
+// Small key/value table for app-level markers (e.g. mode = "demo" on the preview database).
+export const appMeta = sqliteTable("app_meta", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+});
