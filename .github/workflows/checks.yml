@@ -1,0 +1,64 @@
+name: Checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Type check, lint, tests, build, browser test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # Throw-away database file for the build; never a real database.
+      TURSO_DATABASE_URL: file:ci.db
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Generate test-only session key
+        run: echo "AUTH_SECRET=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+
+      - name: Install
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Tests
+        run: npm test
+
+      - name: Production build (same as Vercel)
+        run: npm run build
+
+      - name: Install browser for the browser test
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser test of the main journey
+        run: npm run test:e2e
+
+      - name: Keep the browser-test report when it fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
