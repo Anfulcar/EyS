@@ -197,3 +197,26 @@ export const ERROR_SOURCES: Record<string, L> = {
   action: { es: "Acción", en: "Action" },
   browser: { es: "Navegador", en: "Browser" },
 };
+
+// Short result labels for compact lists (the full text is shown on hover).
+export const CODE_SHORT: Record<string, L> = {
+  "01": { es: "Compromiso", en: "Commitment" },
+  "02": { es: "Ya inició", en: "Already applied" },
+  "03": { es: "Requiere asistencia", en: "Needs help" },
+  "04": { es: "Se niega", en: "Refuses" },
+  "05": { es: "Cerró", en: "Closed" },
+  "06": { es: "Cambió dueño", en: "Changed owner" },
+  "07": { es: "Número equivocado", en: "Wrong number" },
+  "08": { es: "No contesta", en: "No answer" },
+  "09": { es: "Fuera de servicio", en: "Out of service" },
+  "10": { es: "Buzón", en: "Voicemail" },
+};
+
+// Colour group of a result: good (applying), info, warning (no contact), bad (refuses/closed).
+export function codeTone(code: string | null | undefined): "good" | "info" | "warn" | "bad" | "none" {
+  if (!code) return "none";
+  if (code === "01" || code === "02") return "good";
+  if (code === "03" || code === "06") return "info";
+  if (code === "04" || code === "05" || code === "09" || code === "07") return "bad";
+  return "warn";
+}

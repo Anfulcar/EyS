@@ -1,4 +1,5 @@
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
+import { FileField } from "@/components/FileField";
 import { getDict } from "@/lib/i18n-server";
 import { uploadStatusAction } from "../../../actions";
 
@@ -16,7 +17,7 @@ export default async function StatusPage({ params }: { params: Promise<{ id: str
         <label className="choice flex items-center gap-2"><input type="radio" name="target" value={id} defaultChecked /> {t.campaign}: {lang === "es" ? "solo esta" : "this one only"}</label>
         <label className="choice flex items-center gap-2"><input type="radio" name="target" value="all" /> {lang === "es" ? "Todas las campañas no cerradas" : "All campaigns not closed"}</label>
       </div>
-      <input type="file" name="file" accept=".xlsx,.csv" required className="text-sm" />
+      <FileField label={t.chooseFile} required />
       <SubmitButton>{t.upload}</SubmitButton>
     </ActionForm>
   );

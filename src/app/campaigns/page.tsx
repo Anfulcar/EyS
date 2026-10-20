@@ -1,59 +1,76 @@
-import { desc, sql } from "drizzle-orm";
+import { desc, inArray, sql } from "drizzle-orm";
+import { CalendarDays, ChevronRight, Plus } from "lucide-react";
 import Link from "next/link";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
+import { CampaignFields } from "@/components/CampaignFields";
+import { Overlay } from "@/components/Overlay";
 import { Empty, StatusBadge } from "@/components/ui";
 import { db } from "@/db";
-import { campaigns } from "@/db/schema";
+import { campaigns, companies, establishments } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { fmtDate } from "@/lib/dates";
 import type { Dict } from "@/lib/i18n";
 import { getDict } from "@/lib/i18n-server";
-import { CampaignFields } from "@/components/CampaignFields";
 import { createCampaignAction } from "../actions";
 
 export default async function CampaignsPage() {
   const me = await requireUser(["admin", "supervisor"]);
   const { t, lang } = await getDict();
-  const list = await db
-    .select({
-      c: campaigns,
-      companies: sql<number>`(select count(*) from companies where campaign_id = ${campaigns.id})`,
-      ests: sql<number>`(select count(*) from establishments where campaign_id = ${campaigns.id})`,
-      done: sql<number>`(select count(*) from companies where campaign_id = ${campaigns.id} and status in ('done','visit'))`,
-    })
-    .from(campaigns)
-    .orderBy(desc(campaigns.startDate));
+  const list = await db.select().from(campaigns).orderBy(desc(campaigns.startDate));
+  const ids = list.length ? list.map((c) => c.id) : [-1];
+  // Counts per campaign (grouped queries, so each card shows its own totals).
+  const [taskRows, estRows] = await Promise.all([
+    db
+      .select({ id: companies.campaignId, n: sql<number>`count(*)`, done: sql<number>`sum(case when ${companies.status} in ('done','visit') then 1 else 0 end)` })
+      .from(companies)
+      .where(inArray(companies.campaignId, ids))
+      .groupBy(companies.campaignId),
+    db.select({ id: establishments.campaignId, n: sql<number>`count(*)` }).from(establishments).where(inArray(establishments.campaignId, ids)).groupBy(establishments.campaignId),
+  ]);
+  const tasks = new Map(taskRows.map((r) => [r.id, r]));
+  const ests = new Map(estRows.map((r) => [r.id, r.n]));
+
   return (
     <div className="space-y-6">
-      <h1>{t.navCampaigns}</h1>
+      <div className="page-title">
+        <h1>{t.navCampaigns}</h1>
+        {me.role === "admin" && (
+          <Overlay trigger={<><Plus className="h-4 w-4" />{t.newCampaign}</>} title={t.newCampaign}>
+            <ActionForm action={createCampaignAction} className="space-y-5">
+              <CampaignFields t={t} />
+              <div className="flex justify-end"><SubmitButton>{t.create}</SubmitButton></div>
+            </ActionForm>
+          </Overlay>
+        )}
+      </div>
       {list.length === 0 ? (
         <Empty>{t.noCampaigns}</Empty>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {list.map(({ c, companies, ests, done }) => (
-            <Link key={c.id} href={`/campaigns/${c.id}`} className="card block transition hover:border-brand-500">
-              <div className="flex items-start justify-between gap-2">
-                <h2 className="leading-snug">{c.name}</h2>
-                <StatusBadge status={c.status} label={t[`campaignStatus_${c.status}` as keyof Dict]} />
-              </div>
-              <p className="mt-1 text-sm text-slate-500">
-                {fmtDate(c.startDate, lang)} – {fmtDate(c.endDate, lang)}
-              </p>
-              <div className="mt-4 flex gap-6 text-sm">
-                <div><div className="text-xl font-semibold tabular-nums">{companies}</div><div className="text-slate-500">{t.companies}</div></div>
-                <div><div className="text-xl font-semibold tabular-nums">{ests}</div><div className="text-slate-500">{t.establishments}</div></div>
-                <div><div className="text-xl font-semibold tabular-nums">{companies ? Math.round((done / companies) * 100) : 0} %</div><div className="text-slate-500">{t.finished}</div></div>
-              </div>
-            </Link>
-          ))}
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {list.map((c) => {
+            const n = tasks.get(c.id)?.n ?? 0;
+            const done = tasks.get(c.id)?.done ?? 0;
+            const pctDone = n ? Math.round((done / n) * 100) : 0;
+            return (
+              <Link key={c.id} href={`/campaigns/${c.id}`} className="card group flex flex-col gap-4 transition hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-md">
+                <div className="flex items-start justify-between gap-3">
+                  <h2 className="leading-snug">{c.name}</h2>
+                  <StatusBadge status={c.status} label={t[`campaignStatus_${c.status}` as keyof Dict]} />
+                </div>
+                <p className="-mt-2 flex items-center gap-1.5 text-sm text-slate-500"><CalendarDays className="h-4 w-4" />{fmtDate(c.startDate, lang)} – {fmtDate(c.endDate, lang)}</p>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="rounded-xl bg-slate-50 px-3 py-2"><div className="text-lg font-bold tabular-nums text-slate-900">{n}</div><div className="text-xs text-slate-500">{t.companies}</div></div>
+                  <div className="rounded-xl bg-slate-50 px-3 py-2"><div className="text-lg font-bold tabular-nums text-slate-900">{ests.get(c.id) ?? 0}</div><div className="text-xs text-slate-500">{t.establishments}</div></div>
+                </div>
+                <div>
+                  <div className="mb-1 flex justify-between text-xs text-slate-500"><span>{t.finished}</span><span className="font-medium text-slate-700">{pctDone} %</span></div>
+                  <div className="h-1.5 rounded-full bg-slate-100"><div className="h-1.5 rounded-full bg-brand-600" style={{ width: `${pctDone}%` }} /></div>
+                </div>
+                <span className="mt-auto flex items-center justify-end gap-1 text-sm font-medium text-brand-600 opacity-0 transition group-hover:opacity-100">{lang === "es" ? "Abrir" : "Open"} <ChevronRight className="h-4 w-4" /></span>
+              </Link>
+            );
+          })}
         </div>
-      )}
-      {me.role === "admin" && (
-        <ActionForm action={createCampaignAction} className="card space-y-4">
-          <h2>{t.newCampaign}</h2>
-          <CampaignFields t={t} />
-          <SubmitButton>{t.create}</SubmitButton>
-        </ActionForm>
       )}
     </div>
   );

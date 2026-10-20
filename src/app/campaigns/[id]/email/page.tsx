@@ -1,5 +1,6 @@
 import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
+import { FileField } from "@/components/FileField";
 import { db } from "@/db";
 import { establishments } from "@/db/schema";
 import { todayLocal } from "@/lib/dates";
@@ -49,7 +50,7 @@ export default async function EmailPage({ params }: { params: Promise<{ id: stri
           <h3>{t.bouncesUpload}</h3>
           <p className="text-sm text-slate-600">{t.bouncesHelp}</p>
           <input type="hidden" name="campaignId" value={id} />
-          <input type="file" name="file" accept=".xlsx,.csv" required className="text-sm" />
+          <FileField label={t.chooseFile} required />
           <SubmitButton>{t.upload}</SubmitButton>
         </ActionForm>
       </div>

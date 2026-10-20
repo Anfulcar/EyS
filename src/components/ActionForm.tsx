@@ -12,9 +12,10 @@ type Props = {
   children: React.ReactNode;
   className?: string;
   resetOnSuccess?: boolean;
+  id?: string;
 };
 
-export function ActionForm({ action, children, className, resetOnSuccess }: Props) {
+export function ActionForm({ action, children, className, resetOnSuccess, id }: Props) {
   // Keeps what was submitted, so it can be sent again after the password is confirmed
   // (the browser resets the form fields after each submission).
   const lastSubmitted = useRef<FormData | null>(null);
@@ -41,7 +42,7 @@ export function ActionForm({ action, children, className, resetOnSuccess }: Prop
   }, [formAction]);
   return (
     <>
-      <form ref={ref} action={formAction} className={className}>
+      <form ref={ref} id={id} action={formAction} className={className}>
         {children}
         {!askPassword && <Message state={state} />}
       </form>

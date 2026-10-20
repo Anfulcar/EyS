@@ -1,10 +1,11 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import type { ActionState } from "@/app/actions";
 import { withConnectionCheck } from "@/lib/connection";
 import type { Dict } from "@/lib/i18n";
 import { Message } from "./ActionForm";
+import { FileField } from "./FileField";
 
 type Preview = {
   fileName: string; rows: number; valid: number; mapping: Record<string, string>; ignored: string[]; missing: string[];
@@ -21,7 +22,7 @@ export function ImportForm({ campaignId, t, preview: rawPreview, commit: rawComm
   const [p, setP] = useState<Preview | null>(null);
   const [state, setState] = useState<ActionState>(null);
   const [pending, start] = useTransition();
-  const input = useRef<HTMLInputElement>(null);
+  const [resetKey, setResetKey] = useState(0);
 
   const fd = () => {
     const f = new FormData();
@@ -49,14 +50,14 @@ export function ImportForm({ campaignId, t, preview: rawPreview, commit: rawComm
       if (r?.ok) {
         setP(null);
         setFile(null);
-        if (input.current) input.current.value = "";
+        setResetKey((k) => k + 1);
       }
     });
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <input ref={input} type="file" accept=".xlsx,.csv" className="text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-brand-700" onChange={(e) => e.target.files?.[0] && doPreview(e.target.files[0])} />
+        <div className="w-full max-w-md"><FileField key={resetKey} name="upload" label={t.chooseFile} onFile={doPreview} /></div>
         {pending && <span className="text-sm text-slate-500">…</span>}
       </div>
       <Message state={state} />

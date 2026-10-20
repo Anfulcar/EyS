@@ -19,17 +19,17 @@ export default async function VisitsPage({ searchParams }: { searchParams: Promi
         <div><h1>{t.visitsTitle}</h1></div>
         <a href={`/api/visits?${qs}`} className="btn-secondary">⬇ {t.downloadRoute}</a>
       </div>
-      <form className="card flex flex-wrap items-end gap-3 p-4">
+      <form className="card grid items-end gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto]">
         <div>
           <label className="label">{t.campaign}</label>
-          <select name="campaign" defaultValue={sp.campaign ?? ""} className="input w-64">
+          <select name="campaign" defaultValue={sp.campaign ?? ""} className="input">
             <option value="">{t.all}</option>
             {active.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
         <div>
           <label className="label">{t.zone}</label>
-          <select name="zone" defaultValue={sp.zone ?? ""} className="input w-72">
+          <select name="zone" defaultValue={sp.zone ?? ""} className="input">
             <option value="">{t.all}</option>
             {zones.map((z) => <option key={z} value={z}>{z}</option>)}
           </select>

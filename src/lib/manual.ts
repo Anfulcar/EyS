@@ -6,6 +6,7 @@ type Section = { id: string; roles: string[]; title: string; intro?: string; ste
 type L<T> = Record<Lang, T>;
 
 export const WHATS_NEW: { date: string; es: string; en: string }[] = [
+  { date: "2026-10-20", es: "Pantallas de administración más limpias: «+ Nueva campaña» y «+ Nuevo usuario» en ventanas, lista de tareas compacta con «Asignar tareas» en un panel lateral y asignación de filas seleccionadas, configuración de campaña ordenada. Las tarjetas de campaña muestran los totales correctos.", en: "Cleaner administration screens: “+ New campaign” and “+ New user” in pop-ups, compact task list with “Assign tasks” in a side panel and assignment of ticked rows, tidier campaign settings. Campaign cards show the correct totals." },
   { date: "2026-10-20", es: "Manual de uso en la aplicación (esta página), con esta sección de novedades.", en: "In-app manual (this page), with this What's new section." },
   { date: "2026-10-20", es: "Acciones sensibles (eliminar campaña, crear usuarios, cambiar rol, estado o contraseña) piden confirmar la contraseña si el último ingreso fue hace más de 10 minutos.", en: "Sensitive actions (delete a campaign, create users, change role, status or password) ask to confirm the password if the last sign-in was more than 10 minutes ago." },
   { date: "2026-10-20", es: "Nuevo «Registro» para administradores: actividad (quién hizo qué y cuándo) y errores, con filtros y descarga.", en: "New “Log” for administrators: activity (who did what and when) and errors, with filters and download." },
@@ -76,9 +77,9 @@ const ES: Section[] = [
   {
     id: "campaigns", roles: ["supervisor", "admin"], title: "Campañas: carga y asignación",
     steps: [
-      "«Campañas» → «Nueva campaña» (administradores): nombre, fechas de inicio y fin, intentos máximos y días de seguimiento.",
+      "«Campañas» → «+ Nueva campaña» (administradores) abre una ventana: nombre, fechas de inicio y fin, intentos máximos y días de seguimiento.",
       "«Carga masiva»: descargue la plantilla maestra, pegue los establecimientos (mismos encabezados que la Matriz) y cárguela. Verá una vista previa antes de confirmar.",
-      "«Tareas y asignación»: elija el método (repartir equitativamente, por zona o todo a un agente). Los establecimientos de la misma empresa quedan con el mismo agente. También puede reasignar tareas una por una.",
+      "«Tareas y asignación»: la lista muestra cada establecimiento con su último resultado. «Asignar tareas» abre un panel con el método (repartir equitativamente, por zona o todo a un agente); los establecimientos de la misma empresa quedan con el mismo agente. También puede marcar filas y usar «Asignar seleccionadas a», o cambiar el agente de una fila (se guarda solo).",
       "«Correos»: registre la fecha de envío del correo masivo y cargue los correos rebotados.",
       "«Actualización de estatus»: cargue el estatus de SIGTUR para medir quién pasó a «En proceso».",
       "«Exportar»: la Matriz de seguimiento completa en Excel y todas las llamadas en CSV.",
@@ -94,7 +95,7 @@ const ES: Section[] = [
   {
     id: "admin", roles: ["admin"], title: "Administración: usuarios, seguridad y registro",
     bullets: [
-      "«Usuarios»: cree usuarios (si deja la contraseña vacía será usuario + 123), edite nombre, usuario, rol y estado, o restablezca la contraseña.",
+      "«Usuarios»: «+ Nuevo usuario» abre una ventana (si deja la contraseña vacía será usuario + 123). «Editar» abre la misma ventana para cambiar nombre, usuario, rol, estado o contraseña.",
       "Por seguridad, eliminar una campaña, crear usuarios o cambiar rol, estado o contraseña pide confirmar su contraseña si su último ingreso fue hace más de 10 minutos.",
       "«Registro» → «Actividad»: quién hizo qué y cuándo (ingresos, cambios de usuarios, cargas, asignaciones, llamadas, visitas, descargas de datos). «Errores»: fallos de la aplicación. Se puede filtrar y descargar en CSV.",
     ],
@@ -169,9 +170,9 @@ const EN: Section[] = [
   {
     id: "campaigns", roles: ["supervisor", "admin"], title: "Campaigns: upload and assignment",
     steps: [
-      "“Campaigns” → “New campaign” (administrators): name, start and end dates, max attempts and follow-up days.",
+      "“Campaigns” → “+ New campaign” (administrators) opens a pop-up: name, start and end dates, max attempts and follow-up days.",
       "“Bulk upload”: download the master template, paste the establishments (same headers as the Matriz) and upload it. You see a preview before confirming.",
-      "“Tasks & assignment”: choose the method (split evenly, by zone or all to one agent). Establishments of the same company stay with the same agent. You can also reassign tasks one by one.",
+      "“Tasks & assignment”: the list shows each establishment with its last result. “Assign tasks” opens a panel with the method (split evenly, by zone or all to one agent); establishments of the same company stay with the same agent. You can also tick rows and use “Assign selected to”, or change a row's agent (it saves on its own).",
       "“Emails”: log the mass email's send date and upload bounced emails.",
       "“Status update”: upload the SIGTUR status to measure who moved to “En proceso”.",
       "“Export”: the full tracking Matriz in Excel and every call in CSV.",
@@ -187,7 +188,7 @@ const EN: Section[] = [
   {
     id: "admin", roles: ["admin"], title: "Administration: users, security and log",
     bullets: [
-      "“Users”: create users (an empty password becomes username + 123), edit name, username, role and status, or reset the password.",
+      "“Users”: “+ New user” opens a pop-up (an empty password becomes username + 123). “Edit” opens the same pop-up to change name, username, role, status or password.",
       "For security, deleting a campaign, creating users or changing a role, status or password asks you to confirm your password if your last sign-in was more than 10 minutes ago.",
       "“Log” → “Activity”: who did what and when (sign-ins, user changes, uploads, assignments, calls, visits, data downloads). “Errors”: app failures. Filter and download as CSV.",
     ],
