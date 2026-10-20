@@ -15,7 +15,7 @@ import { DICTS } from "@/lib/i18n";
 import { getDict } from "@/lib/i18n-server";
 import { buildRecords, commitImport, previewImport } from "@/lib/importer";
 import { formatPhone, normalizePhone, readTable, str } from "@/lib/sheets";
-import { applyStatusUpdates, canWorkCompany, logCall, logVisit, type CallInput } from "@/lib/workflow";
+import { applyStatusUpdates, canWorkCompany, logCall, logVisit, relatedTasks, type CallInput } from "@/lib/workflow";
 
 export type ActionState = { ok?: boolean; error?: string; message?: string; data?: unknown } | null;
 
@@ -281,13 +281,20 @@ export async function assignAction(_: ActionState, form: FormData): Promise<Acti
   } else if (strategy === "single") {
     for (const c of list) assignment.set(c.id, agentIds[0]);
   } else {
-    // Balanced: biggest companies first, sorted by priority, each to the agent with the lowest load.
+    // Balanced: tasks of the same company (RNC) stay together with one agent; highest priority and
+    // biggest groups first, each group to the agent with the lowest load.
     const load = new Map(agentIds.map((a) => [a, 0]));
-    const sorted = [...list].sort((a, b) => (PRIORITY_ORDER[a.priority ?? ""] ?? 9) - (PRIORITY_ORDER[b.priority ?? ""] ?? 9) || (size.get(b.id) ?? 0) - (size.get(a.id) ?? 0));
-    for (const c of sorted) {
+    const groups = new Map<string, typeof list>();
+    for (const c of list) {
+      const k = (c.rnc ?? "").replace(/[^0-9A-Za-z]/g, "") || `task:${c.id}`;
+      groups.set(k, [...(groups.get(k) ?? []), c]);
+    }
+    const best = (g: typeof list) => Math.min(...g.map((c) => PRIORITY_ORDER[c.priority ?? ""] ?? 9));
+    const sorted = [...groups.values()].sort((a, b) => best(a) - best(b) || b.length - a.length);
+    for (const g of sorted) {
       const [agent] = [...load.entries()].sort((a, b) => a[1] - b[1])[0];
-      assignment.set(c.id, agent);
-      load.set(agent, load.get(agent)! + (size.get(c.id) ?? 1));
+      for (const c of g) assignment.set(c.id, agent);
+      load.set(agent, load.get(agent)! + g.reduce((n, c) => n + (size.get(c.id) ?? 1), 0));
     }
   }
   const byAgent = new Map<number, number[]>();
@@ -324,7 +331,14 @@ export async function logCallAction(_: ActionState, form: FormData): Promise<Act
       if (!input.results.length || input.results.some((r) => !CALL_CODES[r.code]?.contacted)) return { error: t.qResponse };
     }
     input.calledAt = input.calledAt ? new Date(input.calledAt).toISOString() : nowIso();
+    // The same call can be logged on sibling tasks (same RNC) that the user is allowed to work.
+    const main = await canWorkCompany(u, input.companyId);
+    if (!main) return { error: "Forbidden" };
+    const allowed = new Set((await relatedTasks(main)).map((c) => c.id));
+    const extra = [...new Set(input.relatedCompanyIds ?? [])].filter((id) => allowed.has(id));
+    for (const id of extra) if (!(await canWorkCompany(u, id))) return { error: "Forbidden" };
     await logCall(u, input);
+    for (const id of extra) await logCall(u, { ...input, companyId: id, phoneId: null });
   } catch (e) {
     const msg = (e as Error).message;
     return { error: msg === "commitmentRequired" ? t.commitmentRequired : msg };

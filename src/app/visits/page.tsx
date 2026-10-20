@@ -16,7 +16,7 @@ export default async function VisitsPage({ searchParams }: { searchParams: Promi
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <h1>{t.visitsTitle} <span className="text-base font-normal text-slate-500">({rows.length})</span></h1>
+        <div><h1>{t.visitsTitle}</h1></div>
         <a href={`/api/visits?${qs}`} className="btn-secondary">⬇ {t.downloadRoute}</a>
       </div>
       <form className="card flex flex-wrap items-end gap-3 p-4">
@@ -50,7 +50,7 @@ export default async function VisitsPage({ searchParams }: { searchParams: Promi
                   <div className="text-xs text-slate-500">{e.municipio} · {e.zonaOperativa} · {e.estatusRnt}{e.fechaVencimiento ? ` (${fmtDate(e.fechaVencimiento, lang)})` : ""}</div>
                   <div className="font-mono text-xs text-slate-500">{phones.join(" / ")}</div>
                   {e.finalCode && <div className="mt-1 text-xs">{codeLabel(e.finalCode, lang)}</div>}
-                  {visits.map((v) => <div key={v.id} className="text-xs text-violet-700">{t.visitNo} {v.visitNo} · {fmtDate(v.visitDate, lang)} · {codeLabel(v.code, lang)}</div>)}
+                  {visits.map((v) => <div key={v.id} className="text-xs text-violet-700">{fmtDate(v.visitDate, lang)} · {codeLabel(v.code, lang)}</div>)}
                 </div>
                 <details className="w-full md:w-96">
                   <summary className="btn btn-sm cursor-pointer list-none">{t.registerVisit}</summary>
@@ -64,7 +64,7 @@ export default async function VisitsPage({ searchParams }: { searchParams: Promi
                       <label className="label">{t.visitResult}</label>
                       <select name="code" className="input" required defaultValue="">
                         <option value="" disabled>—</option>
-                        {Object.entries(VISIT_CODES).map(([k, v]) => <option key={k} value={k}>{k} {v[lang]}</option>)}
+                        {Object.entries(VISIT_CODES).map(([k, v]) => <option key={k} value={k}>{v[lang]}</option>)}
                       </select>
                     </div>
                     <div><label className="label">{t.notes}</label><textarea name="notes" className="input" rows={2} /></div>

@@ -63,16 +63,16 @@ export async function GET() {
   [
     "PLANTILLA MAESTRA – CARGA DE ESTABLECIMIENTOS / MASTER UPLOAD TEMPLATE",
     "",
-    "1. Una fila por establecimiento en la hoja «Matriz de seguimiento». No cambie los encabezados. / One row per establishment; do not rename headers.",
-    "2. Obligatorias (rojo): ID SIGTUR y Nombre comercial. / Required (red): ID SIGTUR and Nombre comercial.",
-    "3. RNC / Cédula agrupa los establecimientos en una sola tarea de llamada por empresa. Si falta, se agrupa por Razón social. / RNC groups establishments into one call task per company.",
-    "4. Teléfono: puede poner varios números separados por « / » o « , ». Todos quedan disponibles en la tarea. / Several numbers allowed, separated by / or ,",
-    "5. Fechas en formato fecha de Excel o AAAA-MM-DD o DD/MM/AAAA. / Dates as Excel dates, YYYY-MM-DD or DD/MM/YYYY.",
-    "6. Columnas amarillas (seguimiento) son opcionales: si vienen llenas se cargan, si vienen vacías no borran lo registrado. / Yellow tracking columns are optional and never erase existing data when empty.",
-    "7. Las columnas «Llamada 1..3» y «Visita 1..2» se ignoran al cargar: las llamadas se registran en la aplicación. / Call and visit columns are ignored on upload.",
-    "8. Si el ID SIGTUR ya existe en la campaña, se actualiza. Puede volver a cargar el archivo corregido. / Existing IDs are updated.",
-    "9. Borre la fila de ejemplo (fila 2) antes de cargar. / Delete the sample row (row 2) before uploading.",
-    "10. Columnas adicionales no reconocidas se guardan como datos extra del establecimiento. / Unknown columns are stored as extra data.",
+    "• Una fila por establecimiento en la hoja «Matriz de seguimiento». No cambie los encabezados. / One row per establishment; do not rename headers.",
+    "• Obligatorias (rojo): ID SIGTUR y Nombre comercial; el RUT es muy recomendable. / Required (red): ID SIGTUR and Nombre comercial; RUT strongly recommended.",
+    "• Cada RUT es una tarea de llamada. Las tareas con el mismo RNC / Cédula se marcan como «misma empresa» y se pueden trabajar juntas. / Each RUT is one call task; tasks with the same RNC are linked as “same company”.",
+    "• Teléfono: puede poner varios números separados por « / » o « , ». Todos quedan disponibles en la tarea. / Several numbers allowed, separated by / or ,",
+    "• Fechas en formato fecha de Excel o AAAA-MM-DD o DD/MM/AAAA. / Dates as Excel dates, YYYY-MM-DD or DD/MM/YYYY.",
+    "• Columnas amarillas (seguimiento) son opcionales: si vienen llenas se cargan, si vienen vacías no borran lo registrado. / Yellow tracking columns are optional and never erase existing data when empty.",
+    "• Las columnas «Llamada 1..3» y «Visita 1..2» se ignoran al cargar: las llamadas se registran en la aplicación. / Call and visit columns are ignored on upload.",
+    "• Si el ID SIGTUR ya existe en la campaña, se actualiza. Puede volver a cargar el archivo corregido. / Existing IDs are updated.",
+    "• Borre la fila de ejemplo (fila 2) antes de cargar. / Delete the sample row (row 2) before uploading.",
+    "• Columnas adicionales no reconocidas se guardan como datos extra del establecimiento. / Unknown columns are stored as extra data.",
   ].forEach((line, i) => {
     const cell = ins.getCell(i + 1, 1);
     cell.value = line;

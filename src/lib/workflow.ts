@@ -1,9 +1,10 @@
 import "server-only";
-import { and, count, eq, inArray } from "drizzle-orm";
+import { and, count, eq, inArray, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { callAttempts, callResults, campaigns, companies, establishments, phones, statusChanges, visits, type User } from "@/db/schema";
 import { CONTACT_CODES } from "./catalog";
 import { addBusinessDays, addHours, businessDayStart, nowIso, todayLocal } from "./dates";
+import { normalizePhone } from "./sheets";
 
 export type EstResultInput = {
   establishmentId: number;
@@ -19,6 +20,10 @@ export type EstResultInput = {
 export type CallInput = {
   companyId: number;
   phoneId: number | null;
+  // Number dialed as text: used when the call is shared with sibling tasks that don't own phoneId.
+  phoneNumber?: string | null;
+  // Sibling tasks (same RNC) worked in the same call.
+  relatedCompanyIds?: number[];
   calledAt: string;
   contacted: boolean;
   attended: boolean | null;
@@ -64,7 +69,7 @@ export async function logCall(user: User, input: CallInput) {
       companyId: company.id,
       userId: user.id,
       phoneId: phone?.id ?? null,
-      phoneNumber: phone?.number ?? null,
+      phoneNumber: phone?.number ?? input.phoneNumber ?? null,
       calledAt: input.calledAt || now,
       attemptNo,
       contacted: input.contacted,
@@ -82,11 +87,19 @@ export async function logCall(user: User, input: CallInput) {
   const ops = [];
 
   if (failed) {
-    if (phone && (failCode === "07" || failCode === "09")) {
-      ops.push(db.update(phones).set({ quality: failCode === "07" ? "wrong" : "out_of_service" }).where(eq(phones.id, phone.id)));
+    // A wrong / dead number is flagged on this task (matched by number, so it also works for shared calls).
+    const dialed = phone?.normalized ?? (input.phoneNumber ? normalizePhone(input.phoneNumber) : null);
+    const badNumber = (failCode === "07" || failCode === "09") && dialed ? dialed : null;
+    if (badNumber) {
+      ops.push(
+        db
+          .update(phones)
+          .set({ quality: failCode === "07" ? "wrong" : "out_of_service" })
+          .where(and(eq(phones.companyId, company.id), eq(phones.normalized, badNumber))),
+      );
     }
     const allPhones = await db.select().from(phones).where(eq(phones.companyId, company.id));
-    const usable = allPhones.filter((p) => p.active && p.id !== (failCode === "07" || failCode === "09" ? phone?.id : -1) && (p.quality === "ok" || p.quality === "invalid"));
+    const usable = allPhones.filter((p) => p.active && p.normalized !== badNumber && (p.quality === "ok" || p.quality === "invalid"));
     const failedAttempts = company.failedAttempts + 1;
     const toVisit = usable.length === 0 || failedAttempts >= campaign.maxAttempts;
     for (const e of ests) {
@@ -183,6 +196,22 @@ export async function logCall(user: User, input: CallInput) {
   }
   if (ops.length) await db.batch(ops as [typeof ops[0], ...typeof ops]);
   return attempt.id;
+}
+
+// Other tasks of the same campaign whose establishment has the same RNC / Cédula.
+export async function relatedTasks(company: { id: number; campaignId: number; rnc: string | null }) {
+  const key = (company.rnc ?? "").replace(/[^0-9A-Za-z]/g, "");
+  if (key.length < 5) return [];
+  return db
+    .select()
+    .from(companies)
+    .where(
+      and(
+        eq(companies.campaignId, company.campaignId),
+        ne(companies.id, company.id),
+        sql`replace(replace(replace(coalesce(${companies.rnc}, ''), '-', ''), ' ', ''), '.', '') = ${key}`,
+      ),
+    );
 }
 
 export async function logVisit(

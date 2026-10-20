@@ -1,0 +1,32 @@
+"use client";
+
+import { BarChart3, Megaphone, MapPin, Phone, Users } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+
+const ICONS = { calls: Phone, campaigns: Megaphone, visits: MapPin, stats: BarChart3, users: Users };
+export type NavItem = { href: string; label: string; icon: keyof typeof ICONS };
+
+export function Nav({ items, mobile }: { items: NavItem[]; mobile?: boolean }) {
+  const path = usePathname();
+  return (
+    <nav className={mobile ? "flex gap-1 overflow-x-auto" : "flex flex-col gap-1"}>
+      {items.map((n) => {
+        const Icon = ICONS[n.icon];
+        const active = path === n.href || path.startsWith(n.href + "/");
+        return (
+          <Link
+            key={n.href}
+            href={n.href}
+            className={`flex items-center gap-3 whitespace-nowrap rounded-xl px-3 py-2.5 text-sm font-medium transition ${
+              active ? "bg-brand-50 text-brand-700" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+            }`}
+          >
+            <Icon className="h-[18px] w-[18px]" strokeWidth={2} />
+            {n.label}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}

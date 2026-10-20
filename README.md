@@ -18,7 +18,7 @@ Stack: Next.js 15 (App Router) · Turso (libSQL/SQLite) with Drizzle ORM · loca
 
 ## How the call workflow works (plan §5.4–5.5, §6)
 
-- One **call task per company** (establishments grouped by *RNC / Cédula*); every phone on file is listed. Each establishment gets its own code.
+- One **call task per RUT** (establishment). Tasks sharing an *RNC / Cédula* are shown as "same company": the agent can tick them and log one call for all of them, and automatic assignment keeps them with the same agent.
 - Agents can **add a number** as *additional* or *substitute* (the replaced number is kept in history), always with a reason.
 - No contact (07–10): retry next business day (10 → 3 hours later); WhatsApp reminder after the 2nd failure;
   after the campaign's max attempts (default 3), or when no working number remains, the company goes **to visit**.

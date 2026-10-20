@@ -1,3 +1,4 @@
+import { PhoneCall } from "lucide-react";
 import { redirect } from "next/navigation";
 import { currentUser, homeFor } from "@/lib/auth";
 import { getDict } from "@/lib/i18n-server";
@@ -6,13 +7,19 @@ import { loginAction } from "../actions";
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const u = await currentUser();
   if (u) redirect(homeFor(u.role));
-  const { t } = await getDict();
+  const { t, lang } = await getDict();
   const { error } = await searchParams;
   return (
-    <div className="mx-auto mt-16 max-w-sm">
-      <form action={loginAction} className="card space-y-4">
-        <h1>{t.login}</h1>
-        {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error === "locked" ? t.locked : t.invalidLogin}</p>}
+    <div className="mx-auto mt-10 max-w-sm sm:mt-20">
+      <div className="mb-6 flex flex-col items-center text-center">
+        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-lg shadow-brand-500/20">
+          <PhoneCall className="h-7 w-7" />
+        </span>
+        <h1 className="mt-4">{lang === "es" ? "¡Bienvenido!" : "Welcome!"}</h1>
+        <p className="subtitle">{t.appName}</p>
+      </div>
+      <form action={loginAction} className="card space-y-4 p-6">
+        {error && <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{error === "locked" ? t.locked : t.invalidLogin}</p>}
         <div>
           <label className="label" htmlFor="username">{t.username}</label>
           <input id="username" name="username" className="input" autoComplete="username" required autoFocus />

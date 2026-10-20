@@ -1,6 +1,7 @@
 import { and, asc, eq, inArray, isNull, like, or, sql, type SQL } from "drizzle-orm";
 import Link from "next/link";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
+import { Avatar } from "@/components/Avatar";
 import { RefreshButton } from "@/components/RefreshButton";
 import { PriorityBadge, StatusBadge } from "@/components/ui";
 import { db } from "@/db";
@@ -31,7 +32,7 @@ export default async function CompaniesPage({ params, searchParams }: { params: 
   const page = Math.max(0, Number(sp.page ?? 0));
   const [{ total }] = await db.select({ total: sql<number>`count(*)` }).from(companies).where(and(...where));
   const rows = await db
-    .select({ c: companies, agent: users.name, n: sql<number>`(select count(*) from establishments e where e.company_id = ${companies.id})` })
+    .select({ c: companies, agent: users.name })
     .from(companies)
     .leftJoin(users, eq(users.id, companies.assignedUserId))
     .where(and(...where))
@@ -39,10 +40,9 @@ export default async function CompaniesPage({ params, searchParams }: { params: 
     .limit(PAGE)
     .offset(page * PAGE);
   const names = rows.length
-    ? await db.select({ companyId: establishments.companyId, name: establishments.nombreComercial }).from(establishments).where(inArray(establishments.companyId, rows.map((r) => r.c.id)))
+    ? await db.select({ companyId: establishments.companyId, name: establishments.nombreComercial, rut: establishments.rut }).from(establishments).where(inArray(establishments.companyId, rows.map((r) => r.c.id)))
     : [];
-  const namesBy = new Map<number, string[]>();
-  for (const n of names) namesBy.set(n.companyId, [...(namesBy.get(n.companyId) ?? []), n.name ?? ""]);
+  const estBy = new Map(names.map((n) => [n.companyId, n]));
   const qs = (o: Record<string, string | number | undefined>) => "?" + new URLSearchParams(Object.entries({ ...sp, ...o }).filter(([, v]) => v !== undefined && v !== "") as [string, string][]).toString();
 
   return (
@@ -95,7 +95,7 @@ export default async function CompaniesPage({ params, searchParams }: { params: 
 
       <div className="card space-y-4 p-0">
         <form className="flex flex-wrap items-end gap-3 px-4 pt-4">
-          <div><label className="label">{t.search}</label><input name="q" defaultValue={sp.q} className="input w-56" placeholder="RNC, RUT, ID, nombre" /></div>
+          <div><label className="label">{t.search}</label><input name="q" defaultValue={sp.q} className="input w-56" placeholder="RUT, RNC, ID, nombre…" /></div>
           <div>
             <label className="label">{t.status}</label>
             <select name="status" defaultValue={sp.status ?? ""} className="input">
@@ -119,7 +119,7 @@ export default async function CompaniesPage({ params, searchParams }: { params: 
             </select>
           </div>
           <button className="btn-secondary">{t.filter}</button>
-          <span className="ml-auto text-sm text-slate-500">{total} {t.companies.toLowerCase()}</span>
+          <span className="ml-auto" />
           <RefreshButton label={t.refresh} />
         </form>
         <div className="overflow-x-auto">
@@ -128,12 +128,16 @@ export default async function CompaniesPage({ params, searchParams }: { params: 
               <tr><th>{t.company}</th><th>{t.priority}</th><th>{t.zone}</th><th>{t.status}</th><th className="text-right">{t.attempts}</th><th>{t.lastResult}</th><th>{t.nextAction}</th><th>{t.assignedTo}</th></tr>
             </thead>
             <tbody>
-              {rows.map(({ c, n }) => (
+              {rows.map(({ c }) => (
                 <tr key={c.id}>
                   <td className="max-w-xs">
-                    <Link href={`/calls/${c.id}`} className="font-medium text-brand-700 hover:underline">{c.razonSocial ?? c.key}</Link>
-                    <div className="text-xs text-slate-500">{c.rnc} · {n} {t.establishments.toLowerCase()}</div>
-                    <div className="truncate text-xs text-slate-400" title={(namesBy.get(c.id) ?? []).join(", ")}>{(namesBy.get(c.id) ?? []).join(", ")}</div>
+                    <div className="flex items-center gap-3">
+                      <Avatar name={estBy.get(c.id)?.name ?? c.key} size="sm" />
+                      <div className="min-w-0">
+                        <Link href={`/calls/${c.id}`} className="block truncate font-medium text-slate-900 hover:text-brand-700">{estBy.get(c.id)?.name ?? c.razonSocial ?? c.key}</Link>
+                        <div className="truncate text-xs text-slate-500">{c.razonSocial} · RUT {estBy.get(c.id)?.rut} · RNC {c.rnc}</div>
+                      </div>
+                    </div>
                   </td>
                   <td><PriorityBadge p={c.priority} /></td>
                   <td className="max-w-[10rem] truncate text-xs" title={c.zone ?? ""}>{c.zone}</td>
