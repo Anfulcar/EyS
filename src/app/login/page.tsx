@@ -1,4 +1,3 @@
-import { PhoneCall } from "lucide-react";
 import { redirect } from "next/navigation";
 import { DEMO_USERS } from "../../../scripts/seed-demo.mjs";
 import { currentUser, homeFor } from "@/lib/auth";
@@ -14,10 +13,9 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   return (
     <div className="mx-auto mt-10 max-w-sm sm:mt-20">
       <div className="mb-6 flex flex-col items-center text-center">
-        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-lg shadow-brand-500/20">
-          <PhoneCall className="h-7 w-7" />
-        </span>
-        <h1 className="mt-4">{lang === "es" ? "¡Bienvenido!" : "Welcome!"}</h1>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/brand/mitur-logo.png" alt="Ministerio de Turismo – República Dominicana" className="h-28 w-auto rounded-2xl bg-white p-3 shadow-soft" />
+        <h1 className="mt-6">{lang === "es" ? "¡Bienvenido!" : "Welcome!"}</h1>
         <p className="subtitle">{t.appName}</p>
       </div>
       <form action={loginAction} className="card space-y-4 p-6">

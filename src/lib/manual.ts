@@ -6,6 +6,7 @@ type Section = { id: string; roles: string[]; title: string; intro?: string; ste
 type L<T> = Record<Lang, T>;
 
 export const WHATS_NEW: { date: string; es: string; en: string }[] = [
+  { date: "2026-10-20", es: "Logo y colores del Ministerio de Turismo en toda la aplicación. Tableros más claros: arriba las 4 metas del plan con su barra de avance, luego los conteos, los gráficos y las tablas de detalle en pestañas.", en: "Ministerio de Turismo logo and colours throughout the app. Clearer dashboards: the plan's 4 goals with progress bars on top, then counts, charts and detail tables in tabs." },
   { date: "2026-10-20", es: "Pantallas de administración más limpias: «+ Nueva campaña» y «+ Nuevo usuario» en ventanas, lista de tareas compacta con «Asignar tareas» en un panel lateral y asignación de filas seleccionadas, configuración de campaña ordenada. Las tarjetas de campaña muestran los totales correctos.", en: "Cleaner administration screens: “+ New campaign” and “+ New user” in pop-ups, compact task list with “Assign tasks” in a side panel and assignment of ticked rows, tidier campaign settings. Campaign cards show the correct totals." },
   { date: "2026-10-20", es: "Manual de uso en la aplicación (esta página), con esta sección de novedades.", en: "In-app manual (this page), with this What's new section." },
   { date: "2026-10-20", es: "Acciones sensibles (eliminar campaña, crear usuarios, cambiar rol, estado o contraseña) piden confirmar la contraseña si el último ingreso fue hace más de 10 minutos.", en: "Sensitive actions (delete a campaign, create users, change role, status or password) ask to confirm the password if the last sign-in was more than 10 minutes ago." },
@@ -88,7 +89,7 @@ const ES: Section[] = [
   {
     id: "dashboards", roles: ["supervisor", "admin"], title: "Tableros",
     bullets: [
-      "«Tablero» de cada campaña: llamados, contacto efectivo, compromisos, cumplimiento, cerrados, visitas, y desgloses por agente, zona, prioridad y subsector, con las metas del plan.",
+      "«Tablero» de cada campaña: arriba las 4 metas del plan (llamados, contacto efectivo, compromisos, vencidas → en proceso) con una barra verde si se alcanza la meta y naranja si no; la raya oscura marca la meta. Debajo: conteos y avance del periodo, otras metas, gráficos, y las tablas por agente, zona, prioridad y subsector en pestañas.",
       "«Estadísticas globales»: compara todas las campañas y suma sus resultados.",
     ],
   },
@@ -181,7 +182,7 @@ const EN: Section[] = [
   {
     id: "dashboards", roles: ["supervisor", "admin"], title: "Dashboards",
     bullets: [
-      "Each campaign's “Dashboard”: called, effective contact, commitments, compliance, closed, visits, and breakdowns by agent, zone, priority and subsector, with the plan's targets.",
+      "Each campaign's “Dashboard”: the plan's 4 goals on top (called, effective contact, commitments, expired → in process), with a green bar when the target is met and orange when not; the dark mark shows the target. Below: counts and period progress, other goals, charts, and the tables by agent, zone, priority and subsector in tabs.",
       "“Global statistics”: compares every campaign and adds up their results.",
     ],
   },

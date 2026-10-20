@@ -16,16 +16,5 @@ export default async function CampaignDashboard({ params }: { params: Promise<{ 
   const now = new Date(todayLocal()).getTime();
   const progress = Math.min(100, Math.max(0, Math.round(((now - start) / Math.max(1, end - start)) * 100)));
   const daysLeft = Math.max(0, Math.round((end - now) / 86400000));
-  return (
-    <div className="space-y-6">
-      <div className="card">
-        <div className="flex items-center justify-between text-sm">
-          <span className="font-medium">{t.campaignProgress}</span>
-          <span className="text-slate-500">{progress} % · {daysLeft} {t.daysLeft}</span>
-        </div>
-        <div className="mt-2 h-2 rounded-full bg-slate-100"><div className="h-2 rounded-full bg-brand-600" style={{ width: `${progress}%` }} /></div>
-      </div>
-      <StatsView s={s} t={t} lang={lang} />
-    </div>
-  );
+  return <StatsView s={s} t={t} lang={lang} period={{ progress, daysLeft }} />;
 }

@@ -26,14 +26,14 @@ export function fmtPct(n: number, d: number) {
 
 const STATUS_COLORS: Record<string, [string, string]> = {
   pending: ["bg-slate-100 text-slate-700", "bg-slate-400"],
-  retry: ["bg-amber-50 text-amber-800", "bg-amber-500"],
-  followup: ["bg-sky-50 text-sky-800", "bg-sky-500"],
-  visit: ["bg-violet-50 text-violet-800", "bg-violet-500"],
-  done: ["bg-emerald-50 text-emerald-800", "bg-emerald-500"],
+  retry: ["bg-amber-50 text-amber-800", "bg-mitur-yellow"],
+  followup: ["bg-brand-50 text-brand-700", "bg-brand-600"],
+  visit: ["bg-orange-50 text-orange-800", "bg-mitur-orange"],
+  done: ["bg-emerald-50 text-emerald-800", "bg-mitur-green"],
   draft: ["bg-slate-100 text-slate-700", "bg-slate-400"],
-  active: ["bg-emerald-50 text-emerald-800", "bg-emerald-500"],
+  active: ["bg-emerald-50 text-emerald-800", "bg-mitur-green"],
   closed: ["bg-slate-100 text-slate-500", "bg-slate-300"],
-};
+}
 
 export function StatusBadge({ status, label }: { status: string; label: string }) {
   const [c, dot] = STATUS_COLORS[status] ?? STATUS_COLORS.pending;
@@ -47,7 +47,7 @@ export function StatusBadge({ status, label }: { status: string; label: string }
 
 export function PriorityBadge({ p }: { p: string | null }) {
   if (!p) return null;
-  const c = p === "P1" ? "bg-rose-50 text-rose-700 ring-rose-200" : p === "P2" ? "bg-amber-50 text-amber-700 ring-amber-200" : "bg-slate-50 text-slate-600 ring-slate-200";
+  const c = p === "P1" ? "bg-red-50 text-mitur-red ring-red-200" : p === "P2" ? "bg-orange-50 text-orange-700 ring-orange-200" : "bg-slate-50 text-slate-600 ring-slate-200";
   return <span className={`badge ring-1 ring-inset ${c}`}>{p}</span>;
 }
 

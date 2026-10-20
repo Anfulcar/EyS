@@ -1,4 +1,4 @@
-import { FlaskConical, LogOut, PhoneCall } from "lucide-react";
+import { FlaskConical, LogOut } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Avatar } from "@/components/Avatar";
@@ -48,11 +48,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     </form>
   );
   const logo = (
-    <Link href="/" className="flex items-center gap-2.5">
-      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-sm">
-        <PhoneCall className="h-[18px] w-[18px]" />
-      </span>
-      <span className="text-[15px] font-bold leading-tight text-slate-900">{t.appName}</span>
+    <Link href="/" className="flex items-center gap-3" aria-label={t.appName}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/brand/mitur-logo.png" alt="Ministerio de Turismo – República Dominicana" className="h-11 w-auto" />
+      <span className="border-l border-slate-200 pl-3 text-[13px] font-semibold leading-tight text-brand-700">{t.appName}</span>
     </Link>
   );
 
