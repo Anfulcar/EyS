@@ -168,6 +168,7 @@ export const ACTIVITY_LABELS: Record<string, L> = {
   "login.success": { es: "Inicio de sesión", en: "Signed in" },
   "login.failed": { es: "Inicio de sesión fallido", en: "Failed sign-in" },
   "login.locked": { es: "Cuenta bloqueada por intentos", en: "Account locked (attempts)" },
+  "login.reauth": { es: "Contraseña confirmada (acción sensible)", en: "Password confirmed (sensitive action)" },
   logout: { es: "Cierre de sesión", en: "Signed out" },
   "password.changed": { es: "Cambio de contraseña", en: "Password changed" },
   "user.created": { es: "Usuario creado", en: "User created" },

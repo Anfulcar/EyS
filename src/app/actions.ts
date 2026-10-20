@@ -9,7 +9,7 @@ import { z } from "zod";
 import { db } from "@/db";
 import { campaigns, companies, establishments, importLogs, phones, users } from "@/db/schema";
 import { logActivity, logError } from "@/lib/audit";
-import { assertUser, clearSession, homeFor, MANAGERS, setSessionCookie } from "@/lib/auth";
+import { assertUser, clearSession, homeFor, MANAGERS, recentlyAuthenticated, setSessionCookie } from "@/lib/auth";
 import { CALL_CODES, PHONE_KINDS, PHONE_REASONS, PRIORITY_ORDER, ROLES, SIGTUR_STATUSES, VISIT_CODES } from "@/lib/catalog";
 import { nowIso, toIsoDate, todayLocal } from "@/lib/dates";
 import { DICTS } from "@/lib/i18n";
@@ -18,7 +18,7 @@ import { buildRecords, commitImport, previewImport } from "@/lib/importer";
 import { formatPhone, normalizePhone, readTable, str } from "@/lib/sheets";
 import { applyStatusUpdates, canWorkCompany, logCall, logVisit, relatedTasks, type CallInput } from "@/lib/workflow";
 
-export type ActionState = { ok?: boolean; error?: string; message?: string; data?: unknown } | null;
+export type ActionState = { ok?: boolean; error?: string; message?: string; data?: unknown; needsReauth?: boolean } | null;
 
 // ---------- Session ----------
 
@@ -81,6 +81,37 @@ export async function changePasswordAction(_: ActionState, form: FormData): Prom
   return { ok: true, message: t.passwordChanged };
 }
 
+// Sensitive actions answer this when the password must be typed again.
+async function reauthRequired(): Promise<ActionState | null> {
+  if (await recentlyAuthenticated()) return null;
+  const { t } = await getDict();
+  return { needsReauth: true, error: t.reauthNeeded };
+}
+
+export async function reauthAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const { t } = await getDict();
+  const { currentUser } = await import("@/lib/auth");
+  const u = await currentUser();
+  if (!u) redirect("/login");
+  if (!(await bcrypt.compare(String(form.get("password") ?? ""), u.passwordHash))) {
+    const failed = u.failedLogins + 1;
+    await db
+      .update(users)
+      .set({ failedLogins: failed >= 5 ? 0 : failed, lockedUntil: failed >= 5 ? new Date(Date.now() + 15 * 60000).toISOString() : null })
+      .where(eq(users.id, u.id));
+    await logActivity(u, failed >= 5 ? "login.locked" : "login.failed", { entity: "user", entityId: u.id, summary: `${u.username}: contraseña incorrecta al confirmar una acción (${failed}/5)` });
+    if (failed >= 5) {
+      await clearSession();
+      redirect("/login?error=locked");
+    }
+    return { error: t.wrongPassword };
+  }
+  await db.update(users).set({ failedLogins: 0, lockedUntil: null }).where(eq(users.id, u.id));
+  await setSessionCookie(u);
+  await logActivity(u, "login.reauth", { entity: "user", entityId: u.id, summary: u.username });
+  return { ok: true };
+}
+
 // ---------- Users ----------
 
 const USERNAME_RE = /^[a-z0-9._-]{3,40}$/;
@@ -92,6 +123,8 @@ function defaultPassword(username: string) {
 
 export async function createUserAction(_: ActionState, form: FormData): Promise<ActionState> {
   const me = await assertUser(["admin"]);
+  const reauth = await reauthRequired();
+  if (reauth) return reauth;
   const { t } = await getDict();
   const parsed = z
     .object({
@@ -138,6 +171,13 @@ export async function editUserAction(_: ActionState, form: FormData): Promise<Ac
   if (d.username !== target.username) {
     const taken = await db.query.users.findFirst({ where: eq(users.username, d.username) });
     if (taken) return { error: t.usernameTaken };
+  }
+  const sensitive =
+    !!d.resetDefault || !!d.password.trim() || d.username !== target.username ||
+    (d.id !== me.id && (d.role !== target.role || (d.active === "1") !== target.active));
+  if (sensitive) {
+    const reauth = await reauthRequired();
+    if (reauth) return reauth;
   }
   const set: Partial<typeof users.$inferInsert> = { username: d.username, name: d.name };
   // An admin cannot demote or deactivate themselves (avoids locking everyone out).
@@ -209,8 +249,10 @@ export async function setCampaignStatusAction(form: FormData) {
   revalidatePath("/campaigns");
 }
 
-export async function deleteCampaignAction(form: FormData) {
+export async function deleteCampaignAction(_: ActionState, form: FormData): Promise<ActionState> {
   const u = await assertUser(["admin"]);
+  const reauth = await reauthRequired();
+  if (reauth) return reauth;
   const id = Number(form.get("id"));
   const c = await db.query.campaigns.findFirst({ where: eq(campaigns.id, id) });
   await db.delete(campaigns).where(eq(campaigns.id, id));

@@ -4,7 +4,18 @@ import { jwtVerify, SignJWT } from "jose";
 export const SESSION_COOKIE = "eys_session";
 export const SESSION_HOURS = 12;
 
-export type SessionPayload = { uid: number; role: string; name: string; mcp: boolean };
+// authAt: when the person last typed their password (sign-in or confirmation), in milliseconds.
+export type SessionPayload = { uid: number; role: string; name: string; mcp: boolean; authAt?: number };
+
+// Sensitive actions ask for the password again when the last confirmation is older than this.
+export function reauthWindowMinutes() {
+  const v = Number(process.env.REAUTH_MINUTES);
+  return Number.isFinite(v) && v >= 0 && process.env.REAUTH_MINUTES !== "" ? v : 10;
+}
+
+export function isRecentAuth(authAt: number | undefined, now = Date.now(), minutes = reauthWindowMinutes()) {
+  return typeof authAt === "number" && now - authAt < minutes * 60_000;
+}
 
 function secret() {
   const s = process.env.AUTH_SECRET;

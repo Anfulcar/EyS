@@ -7,7 +7,7 @@ type Actor = { id: number; name: string } | null;
 
 // Action names shown (translated) on the "Registro" screen.
 export const ACTIONS = [
-  "login.success", "login.failed", "login.locked", "logout", "password.changed",
+  "login.success", "login.failed", "login.locked", "login.reauth", "logout", "password.changed",
   "user.created", "user.updated", "user.role_changed", "user.status_changed", "user.password_reset",
   "campaign.created", "campaign.updated", "campaign.status_changed", "campaign.deleted",
   "upload.establishments", "upload.bounces", "upload.status", "emails.marked_sent",
