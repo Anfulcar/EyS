@@ -8,6 +8,7 @@ import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { companies } from "@/db/schema";
 import { currentUser } from "@/lib/auth";
+import { attentionSummary } from "@/lib/queue";
 import { ROLES } from "@/lib/catalog";
 import { getDict } from "@/lib/i18n-server";
 import { logoutAction, setLangAction } from "./actions";
@@ -28,7 +29,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     (!!user && isManagerRole(role) &&
       (await db.select({ n: sql<number>`count(*)` }).from(companies).where(eq(companies.assignedUserId, user.id)))[0].n > 0);
   const nav: NavItem[] = [
-    ...(hasCalls ? [{ href: "/calls", label: t.navCalls, icon: "calls" as const }] : []),
+    ...(hasCalls ? [{ href: "/calls", label: t.navCalls, icon: "calls" as const, badge: (await attentionSummary(user!.id)).total }] : []),
     ...(isManager ? [{ href: "/campaigns", label: t.navCampaigns, icon: "campaigns" as const }] : []),
     ...(role && role !== "agent" ? [{ href: "/visits", label: t.navVisits, icon: "visits" as const }] : []),
     ...(isManager ? [{ href: "/stats", label: t.navStats, icon: "stats" as const }] : []),

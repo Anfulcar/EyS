@@ -6,6 +6,7 @@ type Section = { id: string; roles: string[]; title: string; intro?: string; ste
 type L<T> = Record<Lang, T>;
 
 export const WHATS_NEW: { date: string; es: string; en: string }[] = [
+  { date: "2026-10-21", es: "Mis llamadas: contador rojo en el menú y aviso con las llamadas que requieren atención; las nuevas primero y luego las que llevan más días esperando; seguimientos vencidos resaltados en amarillo; filtro por número de intentos. La hora de cada llamada se registra sola al guardar.", en: "My calls: red counter in the menu and a notice with the calls that need attention; new ones first, then those waiting longest; overdue follow-ups highlighted in yellow; filter by number of attempts. Each call's time is recorded automatically on save." },
   { date: "2026-10-20", es: "Logo y colores del Ministerio de Turismo en toda la aplicación. Tableros más claros: arriba las 4 metas del plan con su barra de avance, luego los conteos, los gráficos y las tablas de detalle en pestañas.", en: "Ministerio de Turismo logo and colours throughout the app. Clearer dashboards: the plan's 4 goals with progress bars on top, then counts, charts and detail tables in tabs." },
   { date: "2026-10-20", es: "Pantallas de administración más limpias: «+ Nueva campaña» y «+ Nuevo usuario» en ventanas, lista de tareas compacta con «Asignar tareas» en un panel lateral y asignación de filas seleccionadas, configuración de campaña ordenada. Las tarjetas de campaña muestran los totales correctos.", en: "Cleaner administration screens: “+ New campaign” and “+ New user” in pop-ups, compact task list with “Assign tasks” in a side panel and assignment of ticked rows, tidier campaign settings. Campaign cards show the correct totals." },
   { date: "2026-10-20", es: "Manual de uso en la aplicación (esta página), con esta sección de novedades.", en: "In-app manual (this page), with this What's new section." },
@@ -32,7 +33,9 @@ const ES: Section[] = [
     id: "calls", roles: ["agent", "supervisor", "admin"], title: "Mis llamadas (agentes)",
     intro: "Cada tarjeta es un establecimiento (un RUT) que le asignaron.",
     bullets: [
-      "«Para hoy»: llamadas pendientes y seguimientos que ya tocan. «Programadas»: reintentos y seguimientos de días próximos. «Pasaron a visita» y «Finalizadas»: ya no requieren llamada.",
+      "«Para hoy»: llamadas pendientes y seguimientos que ya tocan. Primero las nuevas (sin llamar), luego las que llevan más días esperando («Pendiente hace 3 días»). Los seguimientos vencidos se resaltan en amarillo. «Programadas»: reintentos y seguimientos de días próximos. «Pasaron a visita» y «Finalizadas»: ya no requieren llamada.",
+      "El número rojo junto a «Mis llamadas» en el menú y el aviso amarillo al entrar indican cuántas llamadas requieren atención. Cada pestaña muestra su cantidad.",
+      "Filtre por número de intentos (sin intentos, 1, 2, 3 o más) con los botones a la derecha de las pestañas.",
       "La etiqueta «+N de la misma empresa» indica otros establecimientos con el mismo RNC.",
       "«Actualizar» recarga la lista sin salir de la página.",
     ],
@@ -45,7 +48,7 @@ const ES: Section[] = [
       "Elija el número marcado y responda: ¿pudo contactar a alguien?, ¿le atendieron?",
       "Si habló con alguien: con quién, su cargo y si es el responsable.",
       "Para cada establecimiento: ¿sigue operando? y la respuesta (iniciará solicitud, ya inició, requiere asistencia, no interesado, cambió dueño). «Iniciará solicitud» exige la fecha de compromiso.",
-      "Pulse «Guardar». La tarea pasa sola al estado que corresponde.",
+      "Pulse «Guardar». La fecha y la hora de la llamada se registran solas en ese momento, y la tarea pasa sola al estado que corresponde.",
     ],
   },
   {
@@ -125,7 +128,9 @@ const EN: Section[] = [
     id: "calls", roles: ["agent", "supervisor", "admin"], title: "My calls (agents)",
     intro: "Each card is one establishment (one RUT) assigned to you.",
     bullets: [
-      "“Due today”: pending calls and follow-ups that are due. “Scheduled”: retries and follow-ups for coming days. “Sent to visit” and “Done”: no call needed.",
+      "“Due today”: pending calls and follow-ups that are due. New ones (never called) first, then those waiting longest (“Waiting for 3 days”). Overdue follow-ups are highlighted in yellow. “Scheduled”: retries and follow-ups for coming days. “Sent to visit” and “Done”: no call needed.",
+      "The red number next to “My calls” in the menu and the yellow notice on entering show how many calls need attention. Each tab shows its count.",
+      "Filter by number of attempts (none, 1, 2, 3 or more) with the buttons to the right of the tabs.",
       "The “+N of the same company” tag shows other establishments with the same RNC.",
       "“Refresh” reloads the list without leaving the page.",
     ],
@@ -138,7 +143,7 @@ const EN: Section[] = [
       "Choose the number dialed and answer: did you reach anyone? did they attend the call?",
       "If you spoke with someone: who, their role, and whether they are the person in charge.",
       "For each establishment: is it still operating? and the response (will apply, already applied, needs help, not interested, changed owner). “Will apply” requires the commitment date.",
-      "Click “Save”. The task moves to the right status on its own.",
+      "Click “Save”. The date and time of the call are recorded automatically at that moment, and the task moves to the right status on its own.",
     ],
   },
   {

@@ -23,12 +23,6 @@ const CODE_ICONS: Record<string, LucideIcon> = {
   "07": PhoneOff, "08": PhoneMissed, "09": XCircle, "10": Voicemail,
 };
 
-function localNow() {
-  const d = new Date();
-  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-  return d.toISOString().slice(0, 16);
-}
-
 function YesNo({ name, value, onChange, t, withUnknown }: { name: string; value: string; onChange: (v: string) => void; t: Dict; withUnknown?: boolean }) {
   return (
     <div className="flex flex-wrap gap-2">
@@ -89,7 +83,6 @@ export function CallForm({
   const allEsts = useMemo(() => [...establishments, ...related.filter((r) => together.includes(r.id)).flatMap((r) => r.establishments)], [establishments, related, together]);
 
   const [phoneId, setPhoneId] = useState<number | null>(phones.find((p) => p.quality === "ok")?.id ?? phones[0]?.id ?? null);
-  const [calledAt, setCalledAt] = useState(localNow);
   const [contacted, setContacted] = useState("");
   const [noContactCode, setNoContactCode] = useState("");
   const [attended, setAttended] = useState("");
@@ -105,7 +98,7 @@ export function CallForm({
   useEffect(() => {
     if (state?.ok) {
       setContacted(""); setNoContactCode(""); setAttended(""); setSpokeWith(""); setSpokeRole(""); setIsResponsible("");
-      setUpdatedEmail(""); setWhatsappSent(false); setNotes(""); setCalledAt(localNow()); setResults({}); setTogether([]);
+      setUpdatedEmail(""); setWhatsappSent(false); setNotes(""); setResults({}); setTogether([]);
     }
   }, [state]);
 
@@ -122,7 +115,6 @@ export function CallForm({
     phoneId,
     phoneNumber: phone?.number ?? null,
     relatedCompanyIds: together,
-    calledAt: calledAt ? new Date(calledAt).toISOString() : "",
     contacted: contacted === "Sí",
     attended: contacted === "Sí" ? attended === "Sí" : null,
     noContactCode: contacted === "No" ? noContactCode : null,
@@ -192,10 +184,7 @@ export function CallForm({
                 <option value="">—</option>
               </select>
             </div>
-            <div>
-              <label className="label">{t.calledAt}</label>
-              <input type="datetime-local" className="input" value={calledAt} onChange={(e) => setCalledAt(e.target.value)} />
-            </div>
+            <p className="flex items-end pb-2.5 text-sm text-slate-500">{t.callTimeAuto}</p>
           </div>
         </Section>
 

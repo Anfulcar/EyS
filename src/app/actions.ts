@@ -369,7 +369,7 @@ export async function assignAction(_: ActionState, form: FormData): Promise<Acti
   for (const [cid, a] of assignment) byAgent.set(a, [...(byAgent.get(a) ?? []), cid]);
   for (const [a, ids] of byAgent) {
     for (let i = 0; i < ids.length; i += 500) {
-      await db.update(companies).set({ assignedUserId: a }).where(inArray(companies.id, ids.slice(i, i + 500)));
+      await db.update(companies).set({ assignedUserId: a, assignedAt: nowIso() }).where(inArray(companies.id, ids.slice(i, i + 500)));
     }
   }
   await logActivity(me, "assignment.run", { campaignId, summary: `${assignment.size} tareas · método: ${strategy} · alcance: ${scope}` });
@@ -381,7 +381,7 @@ export async function reassignCompanyAction(form: FormData) {
   const me = await assertUser(MANAGERS);
   const id = Number(form.get("companyId"));
   const userId = Number(form.get("userId")) || null;
-  const [c] = await db.update(companies).set({ assignedUserId: userId }).where(eq(companies.id, id)).returning();
+  const [c] = await db.update(companies).set({ assignedUserId: userId, assignedAt: nowIso() }).where(eq(companies.id, id)).returning();
   const to = userId ? await db.query.users.findFirst({ where: eq(users.id, userId) }) : null;
   if (c) await logActivity(me, "task.reassigned", { campaignId: c.campaignId, entity: "task", entityId: id, summary: `${c.key} → ${to?.name ?? "sin asignar"}` });
   revalidatePath("/campaigns", "layout");
@@ -396,7 +396,7 @@ export async function bulkAssignAction(_: ActionState, form: FormData): Promise<
   if (!ids.length) return { error: t.assignSelected };
   const updated = await db
     .update(companies)
-    .set({ assignedUserId: userId })
+    .set({ assignedUserId: userId, assignedAt: nowIso() })
     .where(and(eq(companies.campaignId, campaignId), inArray(companies.id, ids)))
     .returning({ id: companies.id });
   const to = userId ? await db.query.users.findFirst({ where: eq(users.id, userId) }) : null;
@@ -419,7 +419,8 @@ export async function logCallAction(_: ActionState, form: FormData): Promise<Act
     if (input.contacted && input.attended !== false) {
       if (!input.results.length || input.results.some((r) => !CALL_CODES[r.code]?.contacted)) return { error: t.qResponse };
     }
-    input.calledAt = input.calledAt ? new Date(input.calledAt).toISOString() : nowIso();
+    // The time of the call is always the moment it is saved (agents can't type or change it).
+    input.calledAt = nowIso();
     // The same call can be logged on sibling tasks (same RNC) that the user is allowed to work.
     const main = await canWorkCompany(u, input.companyId);
     if (!main) return { error: "Not found" };

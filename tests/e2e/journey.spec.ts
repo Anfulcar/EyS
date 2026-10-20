@@ -81,6 +81,12 @@ test("main journey: campaign → upload → assign → calls → visit → dashb
   await changeFirstPassword(page, "agente1123", "Agente-Clave-1");
   await expect(page).toHaveURL(/\/calls/);
   await expect(page.getByText("Buceo Uno", { exact: true })).toBeVisible();
+  // Counter in the menu and notice: 4 new calls need attention
+  await expect(page.getByRole("status").filter({ hasText: "Tienes 4 llamadas que requieren atención: 0 seguimientos vencidos, 4 pendientes de hoy." })).toBeVisible();
+  await expect(page.locator("aside nav a", { hasText: "Mis llamadas" }).getByText("4")).toBeVisible();
+  // Filter by number of attempts
+  await page.getByRole("link", { name: "Sin intentos" }).click();
+  await expect(page.getByText("Buceo Uno", { exact: true })).toBeVisible();
 
   // Same company: one call logged for both establishments with a commitment date
   await page.getByRole("link", { name: /Buceo Uno/ }).click();
@@ -97,6 +103,9 @@ test("main journey: campaign → upload → assign → calls → visit → dashb
   }
   await page.getByRole("button", { name: "Guardar" }).click();
   await expect(page.getByText("Llamada registrada")).toBeVisible();
+  // The time of the call was recorded automatically (shown in the history)
+  await page.reload();
+  await expect(page.locator("ol li").first()).toContainText(new Date().getFullYear().toString());
 
   // Refusal → sent to visit
   await page.goto("/calls");

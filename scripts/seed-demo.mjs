@@ -135,8 +135,9 @@ export async function seedDemo(client, env = process.env) {
   for (const e of ests) {
     if (!rncAgent.has(e.rnc)) rncAgent.set(e.rnc, agents[rncAgent.size % 2]);
     const t = await client.execute({
-      sql: "INSERT INTO companies (campaign_id, key, razon_social, rnc, assigned_user_id, priority, zone) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id",
-      args: [campaignId, `RUT:${e.rut}`, e.razonSocial, e.rnc, rncAgent.get(e.rnc), e.prioridad, e.zonaOperativa],
+      sql: "INSERT INTO companies (campaign_id, key, razon_social, rnc, assigned_user_id, assigned_at, priority, zone) VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+      // Assigned on different days, so "days waiting" varies in the demo.
+      args: [campaignId, `RUT:${e.rut}`, e.razonSocial, e.rnc, rncAgent.get(e.rnc), shiftIso(-(tasks.length % 7)), e.prioridad, e.zonaOperativa],
     });
     const companyId = Number(t.rows[0].id);
     const est = await client.execute({
@@ -182,10 +183,11 @@ export async function seedDemo(client, env = process.env) {
 
   const withPhone = tasks.filter((t) => t.e.telefono);
   // Commitments (follow-up in the coming days)
-  for (const t of withPhone.slice(0, 4)) {
+  for (const [i, t] of withPhone.slice(0, 4).entries()) {
     const commitment = shiftDays(3);
     await attempt(t, 1, { contacted: true, code: "01", daysAgo: 2, spoke: "Carmen Rosario", commitment });
-    await setTask(t, { status: "followup", attempts: 1, next: shiftIso(10), code: "01" });
+    // The first one's follow-up is already overdue (highlighted in the agent's list).
+    await setTask(t, { status: "followup", attempts: 1, next: i === 0 ? shiftIso(-2) : shiftIso(10), code: "01" });
     await setEst(t, { code: "01", op: "Sí", commitment, visit: "No", contact: "Carmen Rosario" });
   }
   // No answer once → due again today

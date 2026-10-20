@@ -41,6 +41,8 @@ export const companies = sqliteTable(
     razonSocial: text("razon_social"),
     rnc: text("rnc"),
     assignedUserId: integer("assigned_user_id").references(() => users.id),
+    // When the task was last (re)assigned: used to count how many days a never-called task has waited.
+    assignedAt: text("assigned_at"),
     // pending | retry | followup | visit | done
     status: text("status").notNull().default("pending"),
     attempts: integer("attempts").notNull().default(0),
