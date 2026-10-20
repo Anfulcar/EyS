@@ -1,9 +1,12 @@
+import { LogOut, PhoneCall } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { logoutAction, setLangAction } from "./actions";
+import { Avatar } from "@/components/Avatar";
+import { Nav, type NavItem } from "@/components/Nav";
 import { currentUser } from "@/lib/auth";
 import { ROLES } from "@/lib/catalog";
 import { getDict } from "@/lib/i18n-server";
+import { logoutAction, setLangAction } from "./actions";
 import "./globals.css";
 
 export const metadata: Metadata = { title: "EyS – Campañas" };
@@ -12,53 +15,75 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const { lang, t } = await getDict();
   const user = await currentUser();
   const role = user?.role;
-  const nav: { href: string; label: string; show: boolean }[] = [
-    { href: "/calls", label: t.navCalls, show: role === "agent" || role === "admin" || role === "supervisor" },
-    { href: "/campaigns", label: t.navCampaigns, show: role === "admin" || role === "supervisor" },
-    { href: "/visits", label: t.navVisits, show: !!role && role !== "agent" },
-    { href: "/stats", label: t.navStats, show: role === "admin" || role === "supervisor" },
-    { href: "/users", label: t.navUsers, show: role === "admin" },
+  const isManager = role === "admin" || role === "supervisor";
+  const nav: NavItem[] = [
+    ...(role && role !== "inspector" ? [{ href: "/calls", label: t.navCalls, icon: "calls" as const }] : []),
+    ...(isManager ? [{ href: "/campaigns", label: t.navCampaigns, icon: "campaigns" as const }] : []),
+    ...(role && role !== "agent" ? [{ href: "/visits", label: t.navVisits, icon: "visits" as const }] : []),
+    ...(isManager ? [{ href: "/stats", label: t.navStats, icon: "stats" as const }] : []),
+    ...(role === "admin" ? [{ href: "/users", label: t.navUsers, icon: "users" as const }] : []),
   ];
+  const showNav = !!user && !user.mustChangePassword;
+
+  const langSwitch = (
+    <form action={setLangAction} className="inline-flex rounded-lg bg-slate-100 p-0.5">
+      {(["es", "en"] as const).map((l) => (
+        <button key={l} name="lang" value={l} className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${lang === l ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
+          {l.toUpperCase()}
+        </button>
+      ))}
+    </form>
+  );
+  const logo = (
+    <Link href="/" className="flex items-center gap-2.5">
+      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-sm">
+        <PhoneCall className="h-[18px] w-[18px]" />
+      </span>
+      <span className="text-[15px] font-bold leading-tight text-slate-900">{t.appName}</span>
+    </Link>
+  );
+
   return (
     <html lang={lang}>
       <body>
-        <header className="border-b border-slate-200 bg-white">
-          <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
-            <Link href="/" className="flex items-center gap-2 font-semibold text-brand-700">
-              <img src="/icon.svg" alt="" className="h-7 w-7" />
-              {t.appName}
-            </Link>
-            {user && !user.mustChangePassword && (
-              <nav className="flex flex-wrap gap-1 text-sm">
-                {nav.filter((n) => n.show).map((n) => (
-                  <Link key={n.href} href={n.href} className="rounded-md px-3 py-1.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900">
-                    {n.label}
-                  </Link>
-                ))}
-              </nav>
-            )}
-            <div className="ml-auto flex items-center gap-3 text-sm">
-              <form action={setLangAction} className="flex overflow-hidden rounded-md border border-slate-300">
-                {(["es", "en"] as const).map((l) => (
-                  <button key={l} name="lang" value={l} className={`px-2 py-1 text-xs font-medium ${lang === l ? "bg-brand-600 text-white" : "bg-white text-slate-600"}`}>
-                    {l.toUpperCase()}
-                  </button>
-                ))}
-              </form>
-              {user && (
-                <>
-                  <Link href="/account" className="text-slate-600 hover:text-slate-900">
-                    {user.name} <span className="text-xs text-slate-400">· {ROLES[user.role]?.[lang]}</span>
-                  </Link>
+        <div className="flex min-h-screen">
+          {showNav && (
+            <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-slate-200/70 bg-white px-4 py-5 lg:flex">
+              {logo}
+              <div className="mt-8 flex-1"><Nav items={nav} /></div>
+              <div className="space-y-3 border-t border-slate-100 pt-4">
+                <Link href="/account" className="flex items-center gap-3 rounded-xl p-2 transition hover:bg-slate-50">
+                  <Avatar name={user!.name} />
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-semibold text-slate-900">{user!.name}</span>
+                    <span className="block truncate text-xs text-slate-500">{ROLES[user!.role]?.[lang]}</span>
+                  </span>
+                </Link>
+                <div className="flex items-center justify-between px-2">
+                  {langSwitch}
                   <form action={logoutAction}>
-                    <button className="btn-secondary btn-sm">{t.logout}</button>
+                    <button className="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-rose-600"><LogOut className="h-3.5 w-3.5" />{t.logout}</button>
                   </form>
-                </>
-              )}
-            </div>
+                </div>
+              </div>
+            </aside>
+          )}
+          <div className="min-w-0 flex-1">
+            <header className={`border-b border-slate-200/70 bg-white ${showNav ? "lg:hidden" : ""}`}>
+              <div className="flex items-center gap-3 px-4 py-3">
+                {logo}
+                <div className="ml-auto flex items-center gap-3">
+                  {langSwitch}
+                  {showNav && (
+                    <form action={logoutAction}><button className="text-slate-500 hover:text-rose-600" aria-label={t.logout}><LogOut className="h-5 w-5" /></button></form>
+                  )}
+                </div>
+              </div>
+              {showNav && <div className="px-3 pb-2"><Nav items={nav} mobile /></div>}
+            </header>
+            <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:py-8">{children}</main>
           </div>
-        </header>
-        <main className="mx-auto max-w-7xl px-4 py-6">{children}</main>
+        </div>
       </body>
     </html>
   );

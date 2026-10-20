@@ -76,27 +76,35 @@ export function label(map: Record<string, L>, key: string | null | undefined, la
   return v ? v[lang] : key;
 }
 
+// Codes (01–10, V1–V7) are kept internally but never shown: lists display only the text.
 export function codeLabel(code: string | null | undefined, lang: Lang) {
   if (!code) return "";
   const v = CALL_CODES[code] ?? VISIT_CODES[code];
-  return v ? `${code} ${v[lang]}` : code;
+  return v ? v[lang] : code;
 }
 
-// Matriz value as written in the Excel lists ("01 En operación – …").
+// Text used in Excel files (Spanish, without the code).
 export function codeMatrixText(code: string | null | undefined) {
-  if (!code) return "";
-  const v = CALL_CODES[code] ?? VISIT_CODES[code];
-  return v ? `${code} ${v.es}` : code;
+  return codeLabel(code, "es");
 }
 
-// Accepts "01", "1", "01 En operación…", "V3 …" and returns the code.
+function normText(s: string) {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+// Accepts "01", "1", "01 En operación…", "V3 …" or just the text ("No contesta", "No answer") and returns the code.
 export function parseCode(value: unknown): string | null {
   if (value == null) return null;
   const s = String(value).trim();
-  const v = s.match(/^(V\d)/i);
+  if (!s) return null;
+  const v = s.match(/^(V\d)\b/i);
   if (v) return v[1].toUpperCase();
   const n = s.match(/^(\d{1,2})\b/);
   if (n) return n[1].padStart(2, "0");
+  const t = normText(s);
+  for (const [code, l] of [...Object.entries(CALL_CODES), ...Object.entries(VISIT_CODES)]) {
+    if (normText(l.es) === t || normText(l.en) === t) return code;
+  }
   return null;
 }
 

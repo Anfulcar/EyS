@@ -26,9 +26,9 @@ export default async function CampaignLayout({ children, params }: { children: R
     { href: "/settings", label: t.tabSettings },
   ];
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <div>
-        <Link href="/campaigns" className="text-sm text-slate-500 hover:text-slate-800">← {t.navCampaigns}</Link>
+        <Link href="/campaigns" className="text-sm font-medium text-slate-500 hover:text-slate-800">← {t.navCampaigns}</Link>
         <div className="mt-1 flex flex-wrap items-center gap-3">
           <h1>{c.name}</h1>
           <StatusBadge status={c.status} label={t[`campaignStatus_${c.status}` as keyof Dict]} />

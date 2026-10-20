@@ -1,10 +1,10 @@
 import "server-only";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { companies, establishments, phones } from "@/db/schema";
 import { MATRIX_COLUMNS, parseCode, PRIORITY_ORDER } from "./catalog";
 import { toIsoDate } from "./dates";
-import { digits, formatPhone, mapMatrixHeaders, normalizePhone, normHeader, type Row, splitPhones, str } from "./sheets";
+import { formatPhone, mapMatrixHeaders, normalizePhone, type Row, splitPhones, str } from "./sheets";
 
 type EstRecord = Record<string, string | number | null> & { sigturId: string };
 
@@ -55,13 +55,10 @@ export function buildRecords(headers: string[], rows: Row[]) {
   return { records: [...records.values()], mapping, ignored, missing, errors, duplicates };
 }
 
+// One call task per RUT (establishment). Tasks sharing an RNC are linked as "same company" in the UI.
 export function companyKey(r: EstRecord) {
-  const rnc = digits(String(r.rnc ?? ""));
-  if (rnc.length >= 5) return `RNC:${rnc}`;
-  const rs = r.razonSocial ? normHeader(String(r.razonSocial)) : "";
-  if (rs) return `RS:${rs}`;
-  const p = splitPhones(r.telefono as string | null)[0];
-  if (p) return `TEL:${normalizePhone(p)}`;
+  const rut = String(r.rut ?? "").trim().toUpperCase();
+  if (rut) return `RUT:${rut}`;
   return `ID:${r.sigturId}`;
 }
 
@@ -132,6 +129,16 @@ export async function commitImport(campaignId: number, records: EstRecord[], map
   // 3. Phones and company summary for touched companies
   const touched = [...new Set(records.map((r) => companyIds.get(keyOf.get(r.sigturId)!)!))];
   await refreshCompanies(campaignId, touched);
+  // Tasks left without establishments (e.g. after regrouping) are removed unless calls were already logged on them.
+  await db
+    .delete(companies)
+    .where(
+      and(
+        eq(companies.campaignId, campaignId),
+        sql`not exists (select 1 from establishments e where e.company_id = ${companies.id})`,
+        sql`not exists (select 1 from call_attempts a where a.company_id = ${companies.id})`,
+      ),
+    );
   return { inserted: toInsert.length, updated: updates.length, companies: touched.length };
 }
 
