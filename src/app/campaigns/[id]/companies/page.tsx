@@ -1,6 +1,7 @@
 import { and, asc, eq, inArray, isNull, like, or, sql, type SQL } from "drizzle-orm";
 import Link from "next/link";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
+import { RefreshButton } from "@/components/RefreshButton";
 import { PriorityBadge, StatusBadge } from "@/components/ui";
 import { db } from "@/db";
 import { companies, establishments, users } from "@/db/schema";
@@ -119,6 +120,7 @@ export default async function CompaniesPage({ params, searchParams }: { params: 
           </div>
           <button className="btn-secondary">{t.filter}</button>
           <span className="ml-auto text-sm text-slate-500">{total} {t.companies.toLowerCase()}</span>
+          <RefreshButton label={t.refresh} />
         </form>
         <div className="overflow-x-auto">
           <table className="table">
@@ -140,7 +142,8 @@ export default async function CompaniesPage({ params, searchParams }: { params: 
                   <td className="max-w-[12rem] text-xs">{codeLabel(c.lastCode, lang)}</td>
                   <td className="text-xs">{fmtDateTime(c.nextActionAt, lang)}</td>
                   <td>
-                    <form action={reassignCompanyAction} className="flex gap-1">
+                    {/* key: remount when the assignment changes so the select shows the refreshed value */}
+                    <form key={c.assignedUserId ?? "none"} action={reassignCompanyAction} className="flex gap-1">
                       <input type="hidden" name="companyId" value={c.id} />
                       <select name="userId" defaultValue={c.assignedUserId ?? ""} className="input w-40 py-1 text-xs">
                         <option value="">{t.unassigned}</option>

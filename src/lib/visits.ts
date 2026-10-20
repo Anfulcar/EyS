@@ -1,11 +1,11 @@
 import "server-only";
-import { and, asc, eq, inArray, type SQL } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { campaigns, establishments, phones, visits } from "@/db/schema";
 import { visitPending } from "./workflow";
 
 export async function pendingVisits(filters: { campaignId?: number; zone?: string; showAll?: boolean }) {
-  const active = await db.select().from(campaigns).where(eq(campaigns.status, "active"));
+  const active = await db.select().from(campaigns).where(ne(campaigns.status, "closed"));
   const ids = active.map((c) => c.id).filter((id) => !filters.campaignId || id === filters.campaignId);
   const where: SQL[] = [inArray(establishments.campaignId, ids.length ? ids : [-1]), eq(establishments.requiereVisita, "Sí")];
   if (filters.zone) where.push(eq(establishments.zonaOperativa, filters.zone));
