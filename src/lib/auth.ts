@@ -1,7 +1,7 @@
 import "server-only";
 import { eq } from "drizzle-orm";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { db } from "@/db";
 import { users, type User } from "@/db/schema";
 import { readSession, SESSION_COOKIE, SESSION_HOURS, signSession } from "./session";
@@ -36,16 +36,29 @@ export async function requireUser(roles?: Role[]): Promise<User> {
   const u = await currentUser();
   if (!u) redirect("/login");
   if (u.mustChangePassword) redirect("/account?force=1");
-  if (roles && !roles.includes(u.role as Role)) redirect("/");
+  // A screen a role may not use answers "not found" (it doesn't reveal that it exists).
+  if (roles && !roles.includes(u.role as Role)) notFound();
   return u;
 }
 
 // For server actions / route handlers: throws instead of redirecting.
 export async function assertUser(roles?: Role[]): Promise<User> {
   const u = await currentUser();
-  if (!u || u.mustChangePassword) throw new Error("Unauthorized");
-  if (roles && !roles.includes(u.role as Role)) throw new Error("Forbidden");
+  if (!u || u.mustChangePassword) throw new Error("Not found");
+  if (roles && !roles.includes(u.role as Role)) throw new Error("Not found");
   return u;
+}
+
+// For downloads (route handlers): the user if allowed, otherwise null → answer with notFoundResponse().
+export async function routeUser(roles?: Role[]): Promise<User | null> {
+  const u = await currentUser();
+  if (!u || u.mustChangePassword) return null;
+  if (roles && !roles.includes(u.role as Role)) return null;
+  return u;
+}
+
+export function notFoundResponse() {
+  return new Response("Not found", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8" } });
 }
 
 export const MANAGERS: Role[] = ["admin", "supervisor"];

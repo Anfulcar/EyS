@@ -1,11 +1,11 @@
 import ExcelJS from "exceljs";
-import { assertUser } from "@/lib/auth";
+import { notFoundResponse, routeUser } from "@/lib/auth";
 import { codeMatrixText } from "@/lib/catalog";
 import { styleHeader, workbookResponse } from "@/lib/sheets";
 import { pendingVisits } from "@/lib/visits";
 
 export async function GET(req: Request) {
-  await assertUser(["admin", "supervisor", "inspector"]);
+  if (!(await routeUser(["admin", "supervisor", "inspector"]))) return notFoundResponse();
   const sp = new URL(req.url).searchParams;
   const { rows } = await pendingVisits({ campaignId: sp.get("campaign") ? Number(sp.get("campaign")) : undefined, zone: sp.get("zone") ?? undefined, showAll: sp.get("all") === "1" });
   const wb = new ExcelJS.Workbook();

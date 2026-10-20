@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef } from "react";
 import { useFormStatus } from "react-dom";
 import type { ActionState } from "@/app/actions";
+import { withConnectionCheck } from "@/lib/connection";
 
 type Props = {
   action: (s: ActionState, f: FormData) => Promise<ActionState>;
@@ -13,7 +14,7 @@ type Props = {
 };
 
 export function ActionForm({ action, children, className, resetOnSuccess }: Props) {
-  const [state, formAction] = useActionState(action, null);
+  const [state, formAction] = useActionState(withConnectionCheck(action), null);
   const ref = useRef<HTMLFormElement>(null);
   const router = useRouter();
   useEffect(() => {

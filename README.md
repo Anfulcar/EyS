@@ -50,6 +50,34 @@ npm run build       # same production build as Vercel
 npm run test:e2e    # browser test of the main journey (Playwright, made-up data)
 ```
 
+## Settings in Vercel (environment variables)
+
+Every setting is read from environment variables; nothing secret is stored in the code or the repository.
+`.env.example` lists the names. Values are set **only** in Vercel.
+
+**Where:** Vercel → your project → **Settings** → **Environment Variables** → *Add New*. For each variable,
+type the **Key** (name), paste the **Value**, tick the **Environments** shown below, and click **Save**.
+Changes apply to the **next** deployment: Deployments → ⋯ on the latest one → **Redeploy**.
+
+| Key | Environments | What to paste | Where to get it |
+|---|---|---|---|
+| `TURSO_DATABASE_URL` | Production | `libsql://…` address of the **live** database | Turso dashboard → Databases → your database → copy the URL (or `turso db show <name> --url`) |
+| `TURSO_AUTH_TOKEN` | Production | access token of the live database | Turso dashboard → your database → **Generate Token** (or `turso db tokens create <name>`) |
+| `AUTH_SECRET` | Production **and** Preview (different values) | a long random text that signs sign-in sessions | Generate one at https://generate-secret.vercel.app/32 or with `openssl rand -base64 32` |
+| `ADMIN_USERNAME` | Production | first administrator's username, e.g. `admin` | You choose it |
+| `ADMIN_PASSWORD` | Production | temporary password for the first administrator (8+ characters) | You choose it; it must be changed at first sign-in. You can delete it after the first sign-in |
+| `ADMIN_NAME` | Production | display name (optional) | You choose it |
+
+Rules:
+- **Never** paste these values anywhere else (code, chat, email, documents). If one leaks, create a new one
+  (new token in Turso / new `AUTH_SECRET`), replace it in Vercel and redeploy.
+- **Preview** deployments (one per pull request) must never use the live database.
+
+## Health check
+
+`/api/health` answers `{"status":"ok","database":"ok"}` when the app and its database are reachable, or
+HTTP 503 when the database can't be reached. Use it to check a deployment or with an uptime monitor.
+
 ## Deploy (Vercel + Turso)
 
 1. **Turso**: create a database and a token.
