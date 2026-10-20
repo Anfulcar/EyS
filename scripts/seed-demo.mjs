@@ -14,7 +14,7 @@ export const DEMO_USERS = [
 ];
 
 // Tables in delete order (children first).
-const TABLES = ["call_results", "call_attempts", "visits", "status_changes", "phones", "establishments", "companies", "import_logs", "campaigns", "users"];
+const TABLES = ["activity_log", "error_log", "call_results", "call_attempts", "visits", "status_changes", "phones", "establishments", "companies", "import_logs", "campaigns", "users"];
 
 function rng(seed) {
   return () => {

@@ -1,14 +1,17 @@
 import { and, asc, eq } from "drizzle-orm";
 import ExcelJS from "exceljs";
 import { db } from "@/db";
+import { logActivity } from "@/lib/audit";
 import { establishments } from "@/db/schema";
 import { MANAGERS, notFoundResponse, routeUser } from "@/lib/auth";
 import { styleHeader, workbookResponse } from "@/lib/sheets";
 
 // Same columns as the "Base correo vencidas" / "Base correo sin licencia" sheets (they match the Annex A/B templates).
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
-  if (!(await routeUser(MANAGERS))) return notFoundResponse();
+  const user = await routeUser(MANAGERS);
+  if (!user) return notFoundResponse();
   const id = Number((await params).id);
+  await logActivity(user, "export.downloaded", { campaignId: id, entity: "campaign", entityId: id, summary: "Base para combinar correspondencia" });
   const ests = await db
     .select()
     .from(establishments)

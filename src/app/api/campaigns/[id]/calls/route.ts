@@ -1,13 +1,16 @@
 import { asc, eq } from "drizzle-orm";
 import Papa from "papaparse";
 import { db } from "@/db";
+import { logActivity } from "@/lib/audit";
 import { callAttempts, callResults, establishments, users } from "@/db/schema";
 import { MANAGERS, notFoundResponse, routeUser } from "@/lib/auth";
 import { codeMatrixText } from "@/lib/catalog";
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
-  if (!(await routeUser(MANAGERS))) return notFoundResponse();
+  const user = await routeUser(MANAGERS);
+  if (!user) return notFoundResponse();
   const id = Number((await params).id);
+  await logActivity(user, "export.downloaded", { campaignId: id, entity: "campaign", entityId: id, summary: "Todas las llamadas (CSV)" });
   const rows = await db
     .select({ r: callResults, a: callAttempts, e: establishments, agent: users.name })
     .from(callResults)

@@ -11,7 +11,7 @@ Stack: Next.js 15 (App Router) · Turso (libSQL/SQLite) with Drizzle ORM · loca
 
 | Role | Can do |
 |---|---|
-| **admin** | Everything: users, campaigns, uploads, assignment, dashboards, exports |
+| **admin** | Everything: users, campaigns, uploads, assignment, dashboards, exports, activity and error log ("Registro") |
 | **supervisor** | Campaigns (except create/delete/settings), uploads, assignment, visits, dashboards, exports |
 | **agent** | Only "Mis llamadas": the companies assigned to them in active campaigns within their dates |
 | **inspector** | Only "Visitas": pending field visits, register V1–V7, download route sheet |

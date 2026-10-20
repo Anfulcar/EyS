@@ -105,6 +105,7 @@ test("main journey: campaign → upload → assign → calls → visit → dashb
   await expect(page.getByText("No encontrado")).toBeVisible();
   const download = await page.request.get(campaignUrl.replace("/campaigns/", "/api/campaigns/") + "/export");
   expect(download.status()).toBe(404);
+  expect((await page.goto("/logs"))?.status()).toBe(404);
 
   // Administrator: dashboard and export
   await signIn(page, "admin", NEW_PW);
@@ -119,6 +120,12 @@ test("main journey: campaign → upload → assign → calls → visit → dashb
   expect(names).toContain("Buceo Uno");
   const results = sheet.getColumn(31).values.map(String); // "Llamada 1 resultado"
   expect(results).toContain("En operación – iniciará solicitud (compromiso)");
+
+  // Activity log: administrators see who did what
+  await page.goto("/logs");
+  for (const what of ["Llamada registrada", "Visita registrada", "Usuario creado", "Carga de establecimientos", "Asignación de tareas", "Descarga de datos"]) {
+    await expect(page.locator("td", { hasText: what }).first()).toBeVisible();
+  }
 
   // Losing the connection shows a clear message instead of failing silently
   await page.goto("/account");
