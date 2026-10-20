@@ -50,7 +50,7 @@ export default async function VisitsPage({ searchParams }: { searchParams: Promi
                   <div className="text-xs text-slate-500">{e.municipio} · {e.zonaOperativa} · {e.estatusRnt}{e.fechaVencimiento ? ` (${fmtDate(e.fechaVencimiento, lang)})` : ""}</div>
                   <div className="font-mono text-xs text-slate-500">{phones.join(" / ")}</div>
                   {e.finalCode && <div className="mt-1 text-xs">{codeLabel(e.finalCode, lang)}</div>}
-                  {visits.map((v) => <div key={v.id} className="text-xs text-violet-700">{fmtDate(v.visitDate, lang)} · {codeLabel(v.code, lang)}</div>)}
+                  {visits.map((v) => <div key={v.id} className="text-xs text-orange-700">{fmtDate(v.visitDate, lang)} · {codeLabel(v.code, lang)}</div>)}
                 </div>
                 <details className="w-full md:w-96">
                   <summary className="btn btn-sm cursor-pointer list-none">{t.registerVisit}</summary>

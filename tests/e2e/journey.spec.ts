@@ -167,6 +167,10 @@ test("health check and security headers", async ({ request }) => {
   const health = await request.get("/api/health");
   expect(health.status()).toBe(200);
   expect(await health.json()).toMatchObject({ status: "ok", database: "ok" });
+  // The Ministry logo is public (shown on the sign-in page before signing in)
+  const logo = await request.get("/brand/mitur-logo.png");
+  expect(logo.status()).toBe(200);
+  expect(logo.headers()["content-type"]).toContain("image/png");
   const page = await request.get("/login");
   expect(page.headers()["content-security-policy"]).toContain("frame-ancestors 'none'");
   expect(page.headers()["x-frame-options"]).toBe("DENY");

@@ -15,7 +15,7 @@ import { getDict } from "@/lib/i18n-server";
 import { assignAction, bulkAssignAction, reassignCompanyAction } from "../../../actions";
 
 const PAGE = 200;
-const TONES = { good: "bg-emerald-50 text-emerald-700", info: "bg-sky-50 text-sky-700", warn: "bg-amber-50 text-amber-800", bad: "bg-rose-50 text-rose-700", none: "" };
+const TONES = { good: "bg-emerald-50 text-emerald-800", info: "bg-brand-50 text-brand-700", warn: "bg-amber-50 text-amber-800", bad: "bg-red-50 text-mitur-red", none: "" };
 
 export default async function TasksPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
   const id = Number((await params).id);

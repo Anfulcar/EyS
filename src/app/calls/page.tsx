@@ -138,7 +138,7 @@ export default async function CallsPage({ searchParams }: { searchParams: Promis
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
                     {e?.status && <span className={`badge ${e.status === "Vencida" ? "bg-rose-50 text-rose-700" : "bg-amber-50 text-amber-700"}`}>{e.status}</span>}
-                    {sib > 0 && <span className="badge bg-indigo-50 text-indigo-700"><Building2 className="h-3 w-3" />+{sib} {t.ofSameCompany}</span>}
+                    {sib > 0 && <span className="badge bg-brand-50 text-brand-700"><Building2 className="h-3 w-3" />+{sib} {t.ofSameCompany}</span>}
                     {nums.slice(0, 2).map((p) => (
                       <span key={p.number} className={`badge bg-slate-100 font-mono text-slate-700 ${p.quality === "ok" || p.quality === "invalid" ? "" : "line-through opacity-60"}`}>
                         <Phone className="h-3 w-3" />{p.number}
