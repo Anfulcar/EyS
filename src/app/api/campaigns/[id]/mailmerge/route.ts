@@ -2,12 +2,12 @@ import { and, asc, eq } from "drizzle-orm";
 import ExcelJS from "exceljs";
 import { db } from "@/db";
 import { establishments } from "@/db/schema";
-import { assertUser, MANAGERS } from "@/lib/auth";
+import { MANAGERS, notFoundResponse, routeUser } from "@/lib/auth";
 import { styleHeader, workbookResponse } from "@/lib/sheets";
 
 // Same columns as the "Base correo vencidas" / "Base correo sin licencia" sheets (they match the Annex A/B templates).
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
-  await assertUser(MANAGERS);
+  if (!(await routeUser(MANAGERS))) return notFoundResponse();
   const id = Number((await params).id);
   const ests = await db
     .select()

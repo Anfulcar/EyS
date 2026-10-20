@@ -2,6 +2,7 @@ import { LogOut, PhoneCall } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Avatar } from "@/components/Avatar";
+import { ConnectionBanner } from "@/components/ConnectionBanner";
 import { Nav, type NavItem } from "@/components/Nav";
 import { currentUser } from "@/lib/auth";
 import { ROLES } from "@/lib/catalog";
@@ -82,6 +83,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               {showNav && <div className="px-3 pb-2"><Nav items={nav} mobile /></div>}
             </header>
             <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:py-8">{children}</main>
+            <ConnectionBanner retryLabel={t.retry} />
           </div>
         </div>
       </body>

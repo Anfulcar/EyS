@@ -93,7 +93,7 @@ describe("call rules", () => {
 
   it("a call on a task the agent is not assigned to is refused", async () => {
     const [other] = await db.insert(users).values({ username: "otro", name: "Otro", role: "agent", passwordHash: "x" }).returning();
-    await expect(logCall(other, call((await taskOf("101")).id, {}))).rejects.toThrow("Forbidden");
+    await expect(logCall(other, call((await taskOf("101")).id, {}))).rejects.toThrow("Not found");
   });
 
   it("records one result per establishment", async () => {

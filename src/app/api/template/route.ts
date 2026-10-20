@@ -1,10 +1,10 @@
 import ExcelJS from "exceljs";
-import { assertUser, MANAGERS } from "@/lib/auth";
+import { MANAGERS, notFoundResponse, routeUser } from "@/lib/auth";
 import { CALL_CODES, CHANNELS, codeMatrixText, MATRIX_COLUMNS, SIGTUR_STATUSES, VISIT_CODES } from "@/lib/catalog";
 import { addListValidation, styleHeader, workbookResponse } from "@/lib/sheets";
 
 export async function GET() {
-  await assertUser(MANAGERS);
+  if (!(await routeUser(MANAGERS))) return notFoundResponse();
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("Matriz de seguimiento");
   ws.columns = MATRIX_COLUMNS.map((c) => ({ header: c.header, key: c.header, width: Math.max(14, c.header.length + 2) }));

@@ -98,23 +98,45 @@ test("main journey: campaign → upload → assign → calls → visit → dashb
   await page.locator("form:has(select[name=code])").first().getByRole("button", { name: "Guardar" }).click();
   await expect(page.getByText("Tienda Tres", { exact: true })).toHaveCount(0);
 
-  // Agent cannot open the administration screens
+  // Agent cannot open the administration screens or downloads: they answer "not found"
   await signIn(page, "agente1", "Agente-Clave-1");
-  const forbidden = await page.goto(campaignUrl);
-  expect(page.url()).not.toContain("/campaigns/");
-  void forbidden;
+  const screen = await page.goto(campaignUrl);
+  expect(screen?.status()).toBe(404);
+  await expect(page.getByText("No encontrado")).toBeVisible();
+  const download = await page.request.get(campaignUrl.replace("/campaigns/", "/api/campaigns/") + "/export");
+  expect(download.status()).toBe(404);
 
   // Administrator: dashboard and export
   await signIn(page, "admin", NEW_PW);
   await page.goto(campaignUrl);
   await expect(page.getByText("Llamados al menos 1 vez")).toBeVisible();
   await page.goto(campaignUrl + "/export");
-  const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("link", { name: /Descargar/ }).first().click()]);
+  const [file] = await Promise.all([page.waitForEvent("download"), page.getByRole("link", { name: /Descargar/ }).first().click()]);
   const wb = new ExcelJS.Workbook();
-  await wb.xlsx.readFile((await download.path())!);
+  await wb.xlsx.readFile((await file.path())!);
   const sheet = wb.getWorksheet("Matriz de seguimiento")!;
   const names = sheet.getColumn(5).values.map(String);
   expect(names).toContain("Buceo Uno");
   const results = sheet.getColumn(31).values.map(String); // "Llamada 1 resultado"
   expect(results).toContain("En operación – iniciará solicitud (compromiso)");
+
+  // Losing the connection shows a clear message instead of failing silently
+  await page.goto("/account");
+  await page.context().setOffline(true);
+  await page.fill("input[name=current]", NEW_PW);
+  await page.fill("input[name=next]", "Otra-Clave-123");
+  await page.fill("input[name=confirm]", "Otra-Clave-123");
+  await page.getByRole("button", { name: "Guardar" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "No se pudo conectar con el servidor" })).toBeVisible();
+  await page.context().setOffline(false);
+});
+
+test("health check and security headers", async ({ request }) => {
+  const health = await request.get("/api/health");
+  expect(health.status()).toBe(200);
+  expect(await health.json()).toMatchObject({ status: "ok", database: "ok" });
+  const page = await request.get("/login");
+  expect(page.headers()["content-security-policy"]).toContain("frame-ancestors 'none'");
+  expect(page.headers()["x-frame-options"]).toBe("DENY");
+  expect(page.headers()["x-content-type-options"]).toBe("nosniff");
 });

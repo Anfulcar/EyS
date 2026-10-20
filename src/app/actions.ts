@@ -333,10 +333,10 @@ export async function logCallAction(_: ActionState, form: FormData): Promise<Act
     input.calledAt = input.calledAt ? new Date(input.calledAt).toISOString() : nowIso();
     // The same call can be logged on sibling tasks (same RNC) that the user is allowed to work.
     const main = await canWorkCompany(u, input.companyId);
-    if (!main) return { error: "Forbidden" };
+    if (!main) return { error: "Not found" };
     const allowed = new Set((await relatedTasks(main)).map((c) => c.id));
     const extra = [...new Set(input.relatedCompanyIds ?? [])].filter((id) => allowed.has(id));
-    for (const id of extra) if (!(await canWorkCompany(u, id))) return { error: "Forbidden" };
+    for (const id of extra) if (!(await canWorkCompany(u, id))) return { error: "Not found" };
     await logCall(u, input);
     for (const id of extra) await logCall(u, { ...input, companyId: id, phoneId: null });
   } catch (e) {
@@ -352,7 +352,7 @@ export async function addPhoneAction(_: ActionState, form: FormData): Promise<Ac
   const { t } = await getDict();
   const companyId = Number(form.get("companyId"));
   const company = await canWorkCompany(u, companyId);
-  if (!company) return { error: "Forbidden" };
+  if (!company) return { error: "Not found" };
   const raw = String(form.get("number") ?? "").trim();
   const kind = String(form.get("kind"));
   const reason = String(form.get("reason"));

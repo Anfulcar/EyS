@@ -2,11 +2,11 @@ import { asc, eq } from "drizzle-orm";
 import Papa from "papaparse";
 import { db } from "@/db";
 import { callAttempts, callResults, establishments, users } from "@/db/schema";
-import { assertUser, MANAGERS } from "@/lib/auth";
+import { MANAGERS, notFoundResponse, routeUser } from "@/lib/auth";
 import { codeMatrixText } from "@/lib/catalog";
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
-  await assertUser(MANAGERS);
+  if (!(await routeUser(MANAGERS))) return notFoundResponse();
   const id = Number((await params).id);
   const rows = await db
     .select({ r: callResults, a: callAttempts, e: establishments, agent: users.name })

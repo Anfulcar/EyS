@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import type { ActionState } from "@/app/actions";
+import { withConnectionCheck } from "@/lib/connection";
 import type { Dict } from "@/lib/i18n";
 import { Message } from "./ActionForm";
 
@@ -13,7 +14,9 @@ type Preview = {
 
 type Act = (s: ActionState, f: FormData) => Promise<ActionState>;
 
-export function ImportForm({ campaignId, t, preview, commit }: { campaignId: number; t: Dict; preview: Act; commit: Act }) {
+export function ImportForm({ campaignId, t, preview: rawPreview, commit: rawCommit }: { campaignId: number; t: Dict; preview: Act; commit: Act }) {
+  const preview = withConnectionCheck(rawPreview);
+  const commit = withConnectionCheck(rawCommit);
   const [file, setFile] = useState<File | null>(null);
   const [p, setP] = useState<Preview | null>(null);
   const [state, setState] = useState<ActionState>(null);

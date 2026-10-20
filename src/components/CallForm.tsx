@@ -7,6 +7,7 @@ import {
 import { useActionState, useEffect, useMemo, useState } from "react";
 import type { ActionState } from "@/app/actions";
 import { CALL_CODES, NO_CONTACT_CODES, OBSTACLES, type Lang } from "@/lib/catalog";
+import { withConnectionCheck } from "@/lib/connection";
 import type { Dict } from "@/lib/i18n";
 import { Message, SubmitButton } from "./ActionForm";
 
@@ -76,7 +77,7 @@ export function CallForm({
   companyId: number; establishments: Est[]; phones: PhoneOpt[]; related: RelatedTask[]; t: Dict; lang: Lang; whatsappSuggested: boolean;
   action: (s: ActionState, f: FormData) => Promise<ActionState>;
 }) {
-  const [state, formAction] = useActionState(action, null);
+  const [state, formAction] = useActionState(withConnectionCheck(action), null);
   const [together, setTogether] = useState<number[]>([]);
   const allPhones = useMemo(() => {
     const seen = new Set<string>();

@@ -49,7 +49,7 @@ export async function canWorkCompany(user: User, companyId: number) {
 
 export async function logCall(user: User, input: CallInput) {
   const company = await canWorkCompany(user, input.companyId);
-  if (!company) throw new Error("Forbidden");
+  if (!company) throw new Error("Not found");
   const campaign = (await db.query.campaigns.findFirst({ where: eq(campaigns.id, company.campaignId) }))!;
   const ests = await db.select().from(establishments).where(eq(establishments.companyId, company.id));
   const phone = input.phoneId
