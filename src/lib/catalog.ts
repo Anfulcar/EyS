@@ -1,0 +1,157 @@
+// Code lists from the "Listas" sheet of the Matriz de seguimiento, plus the rules of the plan (§5.4–5.5, §6).
+
+export type Lang = "es" | "en";
+type L = { es: string; en: string };
+
+export const CALL_CODES: Record<string, L & { contacted: boolean }> = {
+  "01": { es: "En operación – iniciará solicitud (compromiso)", en: "Operating – will apply (commitment)", contacted: true },
+  "02": { es: "En operación – ya inició solicitud", en: "Operating – already applied", contacted: true },
+  "03": { es: "En operación – requiere asistencia / cita", en: "Operating – needs help / appointment", contacted: true },
+  "04": { es: "En operación – no interesado / se niega", en: "Operating – not interested / refuses", contacted: true },
+  "05": { es: "Cerró operaciones", en: "Closed down", contacted: true },
+  "06": { es: "Cambió dueño / nombre / dirección", en: "Changed owner / name / address", contacted: true },
+  "07": { es: "Número equivocado", en: "Wrong number", contacted: false },
+  "08": { es: "No contesta", en: "No answer", contacted: false },
+  "09": { es: "Fuera de servicio / no existe", en: "Out of service / does not exist", contacted: false },
+  "10": { es: "Buzón / devolver llamada", en: "Voicemail / call back", contacted: false },
+};
+export const CONTACT_CODES = ["01", "02", "03", "04", "05", "06"] as const;
+export const NO_CONTACT_CODES = ["07", "08", "09", "10"] as const;
+
+export const VISIT_CODES: Record<string, L> = {
+  V1: { es: "Solicitud iniciada en la visita", en: "Application started during visit" },
+  V2: { es: "En operación – compromiso con fecha", en: "Operating – commitment with date" },
+  V3: { es: "En operación – se niega", en: "Operating – refuses" },
+  V4: { es: "Cerrado (verificado en sitio)", en: "Closed (verified on site)" },
+  V5: { es: "No localizado en la dirección", en: "Not found at address" },
+  V6: { es: "Responsable ausente – revisitar", en: "Person in charge absent – revisit" },
+  V7: { es: "Cambio de dirección / razón social", en: "Changed address / company name" },
+};
+
+export const SIGTUR_STATUSES = ["Vencida", "Sin licencia", "Incompleta", "En proceso", "Vigente", "Inactivo (depurado)"];
+export const CHANNELS = ["Correo", "Llamada", "Visita", "Jornada de formalización", "Iniciativa propia"];
+
+export const OBSTACLES: Record<string, L> = {
+  documentos: { es: "Documentos", en: "Documents" },
+  usuario: { es: "Usuario de la plataforma", en: "Platform user account" },
+  costo: { es: "Costo", en: "Cost" },
+  desconocimiento: { es: "Desconocimiento del trámite", en: "Unaware of the process" },
+  ninguno: { es: "Ninguno", en: "None" },
+  otro: { es: "Otro", en: "Other" },
+};
+
+export const PHONE_REASONS: Record<string, L> = {
+  file_wrong: { es: "El número en archivo es equivocado", en: "Number on file is wrong" },
+  file_out_of_service: { es: "El número en archivo está fuera de servicio", en: "Number on file is out of service" },
+  given_by_contact: { es: "Lo proporcionó el contacto en la llamada", en: "Given by the contact during the call" },
+  other_source: { es: "Encontrado en otra fuente (web, redes, otra empresa)", en: "Found elsewhere (web, social, another company)" },
+  direct_line: { es: "Línea directa del responsable", en: "Direct line of the person in charge" },
+  other: { es: "Otro", en: "Other" },
+};
+
+export const PHONE_KINDS: Record<string, L> = {
+  original: { es: "En archivo", en: "On file" },
+  substitute: { es: "Sustituye al de archivo", en: "Replaces number on file" },
+  additional: { es: "Adicional", en: "Additional" },
+};
+
+export const COMPANY_STATUSES: Record<string, L> = {
+  pending: { es: "Sin llamar", en: "Not called" },
+  retry: { es: "Reintentar", en: "Retry" },
+  followup: { es: "Seguimiento", en: "Follow-up" },
+  visit: { es: "Pasa a visita", en: "Sent to visit" },
+  done: { es: "Finalizada", en: "Done" },
+};
+
+export const ROLES: Record<string, L> = {
+  admin: { es: "Administrador", en: "Administrator" },
+  supervisor: { es: "Supervisor", en: "Supervisor" },
+  agent: { es: "Agente de llamadas", en: "Call agent" },
+  inspector: { es: "Inspector (visitas)", en: "Inspector (visits)" },
+};
+
+export function label(map: Record<string, L>, key: string | null | undefined, lang: Lang) {
+  if (!key) return "";
+  const v = map[key];
+  return v ? v[lang] : key;
+}
+
+export function codeLabel(code: string | null | undefined, lang: Lang) {
+  if (!code) return "";
+  const v = CALL_CODES[code] ?? VISIT_CODES[code];
+  return v ? `${code} ${v[lang]}` : code;
+}
+
+// Matriz value as written in the Excel lists ("01 En operación – …").
+export function codeMatrixText(code: string | null | undefined) {
+  if (!code) return "";
+  const v = CALL_CODES[code] ?? VISIT_CODES[code];
+  return v ? `${code} ${v.es}` : code;
+}
+
+// Accepts "01", "1", "01 En operación…", "V3 …" and returns the code.
+export function parseCode(value: unknown): string | null {
+  if (value == null) return null;
+  const s = String(value).trim();
+  const v = s.match(/^(V\d)/i);
+  if (v) return v[1].toUpperCase();
+  const n = s.match(/^(\d{1,2})\b/);
+  if (n) return n[1].padStart(2, "0");
+  return null;
+}
+
+// ---- Columns of the "Matriz de seguimiento" (in order). `field` is the establishments column. ----
+export type MatrixColumn = { header: string; field?: string; kind?: "date" | "int"; required?: boolean; aliases?: string[] };
+
+export const MATRIX_COLUMNS: MatrixColumn[] = [
+  { header: "ID SIGTUR", field: "sigturId", required: true, aliases: ["Identificador", "ID"] },
+  { header: "RUT", field: "rut" },
+  { header: "Estatus RNT", field: "estatusRnt" },
+  { header: "Prioridad", field: "prioridad" },
+  { header: "Nombre comercial", field: "nombreComercial", required: true },
+  { header: "Razón social", field: "razonSocial" },
+  { header: "RNC / Cédula", field: "rnc", aliases: ["RNC", "Cédula", "Número de identificación"] },
+  { header: "Subsector", field: "subsector" },
+  { header: "Actividad", field: "actividad" },
+  { header: "Provincia", field: "provincia" },
+  { header: "Municipio", field: "municipio" },
+  { header: "Zona operativa", field: "zonaOperativa" },
+  { header: "Zona turística (SIGTUR)", field: "zonaTuristica", aliases: ["Zona turística"] },
+  { header: "Dirección", field: "direccion" },
+  { header: "Teléfono", field: "telefono", aliases: ["Teléfonos", "Telefono"] },
+  { header: "Teléfono válido", field: "telefonoValido" },
+  { header: "Correo", field: "correo", aliases: ["Email", "E-mail"] },
+  { header: "Correo válido", field: "correoValido" },
+  { header: "Contactabilidad", field: "contactabilidad" },
+  { header: "Establ. misma empresa", field: "establMismaEmpresa", kind: "int" },
+  { header: "Establ. mismo correo", field: "establMismoCorreo", kind: "int" },
+  { header: "Resolución", field: "resolucion", aliases: ["Resolución actual"] },
+  { header: "Fecha emisión", field: "fechaEmision", kind: "date", aliases: ["Resolución - Fecha de emisión"] },
+  { header: "Fecha vencimiento", field: "fechaVencimiento", kind: "date", aliases: ["Resolución - Fecha de vencimiento"] },
+  { header: "Días vencida", field: "diasVencida", kind: "int" },
+  { header: "Tiempo vencida", field: "tiempoVencida" },
+  { header: "Antigüedad", field: "antiguedad" },
+  { header: "Correo enviado (fecha)", field: "correoEnviadoFecha", kind: "date" },
+  { header: "Correo rebotado", field: "correoRebotado" },
+  { header: "Llamada 1 fecha" },
+  { header: "Llamada 1 resultado" },
+  { header: "Llamada 2 fecha" },
+  { header: "Llamada 2 resultado" },
+  { header: "Llamada 3 fecha" },
+  { header: "Llamada 3 resultado" },
+  { header: "Tipificación final", field: "finalCode" },
+  { header: "¿En operación?", field: "enOperacion" },
+  { header: "Fecha compromiso", field: "fechaCompromiso", kind: "date" },
+  { header: "Requiere visita", field: "requiereVisita" },
+  { header: "Visita 1 fecha" },
+  { header: "Visita 1 resultado" },
+  { header: "Visita 2 fecha" },
+  { header: "Visita 2 resultado" },
+  { header: "Estatus SIGTUR actualizado", field: "estatusSigturActualizado" },
+  { header: "Fecha cambio estatus", field: "fechaCambioEstatus", kind: "date" },
+  { header: "Canal que logró la gestión", field: "canalLogro" },
+  { header: "Responsable", field: "responsable" },
+  { header: "Observaciones", field: "observaciones" },
+];
+
+export const PRIORITY_ORDER: Record<string, number> = { P1: 1, P2: 2, P3: 3 };
