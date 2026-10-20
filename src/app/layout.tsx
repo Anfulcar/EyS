@@ -4,6 +4,9 @@ import Link from "next/link";
 import { Avatar } from "@/components/Avatar";
 import { ConnectionBanner } from "@/components/ConnectionBanner";
 import { Nav, type NavItem } from "@/components/Nav";
+import { eq, sql } from "drizzle-orm";
+import { db } from "@/db";
+import { companies } from "@/db/schema";
 import { currentUser } from "@/lib/auth";
 import { ROLES } from "@/lib/catalog";
 import { getDict } from "@/lib/i18n-server";
@@ -12,13 +15,20 @@ import "./globals.css";
 
 export const metadata: Metadata = { title: "EyS – Campañas" };
 
+const isManagerRole = (r: string | undefined) => r === "admin" || r === "supervisor";
+
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const { lang, t } = await getDict();
   const user = await currentUser();
   const role = user?.role;
   const isManager = role === "admin" || role === "supervisor";
+  // Administrators and supervisors see "Mis llamadas" only when they have calls assigned.
+  const hasCalls =
+    role === "agent" ||
+    (!!user && isManagerRole(role) &&
+      (await db.select({ n: sql<number>`count(*)` }).from(companies).where(eq(companies.assignedUserId, user.id)))[0].n > 0);
   const nav: NavItem[] = [
-    ...(role && role !== "inspector" ? [{ href: "/calls", label: t.navCalls, icon: "calls" as const }] : []),
+    ...(hasCalls ? [{ href: "/calls", label: t.navCalls, icon: "calls" as const }] : []),
     ...(isManager ? [{ href: "/campaigns", label: t.navCampaigns, icon: "campaigns" as const }] : []),
     ...(role && role !== "agent" ? [{ href: "/visits", label: t.navVisits, icon: "visits" as const }] : []),
     ...(isManager ? [{ href: "/stats", label: t.navStats, icon: "stats" as const }] : []),

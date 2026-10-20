@@ -387,6 +387,24 @@ export async function reassignCompanyAction(form: FormData) {
   revalidatePath("/campaigns", "layout");
 }
 
+export async function bulkAssignAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const me = await assertUser(MANAGERS);
+  const { t } = await getDict();
+  const campaignId = Number(form.get("campaignId"));
+  const ids = form.getAll("ids").map(Number).filter(Boolean);
+  const userId = Number(form.get("userId")) || null;
+  if (!ids.length) return { error: t.assignSelected };
+  const updated = await db
+    .update(companies)
+    .set({ assignedUserId: userId })
+    .where(and(eq(companies.campaignId, campaignId), inArray(companies.id, ids)))
+    .returning({ id: companies.id });
+  const to = userId ? await db.query.users.findFirst({ where: eq(users.id, userId) }) : null;
+  await logActivity(me, "task.reassigned", { campaignId, summary: `${updated.length} tareas seleccionadas → ${to?.name ?? "sin asignar"}` });
+  revalidatePath(`/campaigns/${campaignId}`, "layout");
+  return { ok: true, message: `${updated.length} ${t.assignedCount}` };
+}
+
 // ---------- Calls ----------
 
 export async function logCallAction(_: ActionState, form: FormData): Promise<ActionState> {

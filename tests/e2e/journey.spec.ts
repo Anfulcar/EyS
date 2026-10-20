@@ -31,30 +31,50 @@ test("main journey: campaign → upload → assign → calls → visit → dashb
 
   // Create an agent and an inspector with the default password (<username>123)
   await page.goto("/users");
+  await page.getByRole("button", { name: "Nuevo usuario" }).click();
+  const newUser = page.getByRole("dialog", { name: "Nuevo usuario" });
   for (const [username, name, role] of [["agente1", "Ana Agente", "agent"], ["inspector1", "Iván Inspector", "inspector"]]) {
-    await page.locator("input[name=username]").first().fill(username);
-    await page.locator("input[name=name]").first().fill(name);
-    await page.locator("select[name=role]").first().selectOption(role);
-    await page.getByRole("button", { name: "Crear" }).click();
-    await expect(page.getByText(`${username} / ${username}123`)).toBeVisible();
+    await newUser.locator("input[name=username]").fill(username);
+    await newUser.locator("input[name=name]").fill(name);
+    await newUser.locator("select[name=role]").selectOption(role);
+    await newUser.getByRole("button", { name: "Crear" }).click();
+    await expect(newUser.getByText(`${username} / ${username}123`)).toBeVisible();
   }
+  await page.keyboard.press("Escape");
+  await expect(page.locator("tr", { hasText: "inspector1" })).toBeVisible();
 
   // Create a campaign and upload the Matriz
   await page.goto("/campaigns");
-  await page.fill("input[name=name]", "Campaña de prueba");
-  await page.fill("input[name=startDate]", "2026-01-01");
-  await page.fill("input[name=endDate]", "2030-12-31");
-  await page.getByRole("button", { name: "Crear" }).click();
+  await page.getByRole("button", { name: "Nueva campaña" }).click();
+  const newCampaign = page.getByRole("dialog", { name: "Nueva campaña" });
+  await newCampaign.locator("input[name=name]").fill("Campaña de prueba");
+  await newCampaign.locator("input[name=startDate]").fill("2026-01-01");
+  await newCampaign.locator("input[name=endDate]").fill("2030-12-31");
+  await newCampaign.getByRole("button", { name: "Crear" }).click();
   await expect(page).toHaveURL(/\/campaigns\/\d+\/import/);
   const campaignUrl = page.url().replace("/import", "");
   await page.setInputFiles("input[type=file]", FIXTURE);
   await page.getByRole("button", { name: /Confirmar carga/ }).click();
   await expect(page.getByText(/Carga completada: 4 insertados/)).toBeVisible();
 
-  // Assign every task to the agent
+  // The campaign card shows the right totals
+  await page.goto("/campaigns");
+  await expect(page.locator("a", { hasText: "Campaña de prueba" }).getByText("4", { exact: true }).first()).toBeVisible();
+
+  // Assign every task to the agent from the side panel
   await page.goto(campaignUrl + "/companies");
-  await page.getByRole("button", { name: "Asignar" }).click();
-  await expect(page.getByText("4 tareas asignadas")).toBeVisible();
+  await page.getByRole("button", { name: "Asignar tareas" }).click();
+  const panel = page.getByRole("dialog", { name: "Asignar tareas a los agentes" });
+  await panel.getByRole("button", { name: "Asignar", exact: true }).click();
+  await expect(panel.getByText("4 tareas asignadas")).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  // Ticked rows can be assigned together (here: back to the same agent)
+  await page.locator("tbody input[name=ids]").nth(0).check();
+  await page.locator("tbody input[name=ids]").nth(1).check();
+  await page.locator("#bulk-assign select[name=userId]").selectOption({ label: "Ana Agente" });
+  await page.locator("#bulk-assign").getByRole("button", { name: "Aplicar" }).click();
+  await expect(page.getByText("2 tareas asignadas")).toBeVisible();
 
   // Agent: sees the assigned calls
   await signIn(page, "agente1", "agente1123");
@@ -164,18 +184,19 @@ test("sensitive actions ask for the password again after 10 minutes", async ({ p
   await context.addCookies([{ name: "eys_session", value: token, url: baseURL! }]);
 
   await page.goto("/users");
-  const row = page.locator("tr", { has: page.locator("td", { hasText: /^agente1$/ }) });
-  await row.getByText("Editar").click();
-  await row.locator("select[name=role]").selectOption("supervisor");
-  await row.getByRole("button", { name: "Guardar" }).click();
+  const row = page.locator("tr", { hasText: "agente1" });
+  await row.getByRole("button", { name: "Editar" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.locator("select[name=role]").selectOption("supervisor");
+  await dialog.getByRole("button", { name: "Guardar" }).click();
 
   // The server refuses until the password is confirmed; then the change goes through.
-  await expect(row.getByText("Confirme su contraseña")).toBeVisible();
-  await row.locator("input[name=password][type=password]").fill("contraseña-equivocada");
-  await row.getByRole("button", { name: "Confirmar y continuar" }).click();
-  await expect(row.getByText("La contraseña actual es incorrecta")).toBeVisible();
-  await row.locator("input[name=password][type=password]").fill(NEW_PW);
-  await row.getByRole("button", { name: "Confirmar y continuar" }).click();
+  await expect(dialog.getByText("Confirme su contraseña")).toBeVisible();
+  await dialog.locator("input[name=password][type=password]").fill("contraseña-equivocada");
+  await dialog.getByRole("button", { name: "Confirmar y continuar" }).click();
+  await expect(dialog.getByText("La contraseña actual es incorrecta")).toBeVisible();
+  await dialog.locator("input[name=password][type=password]").fill(NEW_PW);
+  await dialog.getByRole("button", { name: "Confirmar y continuar" }).click();
   await expect(row.locator("td", { hasText: /^Supervisor$/ })).toBeVisible();
 
   await page.goto("/logs?action=user.role_changed");

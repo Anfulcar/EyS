@@ -39,20 +39,20 @@ export default async function LogsPage({ searchParams }: { searchParams: Promise
         <Link href="?tab=activity" aria-current={tab === "activity" ? "page" : undefined}>{t.tabActivity}</Link>
         <Link href="?tab=errors" aria-current={tab === "errors" ? "page" : undefined}>{t.tabErrors}</Link>
       </nav>
-      <form className="card flex flex-wrap items-end gap-3 p-4">
+      <form className="card grid items-end gap-3 p-4 sm:grid-cols-2 lg:grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))]">
         <input type="hidden" name="tab" value={tab} />
         {tab === "activity" ? (
           <>
             <div>
               <label className="label">{t.what}</label>
-              <select name="action" defaultValue={sp.action ?? ""} className="input w-56">
+              <select name="action" defaultValue={sp.action ?? ""} className="input">
                 <option value="">{t.all}</option>
                 {Object.entries(ACTIVITY_LABELS).map(([k, v]) => <option key={k} value={k}>{v[lang]}</option>)}
               </select>
             </div>
             <div>
               <label className="label">{t.who}</label>
-              <select name="user" defaultValue={sp.user ?? ""} className="input w-48">
+              <select name="user" defaultValue={sp.user ?? ""} className="input">
                 <option value="">{t.all}</option>
                 {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
@@ -61,7 +61,7 @@ export default async function LogsPage({ searchParams }: { searchParams: Promise
         ) : (
           <div>
             <label className="label">{t.source}</label>
-            <select name="source" defaultValue={sp.source ?? ""} className="input w-40">
+            <select name="source" defaultValue={sp.source ?? ""} className="input">
               <option value="">{t.all}</option>
               {Object.entries(ERROR_SOURCES).map(([k, v]) => <option key={k} value={k}>{v[lang]}</option>)}
             </select>
@@ -69,7 +69,7 @@ export default async function LogsPage({ searchParams }: { searchParams: Promise
         )}
         <div><label className="label">{t.from}</label><input type="date" name="from" defaultValue={sp.from} className="input" /></div>
         <div><label className="label">{t.to}</label><input type="date" name="to" defaultValue={sp.to} className="input" /></div>
-        <div><label className="label">{t.search}</label><input name="q" defaultValue={sp.q} className="input w-48" /></div>
+        <div><label className="label">{t.search}</label><input name="q" defaultValue={sp.q} className="input" /></div>
         <button className="btn-secondary">{t.filter}</button>
       </form>
       {rows.length === 0 ? (
