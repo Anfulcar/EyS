@@ -11,6 +11,7 @@ import { db } from "@/db";
 import { companies } from "@/db/schema";
 import { currentUser } from "@/lib/auth";
 import { attentionSummary } from "@/lib/queue";
+import { newReportsCount } from "@/lib/report-run";
 import { syncCoverage } from "@/lib/team";
 import { ROLES } from "@/lib/catalog";
 import { getDict } from "@/lib/i18n-server";
@@ -35,12 +36,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       ])
     : [0, null];
   const hasCalls = assigned > 0;
+  const newReports = user && isManager ? await newReportsCount(user) : 0;
   const nav: NavItem[] = [
     ...(hasCalls ? [{ href: "/calls", label: t.navCalls, icon: "calls" as const, badge: attention?.total ?? 0 }] : []),
     ...(role && role !== "inspector" ? [{ href: "/reviews", label: t.navReviews, icon: "reviews" as const }] : []),
     ...(isManager ? [{ href: "/campaigns", label: t.navCampaigns, icon: "campaigns" as const }] : []),
     ...(role && role !== "agent" ? [{ href: "/visits", label: t.navVisits, icon: "visits" as const }] : []),
     ...(isManager ? [{ href: "/stats", label: t.navStats, icon: "stats" as const }] : []),
+    ...(isManager ? [{ href: "/reports", label: t.navReports, icon: "reports" as const, badge: newReports }] : []),
     ...(role === "admin" ? [{ href: "/users", label: t.navUsers, icon: "users" as const }] : []),
     ...(role === "admin" ? [{ href: "/logs", label: t.navLogs, icon: "logs" as const }] : []),
     ...(role ? [{ href: "/help", label: t.navHelp, icon: "help" as const }] : []),

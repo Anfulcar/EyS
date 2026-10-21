@@ -6,6 +6,7 @@ type Section = { id: string; roles: string[]; title: string; intro?: string; ste
 type L<T> = Record<Lang, T>;
 
 export const WHATS_NEW: { date: string; es: string; en: string }[] = [
+  { date: "2026-10-21", es: "Informes en PDF o PowerPoint desde «Estadísticas globales»: elija campañas, período, título, comentarios y secciones. Guarde plantillas y prográmelas (semanal, cada 2 semanas o mensual); los informes generados quedan 12 meses en el nuevo menú «Informes».", en: "PDF or PowerPoint reports from “Global statistics”: choose campaigns, period, title, comments and sections. Save templates and schedule them (weekly, every 2 weeks or monthly); generated reports are kept 12 months in the new “Reports” menu." },
   { date: "2026-10-21", es: "Guion de llamada editable por campaña. Nuevas pestañas «Resumen» (indicadores y leyenda, como en la Matriz) y «Seguimiento» (avance por persona, mover tareas, cubrir ausencias). La asignación automática puede considerar la carga actual de cada persona. Los administradores registran vacaciones, días libres y no disponibilidad en «Usuarios»; durante la ausencia otra persona cubre las tareas y vuelven solas al terminar.", en: "Editable call script per campaign. New “Summary” tab (indicators and legend, as in the Matriz) and “Follow-up” tab (progress per person, move tasks, cover absences). Automatic assignment can take each person's current workload into account. Administrators record vacations, days off and unavailability in “Users”; during the absence someone else covers the tasks, and they go back by themselves at the end." },
   { date: "2026-10-21", es: "La aplicación responde más rápido: cada pantalla aparece al instante con su contorno mientras llegan los datos, guardar una llamada tarda menos y los tableros cargan antes. En «Registro», los administradores ven dónde están la base de datos y los servidores.", en: "The app responds faster: each screen appears instantly with its outline while the data arrives, saving a call takes less time and dashboards load sooner. In “Log”, administrators see where the database and the servers are." },
   { date: "2026-10-21", es: "Nuevo «Llamadas realizadas»: cada llamada con su resumen; supervisores y administradores la marcan «Revisada» con un comentario que el agente ve en su historial. «Exportar» permite elegir hojas, columnas y filtros. En los tableros, cada número, barra y fila abre la lista de establecimientos, con descarga en Excel.", en: "New “Calls made”: every call with its summary; supervisors and administrators mark it “Reviewed” with a comment the agent sees in their history. “Export” lets you choose sheets, columns and filters. On dashboards, every number, bar and row opens the list of establishments, with an Excel download." },
@@ -108,6 +109,17 @@ const ES: Section[] = [
       "Haga clic en la fecha para abrir el resumen: quién atendió y su cargo, las respuestas, el compromiso, el obstáculo, las notas y si se envió WhatsApp.",
       "Supervisores y administradores: escriban un comentario (opcional) y pulsen «Marcar como revisada». Pueden actualizar la revisión después.",
       "Agentes: ven solo sus propias llamadas y el comentario de revisión, también en el historial de la tarea. Una llamada guardada no se puede editar.",
+    ],
+  },
+  {
+    id: "reports", roles: ["supervisor", "admin"], title: "Informes en PDF o PowerPoint",
+    steps: [
+      "«Estadísticas globales» → «Generar informe».",
+      "Elija las campañas (todas, solo activas o cuáles), el período de la actividad (todo, semana pasada, últimos 7 días, mes en curso, mes pasado o fechas exactas), el título y, si quiere, comentarios para la primera página.",
+      "Marque las secciones: metas del plan, conteos, comparación por campaña, resultados, avance por agente, zona/prioridad/subsector, estatus SIGTUR y canal, llamadas por día, leyenda y detalle de establecimientos (sin teléfonos ni contactos).",
+      "Elija PDF o PowerPoint y pulse «Descargar». El informe usa los datos del momento.",
+      "«Guardar como plantilla» guarda la elección con un nombre. Con «Programación» (semanal, cada 2 semanas o mensual) se genera sola ese día a primera hora; con «Semana pasada» o «Mes pasado» el período se ajusta solo.",
+      "Menú «Informes»: los informes generados (se guardan 12 meses) con un contador rojo de nuevos, y las plantillas para «Generar ahora», pausar o eliminar.",
     ],
   },
   {
@@ -237,6 +249,17 @@ const EN: Section[] = [
       "Click the date to open the summary: who answered and their role, the answers, the commitment, the obstacle, the notes and whether a WhatsApp was sent.",
       "Supervisors and administrators: write a comment (optional) and press “Mark as reviewed”. You can update the review later.",
       "Agents: see only their own calls and the review comment, also in the task history. A saved call can't be edited.",
+    ],
+  },
+  {
+    id: "reports", roles: ["supervisor", "admin"], title: "PDF or PowerPoint reports",
+    steps: [
+      "“Global statistics” → “Generate report”.",
+      "Choose the campaigns (all, active only or which ones), the activity period (everything, last week, last 7 days, this month, last month or exact dates), the title and, optionally, comments for the first page.",
+      "Tick the sections: plan goals, counts, comparison by campaign, results, progress by agent, zone/priority/subsector, SIGTUR status and channel, calls per day, legend and establishment detail (no phones or contacts).",
+      "Choose PDF or PowerPoint and press “Download”. The report uses the data at that moment.",
+      "“Save as template” keeps the choice under a name. With “Schedule” (weekly, every 2 weeks or monthly) it is generated by itself that day early in the morning; with “Last week” or “Last month” the period adjusts by itself.",
+      "“Reports” menu: the generated reports (kept 12 months) with a red counter for new ones, and the templates to “Generate now”, pause or delete.",
     ],
   },
   {

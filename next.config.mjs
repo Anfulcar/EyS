@@ -7,7 +7,7 @@ const isLocalHttp = !process.env.VERCEL;
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  serverExternalPackages: ["@libsql/client", "exceljs"],
+  serverExternalPackages: ["@libsql/client", "exceljs", "pdfkit", "pptxgenjs"],
   experimental: { serverActions: { bodySizeLimit: "4mb" } },
   poweredByHeader: false,
   async headers() {

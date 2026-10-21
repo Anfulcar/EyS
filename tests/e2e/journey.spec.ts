@@ -140,6 +140,8 @@ test("main journey: campaign → upload → assign → calls → visit → dashb
   const download = await page.request.get(campaignUrl.replace("/campaigns/", "/api/campaigns/") + "/export");
   expect(download.status()).toBe(404);
   expect((await page.goto("/logs"))?.status()).toBe(404);
+  expect((await page.goto("/reports"))?.status()).toBe(404);
+  expect((await page.request.get("/api/report?o=%7B%7D")).status()).toBe(404);
 
   // Agent: "Llamadas realizadas" shows only their own calls, without the review form
   await page.goto("/reviews");
@@ -190,6 +192,30 @@ test("main journey: campaign → upload → assign → calls → visit → dashb
   // The old full download still works
   expect((await page.request.get(campaignUrl.replace("/campaigns/", "/api/campaigns/") + "/export")).status()).toBe(200);
 
+  // Administrator: report from "Estadísticas globales", as PDF and as a scheduled PowerPoint template
+  await page.goto("/stats");
+  await page.getByRole("button", { name: "Generar informe" }).click();
+  const builder = page.getByRole("dialog", { name: "Generar informe" });
+  await builder.getByRole("button", { name: "Semana pasada" }).click();
+  await builder.locator("#rb-title").fill("Informe de prueba");
+  const [pdf] = await Promise.all([page.waitForEvent("download"), builder.getByRole("link", { name: "Descargar PDF" }).click()]);
+  const fs = await import("node:fs");
+  expect(fs.readFileSync((await pdf.path())!).subarray(0, 5).toString()).toBe("%PDF-");
+  await builder.getByRole("button", { name: "PowerPoint" }).click();
+  await builder.getByText("Guardar como plantilla").first().click();
+  await builder.locator("#rb-name").fill("Semanal Dirección");
+  await builder.locator("#rb-frequency").selectOption("weekly");
+  await builder.getByRole("button", { name: "Guardar como plantilla" }).click();
+  await expect(builder.getByText("Plantilla guardada.")).toBeVisible();
+  await page.goto("/reports");
+  await expect(page.locator("tr", { hasText: "Semanal Dirección" }).getByText(/Semanal · lunes/)).toBeVisible();
+  await page.locator("tr", { hasText: "Semanal Dirección" }).getByRole("button", { name: "Generar ahora" }).click();
+  await expect(page.getByText("Informe generado")).toBeVisible();
+  await page.reload();
+  const pptxHref = await page.getByRole("link", { name: "PowerPoint" }).first().getAttribute("href");
+  const pptx = await page.request.get(pptxHref!);
+  expect((await pptx.body()).subarray(0, 2).toString()).toBe("PK");
+
   // Administrator: the campaign's "Resumen" tab with the indicators and the legend
   await page.goto(campaignUrl + "/summary");
   await expect(page.locator("tr", { hasText: "Establecimientos a intervenir" }).locator("td").last()).toHaveText("4");
@@ -228,7 +254,7 @@ test("main journey: campaign → upload → assign → calls → visit → dashb
 
   // Activity log: administrators see who did what
   await page.goto("/logs");
-  for (const what of ["Llamada registrada", "Llamada revisada", "Ausencia registrada", "Tareas cubiertas durante una ausencia", "Guion de llamada editado", "Visita registrada", "Usuario creado", "Carga de establecimientos", "Asignación de tareas", "Descarga de datos"]) {
+  for (const what of ["Informe descargado", "Plantilla de informe guardada", "Informe generado", "Llamada registrada", "Llamada revisada", "Ausencia registrada", "Tareas cubiertas durante una ausencia", "Guion de llamada editado", "Visita registrada", "Usuario creado", "Carga de establecimientos", "Asignación de tareas", "Descarga de datos"]) {
     await expect(page.locator("td", { hasText: what }).first()).toBeVisible();
   }
 
