@@ -5,6 +5,7 @@ import { and, eq, inArray, isNull, ne } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
 import { campaigns, companies, establishments, importLogs, phones, users } from "@/db/schema";
@@ -79,6 +80,7 @@ export async function changePasswordAction(_: ActionState, form: FormData): Prom
   await setSessionCookie({ ...u, mustChangePassword: false });
   await logActivity(u, "password.changed", { entity: "user", entityId: u.id, summary: u.mustChangePassword ? "Cambio obligatorio del primer ingreso" : "Cambio voluntario" });
   if (u.mustChangePassword) redirect(homeFor(u.role));
+  revalidatePath("/account");
   return { ok: true, message: t.passwordChanged };
 }
 
@@ -425,17 +427,22 @@ export async function logCallAction(_: ActionState, form: FormData): Promise<Act
     // The same call can be logged on sibling tasks (same RNC) that the user is allowed to work.
     const main = await canWorkCompany(u, input.companyId);
     if (!main) return { error: "Not found" };
-    const allowed = new Set((await relatedTasks(main)).map((c) => c.id));
-    const extra = [...new Set(input.relatedCompanyIds ?? [])].filter((id) => allowed.has(id));
-    for (const id of extra) if (!(await canWorkCompany(u, id))) return { error: "Not found" };
-    await logCall(u, input);
-    for (const id of extra) await logCall(u, { ...input, companyId: id, phoneId: null });
+    const asked = [...new Set(input.relatedCompanyIds ?? [])];
+    const allowed = asked.length ? new Set((await relatedTasks(main)).map((c) => c.id)) : new Set<number>();
+    const extra = asked.filter((id) => allowed.has(id));
+    if ((await Promise.all(extra.map((id) => canWorkCompany(u, id)))).some((c) => !c)) return { error: "Not found" };
+    await logCall(u, input, main);
+    // Sibling tasks are separate companies, so they can be saved at the same time.
+    await Promise.all(extra.map((id) => logCall(u, { ...input, companyId: id, phoneId: null })));
     const failed = !input.contacted || input.attended === false;
     const result = failed ? (input.contacted ? "10" : input.noContactCode) : [...new Set(input.results.map((r) => r.code))].join(", ");
-    await logActivity(u, "call.logged", {
-      campaignId: main.campaignId, entity: "task", entityId: main.id,
-      summary: `${main.key}${extra.length ? ` (+${extra.length} misma empresa)` : ""} · resultado: ${result}`,
-    });
+    // Written right after the answer is sent, so the agent doesn't wait for the activity log.
+    after(() =>
+      logActivity(u, "call.logged", {
+        campaignId: main.campaignId, entity: "task", entityId: main.id,
+        summary: `${main.key}${extra.length ? ` (+${extra.length} misma empresa)` : ""} · resultado: ${result}`,
+      }),
+    );
   } catch (e) {
     const msg = (e as Error).message;
     if (msg !== "commitmentRequired") await logError("action", `Registrar llamada: ${msg}`, { userId: u.id, path: "/calls", detail: (e as Error).stack ?? null });

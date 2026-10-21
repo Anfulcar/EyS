@@ -36,6 +36,13 @@
       "when": 1792538892719,
       "tag": "0004_call_review",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1792541353944,
+      "tag": "0005_speed_indexes",
+      "breakpoints": true
     }
   ]
 }

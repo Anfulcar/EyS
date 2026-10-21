@@ -8,6 +8,7 @@ import { requireUser } from "@/lib/auth";
 import { ACTIVITY_LABELS, ERROR_SOURCES, label } from "@/lib/catalog";
 import { fmtDateTime } from "@/lib/dates";
 import { getDict } from "@/lib/i18n-server";
+import { locationReport } from "@/lib/location";
 import { activityRows, errorRows, type LogFilters } from "@/lib/logs";
 
 const PAGE = 100;
@@ -21,7 +22,10 @@ export default async function LogsPage({ searchParams }: { searchParams: Promise
   const people = await db.select({ id: users.id, name: users.name }).from(users).orderBy(asc(users.name));
   const names = new Map(people.map((p) => [p.id, p.name]));
   const filters: LogFilters = { action: sp.action, user: sp.user, q: sp.q, from: sp.from, to: sp.to, source: sp.source };
-  const rows = tab === "activity" ? await activityRows(filters, PAGE + 1, page * PAGE) : await errorRows(filters, PAGE + 1, page * PAGE);
+  const [rows, where] = await Promise.all([
+    tab === "activity" ? activityRows(filters, PAGE + 1, page * PAGE) : errorRows(filters, PAGE + 1, page * PAGE),
+    locationReport(lang),
+  ]);
   const hasMore = rows.length > PAGE;
   const clean = Object.fromEntries(Object.entries({ ...sp }).filter(([, v]) => v)) as Record<string, string>;
   const qs = (o: Record<string, string>) => "?" + new URLSearchParams({ ...clean, ...o }).toString();
@@ -34,6 +38,13 @@ export default async function LogsPage({ searchParams }: { searchParams: Promise
           <p className="subtitle">{t.logsSubtitle}</p>
         </div>
         <a href={`/api/logs${qs({ tab })}`} className="btn-secondary"><Download className="h-4 w-4" />{t.downloadCsv}</a>
+      </div>
+      <div className={`card flex flex-wrap items-center gap-x-8 gap-y-2 py-3 text-sm ${where.close ? "" : "ring-2 ring-mitur-orange"}`}>
+        <span className="font-semibold text-slate-800">{t.locationTitle}</span>
+        <span><span className="text-slate-500">{t.locationDb}:</span> {where.database}</span>
+        <span><span className="text-slate-500">{t.locationApp}:</span> {where.app}</span>
+        <span><span className="text-slate-500">{t.locationMs}:</span> {where.ms} ms</span>
+        <span className={where.close ? "text-emerald-700" : "font-medium text-mitur-orange"}>{where.close ? t.locationClose : t.locationFar}</span>
       </div>
       <nav className="segmented">
         <Link href="?tab=activity" aria-current={tab === "activity" ? "page" : undefined}>{t.tabActivity}</Link>

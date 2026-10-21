@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { startTransition, useActionState, useCallback, useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import type { ActionState } from "@/app/actions";
@@ -27,14 +26,13 @@ export function ActionForm({ action, children, className, resetOnSuccess, id }: 
     null,
   );
   const ref = useRef<HTMLFormElement>(null);
-  const router = useRouter();
   const [askPassword, setAskPassword] = useState(false);
   useEffect(() => {
     setAskPassword(!!state?.needsReauth);
     if (!state?.ok) return;
+    // The server action already sends back the refreshed screen (revalidatePath), so no second refresh is needed.
     if (resetOnSuccess) ref.current?.reset();
-    router.refresh();
-  }, [state, resetOnSuccess, router]);
+  }, [state, resetOnSuccess]);
   const continueAction = useCallback(() => {
     setAskPassword(false);
     const data = lastSubmitted.current;

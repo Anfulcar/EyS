@@ -2,6 +2,7 @@ import "server-only";
 import { eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
+import { cache } from "react";
 import { db } from "@/db";
 import { users, type User } from "@/db/schema";
 import { isRecentAuth, readSession, SESSION_COOKIE, SESSION_HOURS, signSession } from "./session";
@@ -25,13 +26,14 @@ export async function clearSession() {
 }
 
 // Loads the current user from the database on every request, so deactivation and role changes apply immediately.
-export async function currentUser(): Promise<User | null> {
+// Read once per request: the menu and the page share the same lookup.
+export const currentUser = cache(async (): Promise<User | null> => {
   const s = await readSession((await cookies()).get(SESSION_COOKIE)?.value);
   if (!s) return null;
   const u = await db.query.users.findFirst({ where: eq(users.id, s.uid) });
   if (!u || !u.active) return null;
   return u;
-}
+});
 
 export async function requireUser(roles?: Role[]): Promise<User> {
   const u = await currentUser();

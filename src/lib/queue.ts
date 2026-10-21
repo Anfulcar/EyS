@@ -1,7 +1,7 @@
 import "server-only";
-import { and, eq, inArray, isNull, lte, ne, or, sql, type SQL } from "drizzle-orm";
+import { and, eq, inArray, isNull, lte, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
-import { campaigns, companies } from "@/db/schema";
+import { companies } from "@/db/schema";
 import { nowIso } from "./dates";
 
 // "Needs attention" = in "Para hoy": never called, a retry or a follow-up whose time has come.
@@ -13,20 +13,19 @@ export function dueCondition(now = nowIso()): SQL {
   )!;
 }
 
-export async function openCampaignIds() {
-  return (await db.select({ id: campaigns.id }).from(campaigns).where(ne(campaigns.status, "closed"))).map((c) => c.id);
-}
-
 export async function attentionSummary(userId: number, campaignIds?: number[]) {
-  const ids = campaignIds ?? (await openCampaignIds());
-  if (!ids.length) return { total: 0, overdueFollowups: 0, dueToday: 0 };
+  if (campaignIds && !campaignIds.length) return { total: 0, overdueFollowups: 0, dueToday: 0 };
+  // Without a list, "open campaigns" is part of the same database question (one round trip).
+  const inCampaigns = campaignIds
+    ? inArray(companies.campaignId, campaignIds)
+    : sql`${companies.campaignId} in (select c.id from campaigns c where c.status <> 'closed')`;
   const [r] = await db
     .select({
       total: sql<number>`count(*)`,
       followups: sql<number>`sum(case when ${companies.status} = 'followup' then 1 else 0 end)`,
     })
     .from(companies)
-    .where(and(inArray(companies.campaignId, ids), eq(companies.assignedUserId, userId), dueCondition()));
+    .where(and(inCampaigns, eq(companies.assignedUserId, userId), dueCondition()));
   const total = Number(r?.total ?? 0);
   const overdueFollowups = Number(r?.followups ?? 0);
   return { total, overdueFollowups, dueToday: total - overdueFollowups };

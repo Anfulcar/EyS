@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { db } from "@/db";
 import { callAttempts, callResults, campaigns, companies, establishments, users, type User } from "@/db/schema";
 import { callDetail, callRows, reviewCall } from "@/lib/reviews";
-import { computeStats, drillDown, METRICS } from "@/lib/stats";
+import { computeStats, computeStatsByCampaign, drillDown, METRICS } from "@/lib/stats";
 
 let ana: User, beto: User, sup: User, campaignId: number;
 const callIds: Record<string, number> = {};
@@ -56,6 +56,12 @@ describe("calls made and their review", () => {
 });
 
 describe("dashboard lists", () => {
+  it("global statistics read once give the same numbers as each campaign's dashboard", async () => {
+    const [other] = await db.insert(campaigns).values({ name: "Otra", startDate: "2026-01-01", endDate: "2030-12-31", status: "active" }).returning();
+    const both = await computeStatsByCampaign([campaignId, other.id], [campaignId, other.id]);
+    expect(both.per.get(campaignId)).toEqual(await computeStats([campaignId]));
+    expect(both.all).toEqual(await computeStats([campaignId, other.id]));
+  });
   it("each list has exactly as many establishments as the number it opens from", async () => {
     const s = await computeStats([campaignId]);
     const expected: Partial<Record<(typeof METRICS)[number], number>> = {

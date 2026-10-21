@@ -41,20 +41,25 @@ const RESOLVED_STATUSES = ["En proceso", "Vigente", "Inactivo (depurado)"];
 
 export async function canWorkCompany(user: User, companyId: number) {
   const c = await db.query.companies.findFirst({ where: eq(companies.id, companyId) });
-  if (!c) return null;
-  if (user.role === "admin" || user.role === "supervisor") return c;
-  if (user.role === "agent" && c.assignedUserId === user.id) return c;
-  return null;
+  return c && mayWork(user, c) ? c : null;
 }
 
-export async function logCall(user: User, input: CallInput) {
-  const company = await canWorkCompany(user, input.companyId);
+// Administrators and supervisors work any task; agents only the ones assigned to them.
+export function mayWork(user: User, c: { assignedUserId: number | null }) {
+  return user.role === "admin" || user.role === "supervisor" || (user.role === "agent" && c.assignedUserId === user.id);
+}
+
+// `checked` is the task already loaded and permission-checked by the caller (saves a lookup).
+export async function logCall(user: User, input: CallInput, checked?: typeof companies.$inferSelect) {
+  const company = checked && checked.id === input.companyId && mayWork(user, checked) ? checked : await canWorkCompany(user, input.companyId);
   if (!company) throw new Error("Not found");
-  const campaign = (await db.query.campaigns.findFirst({ where: eq(campaigns.id, company.campaignId) }))!;
-  const ests = await db.select().from(establishments).where(eq(establishments.companyId, company.id));
-  const phone = input.phoneId
-    ? await db.query.phones.findFirst({ where: and(eq(phones.id, input.phoneId), eq(phones.companyId, company.id)) })
-    : null;
+  const [campaignRow, ests, allPhones] = await Promise.all([
+    db.query.campaigns.findFirst({ where: eq(campaigns.id, company.campaignId) }),
+    db.select().from(establishments).where(eq(establishments.companyId, company.id)),
+    db.select().from(phones).where(eq(phones.companyId, company.id)),
+  ]);
+  const campaign = campaignRow!;
+  const phone = input.phoneId ? allPhones.find((p) => p.id === input.phoneId) ?? null : null;
 
   const failed = !input.contacted || input.attended === false;
   const failCode = input.contacted ? "10" : input.noContactCode ?? "08";
@@ -98,7 +103,6 @@ export async function logCall(user: User, input: CallInput) {
           .where(and(eq(phones.companyId, company.id), eq(phones.normalized, badNumber))),
       );
     }
-    const allPhones = await db.select().from(phones).where(eq(phones.companyId, company.id));
     const usable = allPhones.filter((p) => p.active && p.normalized !== badNumber && (p.quality === "ok" || p.quality === "invalid"));
     const failedAttempts = company.failedAttempts + 1;
     const toVisit = usable.length === 0 || failedAttempts >= campaign.maxAttempts;

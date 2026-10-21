@@ -7,23 +7,24 @@ import { Avatar } from "@/components/Avatar";
 import { CallForm, type RelatedTask } from "@/components/CallForm";
 import { PriorityBadge, SectionTitle, StatusBadge } from "@/components/ui";
 import { db } from "@/db";
-import { callAttempts, callResults, campaigns, establishments, phones, users } from "@/db/schema";
+import { callAttempts, callResults, campaigns, companies, establishments, phones, users } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { codeLabel, COMPANY_STATUSES, label, OBSTACLES, PHONE_KINDS, PHONE_REASONS } from "@/lib/catalog";
 import { fmtDate, fmtDateTime, todayLocal } from "@/lib/dates";
 import type { Dict } from "@/lib/i18n";
 import { getDict } from "@/lib/i18n-server";
-import { canWorkCompany, relatedTasks } from "@/lib/workflow";
+import { mayWork, relatedTasks } from "@/lib/workflow";
 import { addPhoneAction, logCallAction } from "../../actions";
 
 export default async function TaskPage({ params }: { params: Promise<{ companyId: string }> }) {
-  const me = await requireUser(["agent", "admin", "supervisor"]);
   const companyId = Number((await params).companyId);
-  const company = await canWorkCompany(me, companyId);
-  if (!company) notFound();
-  const { t, lang } = await getDict();
-  const [campaign, ests, phs, attempts, related, people] = await Promise.all([
-    db.query.campaigns.findFirst({ where: eq(campaigns.id, company.campaignId) }),
+  if (!Number.isInteger(companyId)) notFound();
+  // Everything about the task is read at the same time as the account; nothing is shown
+  // until the permission check below passes (others get "not found").
+  const [me, companyRow, { t, lang }, ests, phs, attempts, results, people] = await Promise.all([
+    requireUser(["agent", "admin", "supervisor"]),
+    db.query.companies.findFirst({ where: eq(companies.id, companyId) }),
+    getDict(),
     db.select().from(establishments).where(eq(establishments.companyId, companyId)).orderBy(asc(establishments.nombreComercial)),
     db.select().from(phones).where(eq(phones.companyId, companyId)).orderBy(desc(phones.active), asc(phones.id)),
     db
@@ -32,12 +33,14 @@ export default async function TaskPage({ params }: { params: Promise<{ companyId
       .leftJoin(users, eq(users.id, callAttempts.userId))
       .where(eq(callAttempts.companyId, companyId))
       .orderBy(desc(callAttempts.calledAt)),
-    relatedTasks(company),
+    db.select().from(callResults).where(inArray(callResults.attemptId, db.select({ id: callAttempts.id }).from(callAttempts).where(eq(callAttempts.companyId, companyId)))),
     db.select({ id: users.id, name: users.name }).from(users),
   ]);
+  if (!companyRow || !mayWork(me, companyRow)) notFound();
+  const company = companyRow;
+  const [campaign, related] = await Promise.all([db.query.campaigns.findFirst({ where: eq(campaigns.id, company.campaignId) }), relatedTasks(company)]);
   const relIds = related.map((r) => r.id);
-  const [results, relEsts, relPhones] = await Promise.all([
-    attempts.length ? db.select().from(callResults).where(inArray(callResults.attemptId, attempts.map((a) => a.a.id))) : [],
+  const [relEsts, relPhones] = await Promise.all([
     relIds.length ? db.select().from(establishments).where(inArray(establishments.companyId, relIds)) : [],
     relIds.length ? db.select().from(phones).where(inArray(phones.companyId, relIds)) : [],
   ]);

@@ -6,6 +6,7 @@ type Section = { id: string; roles: string[]; title: string; intro?: string; ste
 type L<T> = Record<Lang, T>;
 
 export const WHATS_NEW: { date: string; es: string; en: string }[] = [
+  { date: "2026-10-21", es: "La aplicación responde más rápido: cada pantalla aparece al instante con su contorno mientras llegan los datos, guardar una llamada tarda menos y los tableros cargan antes. En «Registro», los administradores ven dónde están la base de datos y los servidores.", en: "The app responds faster: each screen appears instantly with its outline while the data arrives, saving a call takes less time and dashboards load sooner. In “Log”, administrators see where the database and the servers are." },
   { date: "2026-10-21", es: "Nuevo «Llamadas realizadas»: cada llamada con su resumen; supervisores y administradores la marcan «Revisada» con un comentario que el agente ve en su historial. «Exportar» permite elegir hojas, columnas y filtros. En los tableros, cada número, barra y fila abre la lista de establecimientos, con descarga en Excel.", en: "New “Calls made”: every call with its summary; supervisors and administrators mark it “Reviewed” with a comment the agent sees in their history. “Export” lets you choose sheets, columns and filters. On dashboards, every number, bar and row opens the list of establishments, with an Excel download." },
   { date: "2026-10-21", es: "Mis llamadas: contador rojo en el menú y aviso con las llamadas que requieren atención; las nuevas primero y luego las que llevan más días esperando; seguimientos vencidos resaltados en amarillo; filtro por número de intentos. La hora de cada llamada se registra sola al guardar.", en: "My calls: red counter in the menu and a notice with the calls that need attention; new ones first, then those waiting longest; overdue follow-ups highlighted in yellow; filter by number of attempts. Each call's time is recorded automatically on save." },
   { date: "2026-10-20", es: "Logo y colores del Ministerio de Turismo en toda la aplicación. Tableros más claros: arriba las 4 metas del plan con su barra de avance, luego los conteos, los gráficos y las tablas de detalle en pestañas.", en: "Ministerio de Turismo logo and colours throughout the app. Clearer dashboards: the plan's 4 goals with progress bars on top, then counts, charts and detail tables in tabs." },
@@ -112,7 +113,7 @@ const ES: Section[] = [
     bullets: [
       "«Usuarios»: «+ Nuevo usuario» abre una ventana (si deja la contraseña vacía será usuario + 123). «Editar» abre la misma ventana para cambiar nombre, usuario, rol, estado o contraseña.",
       "Por seguridad, eliminar una campaña, crear usuarios o cambiar rol, estado o contraseña pide confirmar su contraseña si su último ingreso fue hace más de 10 minutos.",
-      "«Registro» → «Actividad»: quién hizo qué y cuándo (ingresos, cambios de usuarios, cargas, asignaciones, llamadas, visitas, descargas de datos). «Errores»: fallos de la aplicación. Se puede filtrar y descargar en CSV.",
+      "«Registro» → «Actividad»: quién hizo qué y cuándo (ingresos, cambios de usuarios, cargas, asignaciones, llamadas, visitas, descargas de datos). «Errores»: fallos de la aplicación. Se puede filtrar y descargar en CSV. Arriba, «Ubicación y velocidad» muestra dónde están la base de datos y los servidores y cuánto tarda una respuesta; si dice que están lejos, avise a soporte.",
     ],
   },
   {
@@ -217,7 +218,7 @@ const EN: Section[] = [
     bullets: [
       "“Users”: “+ New user” opens a pop-up (an empty password becomes username + 123). “Edit” opens the same pop-up to change name, username, role, status or password.",
       "For security, deleting a campaign, creating users or changing a role, status or password asks you to confirm your password if your last sign-in was more than 10 minutes ago.",
-      "“Log” → “Activity”: who did what and when (sign-ins, user changes, uploads, assignments, calls, visits, data downloads). “Errors”: app failures. Filter and download as CSV.",
+      "“Log” → “Activity”: who did what and when (sign-ins, user changes, uploads, assignments, calls, visits, data downloads). “Errors”: app failures. Filter and download as CSV. On top, “Location and speed” shows where the database and servers are and how long a response takes; if it says they are far apart, tell support.",
     ],
   },
   {
