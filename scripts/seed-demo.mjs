@@ -14,7 +14,7 @@ export const DEMO_USERS = [
 ];
 
 // Tables in delete order (children first).
-const TABLES = ["activity_log", "error_log", "call_results", "call_attempts", "visits", "status_changes", "phones", "establishments", "companies", "import_logs", "campaigns", "users"];
+const TABLES = ["absences", "activity_log", "error_log", "call_results", "call_attempts", "visits", "status_changes", "phones", "establishments", "companies", "import_logs", "campaigns", "users"];
 
 function rng(seed) {
   return () => {
@@ -233,6 +233,11 @@ export async function seedDemo(client, env = process.env) {
           THEN 'Buen manejo: confirmó la fecha de compromiso con el responsable.' ELSE NULL END
           WHERE id IN (SELECT id FROM call_attempts WHERE campaign_id = ? ORDER BY id LIMIT 2)`,
     args: [shiftIso(-1), userIds["demo.supervisor"], campaignId, campaignId],
+  });
+  // Luis has a vacation coming up, so "Seguimiento" shows the warning to cover his tasks.
+  await client.execute({
+    sql: "INSERT INTO absences (user_id, from_date, to_date, kind, note, created_by) VALUES (?, ?, ?, 'vacation', 'Demo', ?)",
+    args: [userIds["demo.agente2"], shiftDays(3), shiftDays(7), userIds["demo.admin"]],
   });
   // Establishments with no valid phone go straight to visit
   for (const t of tasks.filter((x) => !x.e.telefono)) {

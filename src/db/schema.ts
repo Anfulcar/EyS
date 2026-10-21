@@ -27,6 +27,9 @@ export const campaigns = sqliteTable("campaigns", {
   status: text("status").notNull().default("draft"),
   maxAttempts: integer("max_attempts").notNull().default(3),
   followupDays: integer("followup_days").notNull().default(5),
+  // Call script shown to agents (empty = the standard text)
+  scriptEs: text("script_es"),
+  scriptEn: text("script_en"),
   createdBy: integer("created_by").references(() => users.id),
   createdAt: text("created_at").notNull().default(now),
 });
@@ -43,6 +46,10 @@ export const companies = sqliteTable(
     assignedUserId: integer("assigned_user_id").references(() => users.id),
     // When the task was last (re)assigned: used to count how many days a never-called task has waited.
     assignedAt: text("assigned_at"),
+    // Temporary cover during an absence: the task goes back to coverFromUserId when the absence ends.
+    coverFromUserId: integer("cover_from_user_id"),
+    coverUserId: integer("cover_user_id"),
+    coverAbsenceId: integer("cover_absence_id"),
     // pending | retry | followup | visit | done
     status: text("status").notNull().default("pending"),
     attempts: integer("attempts").notNull().default(0),
@@ -232,7 +239,25 @@ export const importLogs = sqliteTable("import_logs", {
   createdAt: text("created_at").notNull().default(now),
 });
 
+// Vacations, days off and unavailability (whole days, local dates).
+export const absences = sqliteTable(
+  "absences",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    fromDate: text("from_date").notNull(),
+    toDate: text("to_date").notNull(),
+    // vacation | day_off | unavailable
+    kind: text("kind").notNull(),
+    note: text("note"),
+    createdBy: integer("created_by").references(() => users.id),
+    createdAt: text("created_at").notNull().default(now),
+  },
+  (t) => [index("absences_user").on(t.userId)],
+);
+
 export type User = typeof users.$inferSelect;
+export type Absence = typeof absences.$inferSelect;
 export type Campaign = typeof campaigns.$inferSelect;
 export type Company = typeof companies.$inferSelect;
 export type Establishment = typeof establishments.$inferSelect;

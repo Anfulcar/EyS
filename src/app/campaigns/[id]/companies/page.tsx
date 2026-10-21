@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, like, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, like, lt, ne, or, sql, type SQL } from "drizzle-orm";
 import { Search, Users2 } from "lucide-react";
 import Link from "next/link";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
@@ -10,8 +10,10 @@ import { Empty, PriorityBadge, StatusBadge } from "@/components/ui";
 import { db } from "@/db";
 import { companies, establishments, users } from "@/db/schema";
 import { CODE_SHORT, codeLabel, codeTone, COMPANY_STATUSES, label } from "@/lib/catalog";
-import { fmtDate } from "@/lib/dates";
+import { fmtDate, nowIso } from "@/lib/dates";
 import { getDict } from "@/lib/i18n-server";
+import { dueCondition } from "@/lib/queue";
+import { absentOn, workload } from "@/lib/team";
 import { assignAction, bulkAssignAction, reassignCompanyAction } from "../../../actions";
 
 const PAGE = 200;
@@ -22,6 +24,7 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
   const sp = await searchParams;
   const { t, lang } = await getDict();
   const agents = await db.select().from(users).where(and(eq(users.active, true), inArray(users.role, ["agent", "supervisor", "admin"]))).orderBy(asc(users.name));
+  const [load, absent] = await Promise.all([workload(agents.map((a) => a.id)), absentOn()]);
   const zones = (await db.selectDistinct({ zone: companies.zone }).from(companies).where(eq(companies.campaignId, id))).map((z) => z.zone).filter(Boolean).sort() as string[];
 
   const where: SQL[] = [eq(companies.campaignId, id)];
@@ -29,6 +32,14 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
   if (sp.agent === "none") where.push(isNull(companies.assignedUserId));
   else if (sp.agent) where.push(eq(companies.assignedUserId, Number(sp.agent)));
   if (sp.zone) where.push(eq(companies.zone, sp.zone));
+  // Follow-up filters (also opened from the "Seguimiento" tab)
+  const now = nowIso();
+  const idleDays = Math.max(1, Number(sp.days) || 3);
+  if (sp.f === "due") where.push(dueCondition(now));
+  if (sp.f === "overdue") where.push(and(eq(companies.status, "followup"), lt(companies.nextActionAt, now))!);
+  if (sp.f === "idle") where.push(and(ne(companies.status, "done"), lt(sql`coalesce(${companies.lastCalledAt}, ${companies.assignedAt}, '')`, new Date(Date.now() - idleDays * 86400000).toISOString()))!);
+  if (sp.f === "open") where.push(ne(companies.status, "done"));
+  if (sp.f === "covered") where.push(isNotNull(companies.coverAbsenceId));
   if (sp.q) {
     const q = `%${sp.q}%`;
     where.push(or(like(companies.razonSocial, q), like(companies.rnc, q), sql`exists (select 1 from establishments e where e.company_id = ${companies.id} and (e.nombre_comercial like ${q} or e.sigtur_id like ${q} or e.rut like ${q}))`)!);
@@ -42,13 +53,14 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
   const estBy = new Map(names.map((n) => [n.companyId, n]));
   const qs = (o: Record<string, string | number | undefined>) => "?" + new URLSearchParams(Object.entries({ ...sp, ...o }).filter(([, v]) => v !== undefined && v !== "") as [string, string][]).toString();
   const agentOptions = agents.map((a) => ({ id: a.id, name: a.name }));
+  const nameById = new Map(agents.map((a) => [a.id, a.name]));
   const zoneCode = (z: string | null) => (z ? z.split(".")[0] : "—");
 
   return (
     <div className="space-y-4">
       {/* Toolbar: filters on one line + actions */}
       <div className="card p-4">
-        <form className="grid gap-3 md:grid-cols-[minmax(0,2fr)_repeat(3,minmax(0,1fr))_auto] md:items-end">
+        <form className="grid gap-3 md:grid-cols-[minmax(0,2fr)_repeat(4,minmax(0,1fr))_auto] md:items-end">
           <div>
             <label className="label">{t.search}</label>
             <div className="relative">
@@ -78,6 +90,20 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
               {zones.map((z) => <option key={z} value={z}>{z}</option>)}
             </select>
           </div>
+          <div>
+            <label className="label">{t.followupFilter}</label>
+            <div className="flex gap-2">
+              <select name="f" defaultValue={sp.f ?? ""} className="input">
+                <option value="">{t.all}</option>
+                <option value="open">{t.fOpen}</option>
+                <option value="due">{t.dueNow}</option>
+                <option value="overdue">{t.fOverdue}</option>
+                <option value="idle">{t.fIdle}</option>
+                <option value="covered">{t.fCovered}</option>
+              </select>
+              <input name="days" type="number" min={1} defaultValue={idleDays} className="input w-16 px-2" aria-label={t.fIdleDays} title={t.fIdleDays} />
+            </div>
+          </div>
           <button className="btn-secondary">{t.filter}</button>
         </form>
       </div>
@@ -93,13 +119,27 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
                   <label key={v} className="choice"><input type="radio" name="strategy" value={v} defaultChecked={v === "roundRobin"} className="accent-brand-600" /> {l}</label>
                 ))}
               </div>
+              <label className="mt-2 flex items-start gap-2 text-sm text-slate-700">
+                <input type="checkbox" name="workload" defaultChecked className="mt-0.5 h-4 w-4 accent-brand-600" />
+                <span>{t.considerWorkload}<span className="block text-xs text-slate-500">{t.considerWorkloadHelp}</span></span>
+              </label>
             </div>
             <div>
               <div className="label">{t.agents}</div>
               <div className="grid gap-2 sm:grid-cols-2">
-                {agents.map((a) => (
-                  <label key={a.id} className="choice"><input type="checkbox" name="agents" value={a.id} defaultChecked={a.role === "agent"} className="h-4 w-4 accent-brand-600" /> {a.name}</label>
-                ))}
+                {agents.map((a) => {
+                  const off = absent.get(a.id);
+                  return (
+                    <label key={a.id} className="choice">
+                      <input type="checkbox" name="agents" value={a.id} defaultChecked={a.role === "agent" && !off} className="h-4 w-4 accent-brand-600" />
+                      <span className="min-w-0 flex-1">
+                        {a.name}
+                        <span className="block text-xs text-slate-500">{t.openLoad.replace("{n}", String(load.get(a.id) ?? 0))}</span>
+                      </span>
+                      {off && <span className="badge bg-amber-100 text-amber-800" title={`${off.fromDate} – ${off.toDate}`}>{t.absentTag}</span>}
+                    </label>
+                  );
+                })}
               </div>
             </div>
             <details className="rounded-xl bg-slate-50 p-3">
@@ -176,6 +216,13 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
                               <PriorityBadge p={c.priority} />
                             </div>
                             <div className="truncate text-xs text-slate-500">RUT {e?.rut} · RNC {c.rnc}</div>
+                            {c.coverFromUserId && (
+                              <div className="mt-0.5 text-xs font-medium text-amber-700">
+                                {(c.assignedUserId === c.coverUserId ? t.coveringTag : t.coverScheduledTag)
+                                  .replace("{name}", nameById.get(c.coverFromUserId) ?? "—")
+                                  .replace("{cover}", nameById.get(c.coverUserId ?? 0) ?? "—")}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </td>

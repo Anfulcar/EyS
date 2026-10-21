@@ -91,7 +91,7 @@ export default async function TaskPage({ params }: { params: Promise<{ companyId
         <div className="space-y-6">
           <details className="card group">
             <summary className="flex cursor-pointer list-none items-center gap-2 font-semibold"><FileText className="h-4 w-4 text-brand-600" />{t.script}</summary>
-            <p className="mt-3 text-sm leading-relaxed text-slate-600">{t.scriptText}</p>
+            <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-slate-600">{(lang === "en" ? campaign?.scriptEn || campaign?.scriptEs : campaign?.scriptEs) || t.scriptText}</p>
           </details>
 
           <CallForm

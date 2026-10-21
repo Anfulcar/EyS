@@ -190,9 +190,45 @@ test("main journey: campaign → upload → assign → calls → visit → dashb
   // The old full download still works
   expect((await page.request.get(campaignUrl.replace("/campaigns/", "/api/campaigns/") + "/export")).status()).toBe(200);
 
+  // Administrator: the campaign's "Resumen" tab with the indicators and the legend
+  await page.goto(campaignUrl + "/summary");
+  await expect(page.locator("tr", { hasText: "Establecimientos a intervenir" }).locator("td").last()).toHaveText("4");
+  await expect(page.getByText("Se registra la fecha de compromiso", { exact: false })).toBeVisible();
+
+  // Administrator: edits the call script (agents see it in each task)
+  await page.goto(campaignUrl + "/settings");
+  await page.fill("#script-es", "Buenos días, le llamamos del Ministerio de Turismo (guion de prueba).");
+  await page.locator("form", { has: page.locator("#script-es") }).getByRole("button", { name: "Guardar" }).click();
+  await expect(page.locator("form", { has: page.locator("#script-es") }).getByText("Guardado")).toBeVisible();
+
+  // Administrator: Ana is absent from today; "Seguimiento" warns and her open tasks are covered by the administrator
+  await page.goto("/users");
+  await page.locator("tr", { hasText: "agente1" }).getByRole("button", { name: "Ausencias" }).click();
+  const absDialog = page.getByRole("dialog", { name: /Ausencias/ });
+  await absDialog.getByRole("button", { name: "Agregar ausencia" }).click();
+  await expect(absDialog.getByText("Vacaciones ·", { exact: false })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.goto(campaignUrl + "/followup");
+  await expect(page.getByText(/Ana Agente · Vacaciones del .*tareas abiertas/)).toBeVisible();
+  await page.getByRole("button", { name: "Cubrir durante la ausencia" }).click();
+  const cover = page.getByRole("dialog", { name: /Cubrir durante la ausencia/ });
+  await cover.locator("input[name=mode][value=one]").check();
+  await cover.locator("select[name=toUserId]").selectOption({ label: "Admin Prueba" });
+  await cover.getByRole("button", { name: "Cubrir durante la ausencia" }).click();
+  await expect(cover.getByText(/tareas cubiertas/)).toBeVisible();
+  await page.goto(campaignUrl + "/companies?f=covered");
+  await expect(page.getByText(/Cubriendo a Ana Agente/).first()).toBeVisible();
+  // Deleting the absence gives the tasks back to Ana
+  await page.goto("/users");
+  await page.locator("tr", { hasText: "agente1" }).getByRole("button", { name: "Ausencias" }).click();
+  await page.getByRole("dialog", { name: /Ausencias/ }).getByRole("button", { name: "Eliminar" }).click();
+  await expect(page.getByRole("dialog", { name: /Ausencias/ }).getByText("No hay ausencias registradas.")).toBeVisible();
+  await page.goto(campaignUrl + "/companies?f=covered");
+  await expect(page.getByText(/Cubriendo a/)).toHaveCount(0);
+
   // Activity log: administrators see who did what
   await page.goto("/logs");
-  for (const what of ["Llamada registrada", "Llamada revisada", "Visita registrada", "Usuario creado", "Carga de establecimientos", "Asignación de tareas", "Descarga de datos"]) {
+  for (const what of ["Llamada registrada", "Llamada revisada", "Ausencia registrada", "Tareas cubiertas durante una ausencia", "Guion de llamada editado", "Visita registrada", "Usuario creado", "Carga de establecimientos", "Asignación de tareas", "Descarga de datos"]) {
     await expect(page.locator("td", { hasText: what }).first()).toBeVisible();
   }
 
@@ -202,6 +238,9 @@ test("main journey: campaign → upload → assign → calls → visit → dashb
   await expect(page.getByText("Buen manejo de la objeción.")).toBeVisible();
   await page.getByRole("link", { name: "Abrir la tarea" }).click();
   await expect(page.locator("ol li").first()).toContainText("Buen manejo de la objeción.");
+  // …and the campaign's call script as edited by the administrator
+  await page.getByText("Guion", { exact: false }).first().click();
+  await expect(page.getByText("guion de prueba", { exact: false })).toBeVisible();
 
   // Losing the connection shows a clear message instead of failing silently
   await page.goto("/account");
