@@ -69,8 +69,12 @@ export async function runDueReports(today = todayLocal(), force = false) {
   return n;
 }
 
-export async function newReportsCount(user: { createdAt: string; reportsSeenAt: string | null }) {
+// New reports since the person last opened «Informes» (their own downloads don't count as new).
+export async function newReportsCount(user: { id: number; createdAt: string; reportsSeenAt: string | null }) {
   const since = user.reportsSeenAt ?? user.createdAt;
-  const [r] = await db.select({ n: sql<number>`count(*)` }).from(generatedReports).where(gt(generatedReports.createdAt, since));
+  const [r] = await db
+    .select({ n: sql<number>`count(*)` })
+    .from(generatedReports)
+    .where(and(gt(generatedReports.createdAt, since), sql`coalesce(${generatedReports.createdBy}, 0) <> ${user.id}`));
   return Number(r?.n ?? 0);
 }

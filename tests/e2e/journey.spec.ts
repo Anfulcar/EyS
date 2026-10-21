@@ -208,6 +208,8 @@ test("main journey: campaign → upload → assign → calls → visit → dashb
   await builder.getByRole("button", { name: "Guardar como plantilla" }).click();
   await expect(builder.getByText("Plantilla guardada.")).toBeVisible();
   await page.goto("/reports");
+  // The PDF downloaded from the panel is also kept in «Informes»
+  await expect(page.locator("tr", { hasText: "Informe de prueba" }).getByRole("link", { name: "PDF" })).toBeVisible();
   await expect(page.locator("tr", { hasText: "Semanal Dirección" }).getByText(/Semanal · lunes/)).toBeVisible();
   await page.locator("tr", { hasText: "Semanal Dirección" }).getByRole("button", { name: "Generar ahora" }).click();
   await expect(page.getByText("Informe generado")).toBeVisible();
