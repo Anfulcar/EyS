@@ -55,7 +55,7 @@ export default async function ReportsPage() {
                       <div className="flex items-center gap-2 font-medium text-slate-900">
                         {f.format === "pptx" ? <Presentation className="h-4 w-4 text-mitur-orange" /> : <FileText className="h-4 w-4 text-mitur-red" />}
                         {f.name}
-                        {f.createdAt > seenBefore && <span className="badge bg-mitur-red text-white">{t.reportsNew}</span>}
+                        {f.createdAt > seenBefore && f.createdBy !== me.id && <span className="badge bg-mitur-red text-white">{t.reportsNew}</span>}
                       </div>
                       <div className="text-xs text-slate-500">{f.source === "scheduled" ? t.reportsScheduled : `${t.reportsOnDemand}${f.createdBy ? ` · ${names.get(f.createdBy) ?? ""}` : ""}`}</div>
                     </td>
