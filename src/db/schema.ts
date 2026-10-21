@@ -57,6 +57,7 @@ export const companies = sqliteTable(
   (t) => [
     uniqueIndex("companies_campaign_key").on(t.campaignId, t.key),
     index("companies_assigned").on(t.campaignId, t.assignedUserId, t.status),
+    index("companies_user").on(t.assignedUserId),
   ],
 );
 
@@ -141,7 +142,7 @@ export const phones = sqliteTable(
     addedBy: integer("added_by").references(() => users.id),
     createdAt: text("created_at").notNull().default(now),
   },
-  (t) => [index("phones_company").on(t.companyId)],
+  (t) => [index("phones_company").on(t.companyId), index("phones_campaign").on(t.campaignId)],
 );
 
 export const callAttempts = sqliteTable(
@@ -168,7 +169,7 @@ export const callAttempts = sqliteTable(
     reviewedBy: integer("reviewed_by").references(() => users.id),
     reviewComment: text("review_comment"),
   },
-  (t) => [index("attempts_company").on(t.companyId), index("attempts_campaign").on(t.campaignId), index("attempts_called_at").on(t.calledAt)],
+  (t) => [index("attempts_company").on(t.companyId), index("attempts_campaign").on(t.campaignId), index("attempts_called_at").on(t.calledAt), index("attempts_user").on(t.userId)],
 );
 
 // Result of an attempt for each establishment of the company ("se tipifica cada establecimiento").
@@ -186,7 +187,7 @@ export const callResults = sqliteTable(
     obstacle: text("obstacle"),
     notes: text("notes"),
   },
-  (t) => [index("results_est").on(t.establishmentId), index("results_campaign").on(t.campaignId)],
+  (t) => [index("results_est").on(t.establishmentId), index("results_campaign").on(t.campaignId), index("results_attempt").on(t.attemptId)],
 );
 
 export const visits = sqliteTable(
@@ -203,7 +204,7 @@ export const visits = sqliteTable(
     notes: text("notes"),
     createdAt: text("created_at").notNull().default(now),
   },
-  (t) => [index("visits_est").on(t.establishmentId)],
+  (t) => [index("visits_est").on(t.establishmentId), index("visits_campaign").on(t.campaignId)],
 );
 
 export const statusChanges = sqliteTable("status_changes", {
@@ -215,7 +216,7 @@ export const statusChanges = sqliteTable("status_changes", {
   changedAt: text("changed_at").notNull(),
   userId: integer("user_id").references(() => users.id),
   createdAt: text("created_at").notNull().default(now),
-});
+}, (t) => [index("status_changes_campaign").on(t.campaignId)]);
 
 export const importLogs = sqliteTable("import_logs", {
   id: integer("id").primaryKey({ autoIncrement: true }),

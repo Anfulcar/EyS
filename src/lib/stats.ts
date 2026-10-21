@@ -57,19 +57,46 @@ function predicates(visitsByEst: Map<number, string[]>) {
   return { isClosed, isOperating, isCommitment, inProcess, contactedAny, commitmentDue, commitmentKept };
 }
 
-export async function computeStats(campaignIds: number[]): Promise<Stats> {
+// Everything the dashboard numbers need, read in one go (one database round trip).
+async function loadStatsData(campaignIds: number[]) {
   const ids = campaignIds.length ? campaignIds : [-1];
   const [ests, results, attempts, comps, vis, people] = await Promise.all([
     db.select().from(establishments).where(inArray(establishments.campaignId, ids)),
-    db.select({ establishmentId: callResults.establishmentId, attemptId: callResults.attemptId, code: callResults.code }).from(callResults).where(inArray(callResults.campaignId, ids)),
+    db.select({ campaignId: callResults.campaignId, establishmentId: callResults.establishmentId, attemptId: callResults.attemptId, code: callResults.code }).from(callResults).where(inArray(callResults.campaignId, ids)),
     db
-      .select({ id: callAttempts.id, userId: callAttempts.userId, calledAt: callAttempts.calledAt, contacted: callAttempts.contacted, attended: callAttempts.attended, isResponsible: callAttempts.isResponsible, companyId: callAttempts.companyId })
+      .select({ campaignId: callAttempts.campaignId, id: callAttempts.id, userId: callAttempts.userId, calledAt: callAttempts.calledAt, contacted: callAttempts.contacted, attended: callAttempts.attended, isResponsible: callAttempts.isResponsible, companyId: callAttempts.companyId })
       .from(callAttempts)
       .where(inArray(callAttempts.campaignId, ids)),
-    db.select({ id: companies.id, status: companies.status, assignedUserId: companies.assignedUserId }).from(companies).where(inArray(companies.campaignId, ids)),
-    db.select({ establishmentId: visits.establishmentId, code: visits.code }).from(visits).where(inArray(visits.campaignId, ids)),
+    db.select({ campaignId: companies.campaignId, id: companies.id, status: companies.status, assignedUserId: companies.assignedUserId }).from(companies).where(inArray(companies.campaignId, ids)),
+    db.select({ campaignId: visits.campaignId, establishmentId: visits.establishmentId, code: visits.code }).from(visits).where(inArray(visits.campaignId, ids)),
     db.select({ id: users.id, name: users.name }).from(users),
   ]);
+  return { ests, results, attempts, comps, vis, people };
+}
+type StatsData = Awaited<ReturnType<typeof loadStatsData>>;
+
+export async function computeStats(campaignIds: number[]): Promise<Stats> {
+  return statsFrom(await loadStatsData(campaignIds));
+}
+
+// Totals for several campaigns plus each campaign on its own, from a single read.
+export async function computeStatsByCampaign(campaignIds: number[], totalIds: number[]) {
+  const data = await loadStatsData(campaignIds);
+  const only = (ids: Set<number>): StatsData => ({
+    ests: data.ests.filter((x) => ids.has(x.campaignId)),
+    results: data.results.filter((x) => ids.has(x.campaignId)),
+    attempts: data.attempts.filter((x) => ids.has(x.campaignId)),
+    comps: data.comps.filter((x) => ids.has(x.campaignId)),
+    vis: data.vis.filter((x) => ids.has(x.campaignId)),
+    people: data.people,
+  });
+  return {
+    all: statsFrom(only(new Set(totalIds))),
+    per: new Map(campaignIds.map((id) => [id, statsFrom(only(new Set([id])))])),
+  };
+}
+
+function statsFrom({ ests, results, attempts, comps, vis, people }: StatsData): Stats {
   const attemptById = new Map(attempts.map((a) => [a.id, a]));
   const calledSet = new Set<number>();
   const effective = new Set<number>();

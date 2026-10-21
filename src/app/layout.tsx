@@ -1,9 +1,11 @@
 import { FlaskConical, LogOut } from "lucide-react";
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import Link from "next/link";
 import { Avatar } from "@/components/Avatar";
 import { ConnectionBanner } from "@/components/ConnectionBanner";
 import { Nav, type NavItem } from "@/components/Nav";
+import { NavProgress } from "@/components/NavProgress";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { companies } from "@/db/schema";
@@ -19,17 +21,20 @@ export const metadata: Metadata = { title: "EyS – Campañas" };
 const isManagerRole = (r: string | undefined) => r === "admin" || r === "supervisor";
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const { lang, t } = await getDict();
-  const user = await currentUser();
+  const [{ lang, t }, user] = await Promise.all([getDict(), currentUser()]);
   const role = user?.role;
   const isManager = role === "admin" || role === "supervisor";
   // Administrators and supervisors see "Mis llamadas" only when they have calls assigned.
-  const hasCalls =
-    role === "agent" ||
-    (!!user && isManagerRole(role) &&
-      (await db.select({ n: sql<number>`count(*)` }).from(companies).where(eq(companies.assignedUserId, user.id)))[0].n > 0);
+  // Both menu numbers are asked for at the same time.
+  const [assigned, attention] = user && (role === "agent" || isManagerRole(role))
+    ? await Promise.all([
+        role === "agent" ? Promise.resolve(1) : db.select({ n: sql<number>`count(*)` }).from(companies).where(eq(companies.assignedUserId, user.id)).then((r) => Number(r[0].n)),
+        attentionSummary(user.id),
+      ])
+    : [0, null];
+  const hasCalls = assigned > 0;
   const nav: NavItem[] = [
-    ...(hasCalls ? [{ href: "/calls", label: t.navCalls, icon: "calls" as const, badge: (await attentionSummary(user!.id)).total }] : []),
+    ...(hasCalls ? [{ href: "/calls", label: t.navCalls, icon: "calls" as const, badge: attention?.total ?? 0 }] : []),
     ...(role && role !== "inspector" ? [{ href: "/reviews", label: t.navReviews, icon: "reviews" as const }] : []),
     ...(isManager ? [{ href: "/campaigns", label: t.navCampaigns, icon: "campaigns" as const }] : []),
     ...(role && role !== "agent" ? [{ href: "/visits", label: t.navVisits, icon: "visits" as const }] : []),
@@ -60,6 +65,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang={lang}>
       <body>
+        <Suspense fallback={null}><NavProgress /></Suspense>
         <div className="flex min-h-screen">
           {showNav && (
             <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-slate-200/70 bg-white px-4 py-5 lg:flex">

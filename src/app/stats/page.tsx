@@ -8,16 +8,20 @@ import { requireUser } from "@/lib/auth";
 import { fmtDate } from "@/lib/dates";
 import type { Dict } from "@/lib/i18n";
 import { getDict } from "@/lib/i18n-server";
-import { computeStats } from "@/lib/stats";
+import { computeStatsByCampaign } from "@/lib/stats";
 
 export default async function GlobalStatsPage({ searchParams }: { searchParams: Promise<{ include?: string }> }) {
-  await requireUser(["admin", "supervisor"]);
-  const { t, lang } = await getDict();
-  const sp = await searchParams;
-  const list = await db.select().from(campaigns).orderBy(desc(campaigns.startDate));
+  const [, { t, lang }, sp, list] = await Promise.all([
+    requireUser(["admin", "supervisor"]),
+    getDict(),
+    searchParams,
+    db.select().from(campaigns).orderBy(desc(campaigns.startDate)),
+  ]);
   const includeClosed = sp.include !== "open";
   const ids = list.filter((c) => includeClosed || c.status !== "closed").map((c) => c.id);
-  const [all, per] = await Promise.all([computeStats(ids), Promise.all(list.map(async (c) => ({ c, s: await computeStats([c.id]) })))]);
+  const byCampaign = await computeStatsByCampaign(list.map((c) => c.id), ids);
+  const all = byCampaign.all;
+  const per = list.map((c) => ({ c, s: byCampaign.per.get(c.id)! }));
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">

@@ -8,9 +8,8 @@ import { computeStats } from "@/lib/stats";
 
 export default async function CampaignDashboard({ params }: { params: Promise<{ id: string }> }) {
   const id = Number((await params).id);
-  const c = (await db.query.campaigns.findFirst({ where: eq(campaigns.id, id) }))!;
-  const { t, lang } = await getDict();
-  const s = await computeStats([id]);
+  const [c0, { t, lang }, s] = await Promise.all([db.query.campaigns.findFirst({ where: eq(campaigns.id, id) }), getDict(), computeStats([id])]);
+  const c = c0!;
   const start = new Date(c.startDate).getTime();
   const end = new Date(c.endDate).getTime();
   const now = new Date(todayLocal()).getTime();

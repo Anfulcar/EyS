@@ -18,9 +18,13 @@ const PAGE = 100;
 const rncKey = sql<string>`replace(replace(replace(coalesce(${companies.rnc}, ''), '-', ''), ' ', ''), '.', '')`;
 
 export default async function CallsPage({ searchParams }: { searchParams: Promise<{ tab?: string; agent?: string; campaign?: string; limit?: string; att?: string }> }) {
-  const me = await requireUser(["agent", "admin", "supervisor"]);
-  const sp = await searchParams;
-  const { t, lang } = await getDict();
+  // The open campaigns are read at the same time as the account (nothing is shown before the role check).
+  const [me, sp, { t, lang }, open] = await Promise.all([
+    requireUser(["agent", "admin", "supervisor"]),
+    searchParams,
+    getDict(),
+    db.select().from(campaigns).where(ne(campaigns.status, "closed")),
+  ]);
   const tab = (TABS as readonly string[]).includes(sp.tab ?? "") ? sp.tab! : "due";
   const isManager = me.role !== "agent";
   const agentId = isManager && sp.agent ? Number(sp.agent) : me.id;
@@ -29,7 +33,6 @@ export default async function CallsPage({ searchParams }: { searchParams: Promis
   const now = nowIso();
 
   // Every campaign that is not closed: draft or out-of-dates campaigns are shown with a warning instead of hidden.
-  const open = await db.select().from(campaigns).where(ne(campaigns.status, "closed"));
   const warnings = open.filter((c) => c.status !== "active" || today < c.startDate || today > c.endDate);
   const campaignIds = open.map((c) => c.id).filter((id) => !sp.campaign || id === Number(sp.campaign));
 
@@ -51,22 +54,24 @@ export default async function CallsPage({ searchParams }: { searchParams: Promis
     "3": gte(companies.attempts, 3),
   };
   const att = sp.att && attemptsFilter[sp.att] ? sp.att : "";
-  const [counts, attention] = await Promise.all([
-    Promise.all(TABS.map(async (k) => [k, Number((await db.select({ n: sql<number>`count(*)` }).from(companies).where(and(...base, filters[k])))[0].n)] as const)).then(Object.fromEntries),
-    attentionSummary(agentId, campaignIds),
-  ]);
   // "Para hoy": never-called tasks first, then the ones waiting longest; same-company tasks stay together.
   const waitingSince = sql`coalesce(${companies.lastCalledAt}, ${companies.assignedAt}, '')`;
   const order =
     tab === "due"
       ? [sql`case when ${companies.attempts} = 0 then 0 else 1 end`, asc(waitingSince), asc(companies.priority), asc(rncKey), asc(companies.id)]
       : [sql`case when ${companies.nextActionAt} is null then 1 else 0 end`, asc(companies.nextActionAt), asc(companies.priority), asc(rncKey), asc(companies.id)];
-  const rows = await db
-    .select()
-    .from(companies)
-    .where(and(...base, filters[tab], ...(att ? [attemptsFilter[att]] : [])))
-    .orderBy(...order)
-    .limit(limit + 1);
+  // Tab counts, the attention notice and the list are asked for at the same time.
+  const [counts, attention, rows, agents] = await Promise.all([
+    Promise.all(TABS.map(async (k) => [k, Number((await db.select({ n: sql<number>`count(*)` }).from(companies).where(and(...base, filters[k])))[0].n)] as const)).then(Object.fromEntries),
+    attentionSummary(agentId, campaignIds),
+    db
+      .select()
+      .from(companies)
+      .where(and(...base, filters[tab], ...(att ? [attemptsFilter[att]] : [])))
+      .orderBy(...order)
+      .limit(limit + 1),
+    isManager ? db.select().from(users).where(eq(users.active, true)).orderBy(asc(users.name)) : Promise.resolve([]),
+  ]);
   const hasMore = rows.length > limit;
   const list = rows.slice(0, limit);
   const ids = list.map((r) => r.id);
@@ -85,7 +90,6 @@ export default async function CallsPage({ searchParams }: { searchParams: Promis
   const phBy = new Map<number, typeof phs>();
   for (const p of phs) phBy.set(p.companyId, [...(phBy.get(p.companyId) ?? []), p]);
   const sibCount = new Map(siblings.filter((s) => s.k.length >= 5).map((s) => [`${s.campaignId}|${s.k}`, s.n - 1]));
-  const agents = isManager ? await db.select().from(users).where(eq(users.active, true)).orderBy(asc(users.name)) : [];
   const campaignName = new Map(open.map((c) => [c.id, c.name]));
   const qs = (o: Record<string, string>) => "?" + new URLSearchParams({ ...(sp as Record<string, string>), ...o }).toString();
   const tabLabels: Record<string, string> = { due: t.dueNow, scheduled: t.scheduled, visit: t.sentToVisit, done: t.finished };
