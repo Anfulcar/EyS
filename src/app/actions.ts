@@ -8,15 +8,16 @@ import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
-import { campaigns, companies, establishments, importLogs, phones, users } from "@/db/schema";
+import { absences, campaigns, companies, establishments, importLogs, phones, users } from "@/db/schema";
 import { logActivity, logError } from "@/lib/audit";
 import { assertUser, clearSession, homeFor, MANAGERS, recentlyAuthenticated, setSessionCookie } from "@/lib/auth";
-import { CALL_CODES, PHONE_KINDS, PHONE_REASONS, PRIORITY_ORDER, ROLES, SIGTUR_STATUSES, VISIT_CODES } from "@/lib/catalog";
+import { CALL_CODES, PHONE_KINDS, PHONE_REASONS, ROLES, SIGTUR_STATUSES, VISIT_CODES } from "@/lib/catalog";
 import { nowIso, toIsoDate, todayLocal } from "@/lib/dates";
 import { DICTS } from "@/lib/i18n";
 import { getDict } from "@/lib/i18n-server";
 import { buildRecords, commitImport, previewImport } from "@/lib/importer";
 import { reviewCall } from "@/lib/reviews";
+import { ABSENCE_KINDS, coverTasks, distribute, moveTasks, syncCoverage, workload } from "@/lib/team";
 import { formatPhone, normalizePhone, readTable, str } from "@/lib/sheets";
 import { applyStatusUpdates, canWorkCompany, logCall, logVisit, relatedTasks, type CallInput } from "@/lib/workflow";
 
@@ -342,6 +343,9 @@ export async function assignAction(_: ActionState, form: FormData): Promise<Acti
   const sizes = await db.select({ companyId: establishments.companyId }).from(establishments).where(eq(establishments.campaignId, campaignId));
   const size = new Map<number, number>();
   for (const s of sizes) size.set(s.companyId, (size.get(s.companyId) ?? 0) + 1);
+  // "Considerar la carga actual": everyone starts from the open work they already have in active campaigns
+  // (the tasks being handed out now don't count for their current owner).
+  const byWorkload = form.get("workload") === "on";
 
   const assignment = new Map<number, number>();
   if (strategy === "zone") {
@@ -354,19 +358,8 @@ export async function assignAction(_: ActionState, form: FormData): Promise<Acti
   } else {
     // Balanced: tasks of the same company (RNC) stay together with one agent; highest priority and
     // biggest groups first, each group to the agent with the lowest load.
-    const load = new Map(agentIds.map((a) => [a, 0]));
-    const groups = new Map<string, typeof list>();
-    for (const c of list) {
-      const k = (c.rnc ?? "").replace(/[^0-9A-Za-z]/g, "") || `task:${c.id}`;
-      groups.set(k, [...(groups.get(k) ?? []), c]);
-    }
-    const best = (g: typeof list) => Math.min(...g.map((c) => PRIORITY_ORDER[c.priority ?? ""] ?? 9));
-    const sorted = [...groups.values()].sort((a, b) => best(a) - best(b) || b.length - a.length);
-    for (const g of sorted) {
-      const [agent] = [...load.entries()].sort((a, b) => a[1] - b[1])[0];
-      for (const c of g) assignment.set(c.id, agent);
-      load.set(agent, load.get(agent)! + g.reduce((n, c) => n + (size.get(c.id) ?? 1), 0));
-    }
+    const start = byWorkload ? await workload(agentIds, list.map((c) => c.id)) : undefined;
+    for (const [cid, a] of distribute(list, agentIds, size, start)) assignment.set(cid, a);
   }
   const byAgent = new Map<number, number[]>();
   for (const [cid, a] of assignment) byAgent.set(a, [...(byAgent.get(a) ?? []), cid]);
@@ -375,7 +368,7 @@ export async function assignAction(_: ActionState, form: FormData): Promise<Acti
       await db.update(companies).set({ assignedUserId: a, assignedAt: nowIso() }).where(inArray(companies.id, ids.slice(i, i + 500)));
     }
   }
-  await logActivity(me, "assignment.run", { campaignId, summary: `${assignment.size} tareas · método: ${strategy} · alcance: ${scope}` });
+  await logActivity(me, "assignment.run", { campaignId, summary: `${assignment.size} tareas · método: ${strategy}${strategy === "roundRobin" && byWorkload ? " (con carga actual)" : ""} · alcance: ${scope}` });
   revalidatePath(`/campaigns/${campaignId}`, "layout");
   return { ok: true, message: `${assignment.size} ${t.assignedCount}` };
 }
@@ -601,4 +594,104 @@ export async function uploadStatusAction(_: ActionState, form: FormData): Promis
   await logActivity(u, "upload.status", { campaignId: target === "all" ? null : Number(target), entity: "file", summary: `${file.name}: ${r.updated} estatus actualizados, ${r.notFound} no encontrados` });
   revalidatePath("/campaigns", "layout");
   return { ok: true, message: `${r.updated} ${t.statusUpdated}, ${r.notFound} ${t.skipped}` };
+}
+
+// ---------- Follow-up: moving and covering tasks ----------
+
+// Who receives: one person ("one") or shared evenly among the ticked people ("even").
+function receivers(form: FormData) {
+  const mode = String(form.get("mode"));
+  const ids = mode === "one" ? [Number(form.get("toUserId"))] : form.getAll("people").map(Number);
+  return { ids: ids.filter((n) => Number.isInteger(n) && n > 0), byWorkload: form.get("workload") === "on" };
+}
+
+async function activeAssignees(ids: number[]) {
+  if (!ids.length) return [];
+  const rows = await db.select({ id: users.id }).from(users).where(and(inArray(users.id, ids), eq(users.active, true), inArray(users.role, ["agent", "supervisor", "admin"])));
+  return rows.map((r) => r.id);
+}
+
+export async function moveTasksAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const me = await assertUser(MANAGERS);
+  const { t } = await getDict();
+  const campaignId = Number(form.get("campaignId"));
+  const fromUserId = Number(form.get("fromUserId"));
+  const r = receivers(form);
+  const to = await activeAssignees(r.ids);
+  if (!to.length) return { error: t.chooseReceivers };
+  const n = await moveTasks(campaignId, fromUserId, to, r.byWorkload);
+  const from = await db.query.users.findFirst({ where: eq(users.id, fromUserId) });
+  await logActivity(me, "task.moved", { campaignId, entity: "user", entityId: fromUserId, summary: `${n} tareas abiertas de ${from?.name ?? fromUserId} → ${to.length === 1 ? "una persona" : `repartidas entre ${to.length}`}` });
+  revalidatePath(`/campaigns/${campaignId}`, "layout");
+  return { ok: true, message: `${n} ${t.assignedCount}` };
+}
+
+export async function coverTasksAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const me = await assertUser(MANAGERS);
+  const { t } = await getDict();
+  const campaignId = Number(form.get("campaignId"));
+  const absenceId = Number(form.get("absenceId"));
+  const r = receivers(form);
+  const to = await activeAssignees(r.ids);
+  if (!to.length) return { error: t.chooseReceivers };
+  const n = await coverTasks(campaignId, absenceId, to, r.byWorkload);
+  await logActivity(me, "task.covered", { campaignId, entity: "absence", entityId: absenceId, summary: `${n} tareas cubiertas durante la ausencia` });
+  revalidatePath(`/campaigns/${campaignId}`, "layout");
+  revalidatePath("/calls", "layout");
+  return { ok: true, message: `${n} ${t.coveredCount}` };
+}
+
+// ---------- Absences (administrators) ----------
+
+export async function addAbsenceAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const me = await assertUser(["admin"]);
+  const { t } = await getDict();
+  const parsed = z
+    .object({
+      userId: z.coerce.number().int().positive(),
+      fromDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      toDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      kind: z.enum(ABSENCE_KINDS),
+      note: z.string().trim().max(200).optional().default(""),
+    })
+    .safeParse(Object.fromEntries(form));
+  if (!parsed.success || parsed.data.toDate < parsed.data.fromDate) return { error: t.absenceDatesError };
+  const u = await db.query.users.findFirst({ where: eq(users.id, parsed.data.userId) });
+  if (!u) return { error: "Not found" };
+  const d = parsed.data;
+  await db.insert(absences).values({ userId: d.userId, fromDate: d.fromDate, toDate: d.toDate, kind: d.kind, note: d.note || null, createdBy: me.id });
+  await logActivity(me, "absence.added", { entity: "user", entityId: u.id, summary: `${u.name}: ${d.fromDate} – ${d.toDate} (${d.kind})` });
+  revalidatePath("/", "layout");
+  return { ok: true, message: t.saved };
+}
+
+export async function deleteAbsenceAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const me = await assertUser(["admin"]);
+  const { t } = await getDict();
+  const id = Number(form.get("absenceId"));
+  const a = await db.query.absences.findFirst({ where: eq(absences.id, id) });
+  if (!a) return { error: "Not found" };
+  await db.delete(absences).where(eq(absences.id, id));
+  // Covered tasks go back to their owner right away.
+  await syncCoverage(undefined, true);
+  const u = await db.query.users.findFirst({ where: eq(users.id, a.userId) });
+  await logActivity(me, "absence.deleted", { entity: "user", entityId: a.userId, summary: `${u?.name ?? a.userId}: ${a.fromDate} – ${a.toDate}` });
+  revalidatePath("/", "layout");
+  return { ok: true, message: t.saved };
+}
+
+// ---------- Call script ----------
+
+export async function updateScriptAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const me = await assertUser(MANAGERS);
+  const { t } = await getDict();
+  const id = Number(form.get("campaignId"));
+  const c = await db.query.campaigns.findFirst({ where: eq(campaigns.id, id) });
+  if (!c) return { error: "Not found" };
+  const clean = (v: FormDataEntryValue | null) => String(v ?? "").trim().slice(0, 10000) || null;
+  await db.update(campaigns).set({ scriptEs: clean(form.get("scriptEs")), scriptEn: clean(form.get("scriptEn")) }).where(eq(campaigns.id, id));
+  await logActivity(me, "campaign.script_updated", { campaignId: id, entity: "campaign", entityId: id, summary: c.name });
+  revalidatePath(`/campaigns/${id}`, "layout");
+  revalidatePath("/calls", "layout");
+  return { ok: true, message: t.saved };
 }

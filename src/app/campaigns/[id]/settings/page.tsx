@@ -1,23 +1,41 @@
 import { eq } from "drizzle-orm";
-import { AlertTriangle, Settings2, Power } from "lucide-react";
+import { AlertTriangle, FileText, Settings2, Power } from "lucide-react";
 import { ActionForm, ConfirmButton, SubmitButton } from "@/components/ActionForm";
 import { CampaignFields } from "@/components/CampaignFields";
 import { SectionTitle, StatusBadge } from "@/components/ui";
 import { db } from "@/db";
 import { campaigns } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
-import type { Dict } from "@/lib/i18n";
+import { DICTS, type Dict } from "@/lib/i18n";
 import { getDict } from "@/lib/i18n-server";
-import { deleteCampaignAction, setCampaignStatusAction, updateCampaignAction } from "../../../actions";
+import { deleteCampaignAction, setCampaignStatusAction, updateCampaignAction, updateScriptAction } from "../../../actions";
 
 export default async function SettingsPage({ params }: { params: Promise<{ id: string }> }) {
   const me = await requireUser(["admin", "supervisor"]);
   const id = Number((await params).id);
   const c = (await db.query.campaigns.findFirst({ where: eq(campaigns.id, id) }))!;
   const { t } = await getDict();
-  if (me.role !== "admin") return <p className="text-sm text-slate-500">—</p>;
+  // Administrators and supervisors edit the call script; the rest of the settings are for administrators.
+  const script = (
+    <ActionForm action={updateScriptAction} className="card space-y-4">
+      <SectionTitle icon={<FileText className="h-4 w-4" />}>{t.scriptTitle}</SectionTitle>
+      <input type="hidden" name="campaignId" value={id} />
+      <p className="text-sm text-slate-500">{t.scriptHelp}</p>
+      <div>
+        <label className="label" htmlFor="script-es">{t.scriptEs}</label>
+        <textarea id="script-es" name="scriptEs" rows={7} className="input" defaultValue={c.scriptEs ?? DICTS.es.scriptText} key={c.scriptEs ?? ""} />
+      </div>
+      <div>
+        <label className="label" htmlFor="script-en">{t.scriptEn}</label>
+        <textarea id="script-en" name="scriptEn" rows={5} className="input" defaultValue={c.scriptEn ?? ""} key={c.scriptEn ?? ""} placeholder={DICTS.en.scriptText} />
+      </div>
+      <div className="flex justify-end"><SubmitButton>{t.save}</SubmitButton></div>
+    </ActionForm>
+  );
+  if (me.role !== "admin") return script;
   const statusLabel = t[`campaignStatus_${c.status}` as keyof Dict];
   return (
+    <div className="space-y-6">
     <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
       <ActionForm action={updateCampaignAction} className="card space-y-5">
         <SectionTitle icon={<Settings2 className="h-4 w-4" />}>{t.campaignData}</SectionTitle>
@@ -50,6 +68,8 @@ export default async function SettingsPage({ params }: { params: Promise<{ id: s
           </ActionForm>
         </div>
       </div>
+    </div>
+    {script}
     </div>
   );
 }

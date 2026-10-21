@@ -18,6 +18,8 @@ export default async function CampaignLayout({ children, params }: { children: R
   const { t, lang } = await getDict();
   const tabs = [
     { href: "", label: t.tabDashboard },
+    { href: "/summary", label: t.tabSummary },
+    { href: "/followup", label: t.tabFollowup },
     { href: "/companies", label: t.tabCompanies },
     { href: "/import", label: t.tabImport },
     { href: "/email", label: t.tabEmail },

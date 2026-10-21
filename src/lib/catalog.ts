@@ -164,6 +164,12 @@ export const MATRIX_COLUMNS: MatrixColumn[] = [
 
 export const PRIORITY_ORDER: Record<string, number> = { P1: 1, P2: 2, P3: 3 };
 
+export const ABSENCE_LABELS: Record<string, L> = {
+  vacation: { es: "Vacaciones", en: "Vacation" },
+  day_off: { es: "Día libre", en: "Day off" },
+  unavailable: { es: "No disponible", en: "Unavailable" },
+};
+
 export const ACTIVITY_LABELS: Record<string, L> = {
   "login.success": { es: "Inicio de sesión", en: "Signed in" },
   "login.failed": { es: "Inicio de sesión fallido", en: "Failed sign-in" },
@@ -188,6 +194,11 @@ export const ACTIVITY_LABELS: Record<string, L> = {
   "task.reassigned": { es: "Tarea reasignada", en: "Task reassigned" },
   "call.logged": { es: "Llamada registrada", en: "Call logged" },
   "call.reviewed": { es: "Llamada revisada", en: "Call reviewed" },
+  "task.moved": { es: "Tareas movidas a otra persona", en: "Tasks moved to someone else" },
+  "task.covered": { es: "Tareas cubiertas durante una ausencia", en: "Tasks covered during an absence" },
+  "absence.added": { es: "Ausencia registrada", en: "Absence added" },
+  "absence.deleted": { es: "Ausencia eliminada", en: "Absence deleted" },
+  "campaign.script_updated": { es: "Guion de llamada editado", en: "Call script edited" },
   "phone.added": { es: "Número agregado", en: "Number added" },
   "visit.logged": { es: "Visita registrada", en: "Visit logged" },
   "export.downloaded": { es: "Descarga de datos", en: "Data downloaded" },

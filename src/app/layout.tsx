@@ -11,6 +11,7 @@ import { db } from "@/db";
 import { companies } from "@/db/schema";
 import { currentUser } from "@/lib/auth";
 import { attentionSummary } from "@/lib/queue";
+import { syncCoverage } from "@/lib/team";
 import { ROLES } from "@/lib/catalog";
 import { getDict } from "@/lib/i18n-server";
 import { logoutAction, setLangAction } from "./actions";
@@ -21,7 +22,8 @@ export const metadata: Metadata = { title: "EyS – Campañas" };
 const isManagerRole = (r: string | undefined) => r === "admin" || r === "supervisor";
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const [{ lang, t }, user] = await Promise.all([getDict(), currentUser()]);
+  // Covers for absences start and end by date (throttled; never blocks the page on failure).
+  const [{ lang, t }, user] = await Promise.all([getDict(), currentUser(), syncCoverage().catch((e) => console.error("[coverage]", e))]);
   const role = user?.role;
   const isManager = role === "admin" || role === "supervisor";
   // Administrators and supervisors see "Mis llamadas" only when they have calls assigned.

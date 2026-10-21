@@ -6,6 +6,7 @@ type Section = { id: string; roles: string[]; title: string; intro?: string; ste
 type L<T> = Record<Lang, T>;
 
 export const WHATS_NEW: { date: string; es: string; en: string }[] = [
+  { date: "2026-10-21", es: "Guion de llamada editable por campaña. Nuevas pestañas «Resumen» (indicadores y leyenda, como en la Matriz) y «Seguimiento» (avance por persona, mover tareas, cubrir ausencias). La asignación automática puede considerar la carga actual de cada persona. Los administradores registran vacaciones, días libres y no disponibilidad en «Usuarios»; durante la ausencia otra persona cubre las tareas y vuelven solas al terminar.", en: "Editable call script per campaign. New “Summary” tab (indicators and legend, as in the Matriz) and “Follow-up” tab (progress per person, move tasks, cover absences). Automatic assignment can take each person's current workload into account. Administrators record vacations, days off and unavailability in “Users”; during the absence someone else covers the tasks, and they go back by themselves at the end." },
   { date: "2026-10-21", es: "La aplicación responde más rápido: cada pantalla aparece al instante con su contorno mientras llegan los datos, guardar una llamada tarda menos y los tableros cargan antes. En «Registro», los administradores ven dónde están la base de datos y los servidores.", en: "The app responds faster: each screen appears instantly with its outline while the data arrives, saving a call takes less time and dashboards load sooner. In “Log”, administrators see where the database and the servers are." },
   { date: "2026-10-21", es: "Nuevo «Llamadas realizadas»: cada llamada con su resumen; supervisores y administradores la marcan «Revisada» con un comentario que el agente ve en su historial. «Exportar» permite elegir hojas, columnas y filtros. En los tableros, cada número, barra y fila abre la lista de establecimientos, con descarga en Excel.", en: "New “Calls made”: every call with its summary; supervisors and administrators mark it “Reviewed” with a comment the agent sees in their history. “Export” lets you choose sheets, columns and filters. On dashboards, every number, bar and row opens the list of establishments, with an Excel download." },
   { date: "2026-10-21", es: "Mis llamadas: contador rojo en el menú y aviso con las llamadas que requieren atención; las nuevas primero y luego las que llevan más días esperando; seguimientos vencidos resaltados en amarillo; filtro por número de intentos. La hora de cada llamada se registra sola al guardar.", en: "My calls: red counter in the menu and a notice with the calls that need attention; new ones first, then those waiting longest; overdue follow-ups highlighted in yellow; filter by number of attempts. Each call's time is recorded automatically on save." },
@@ -85,7 +86,8 @@ const ES: Section[] = [
     steps: [
       "«Campañas» → «+ Nueva campaña» (administradores) abre una ventana: nombre, fechas de inicio y fin, intentos máximos y días de seguimiento.",
       "«Carga masiva»: descargue la plantilla maestra, pegue los establecimientos (mismos encabezados que la Matriz) y cárguela. Verá una vista previa antes de confirmar.",
-      "«Tareas y asignación»: la lista muestra cada establecimiento con su último resultado. «Asignar tareas» abre un panel con el método (repartir equitativamente, por zona o todo a un agente); los establecimientos de la misma empresa quedan con el mismo agente. También puede marcar filas y usar «Asignar seleccionadas a», o cambiar el agente de una fila (se guarda solo).",
+      "«Tareas y asignación»: la lista muestra cada establecimiento con su último resultado. «Asignar tareas» abre un panel con el método (repartir equitativamente, por zona o todo a un agente); los establecimientos de la misma empresa quedan con el mismo agente. Junto a cada persona se ve su carga actual («N abiertos») y, si está ausente hoy, «Ausente» (queda sin marcar). Con «Considerar la carga actual de cada persona», al repartir equitativamente recibe más quien tiene menos trabajo abierto en las campañas activas. También puede marcar filas y usar «Asignar seleccionadas a», o cambiar el agente de una fila (se guarda solo). El filtro «Seguimiento» muestra: abiertas, para hoy, seguimiento vencido, sin actividad hace más de N días o con cobertura por ausencia.",
+      "«Configuración» → «Guion de llamada» (administradores y supervisores): el texto que ven los agentes en «Guion» al abrir cada tarea de la campaña, en español y, si quiere, en inglés.",
       "«Correos»: registre la fecha de envío del correo masivo y cargue los correos rebotados.",
       "«Actualización de estatus»: cargue el estatus de SIGTUR para medir quién pasó a «En proceso».",
       "«Exportar»: marque las hojas que quiere (Matriz, Llamadas, Teléfonos, Visitas, Cambios de estatus) y, en «Elegir columnas», las columnas de cada una. Puede filtrar por fechas, agente asignado, zona, prioridad, resultado y estado de la tarea. «Descargar Excel» baja solo lo elegido; su última elección se recuerda en ese navegador. También puede bajar todas las llamadas en CSV.",
@@ -106,6 +108,29 @@ const ES: Section[] = [
       "Haga clic en la fecha para abrir el resumen: quién atendió y su cargo, las respuestas, el compromiso, el obstáculo, las notas y si se envió WhatsApp.",
       "Supervisores y administradores: escriban un comentario (opcional) y pulsen «Marcar como revisada». Pueden actualizar la revisión después.",
       "Agentes: ven solo sus propias llamadas y el comentario de revisión, también en el historial de la tarea. Una llamada guardada no se puede editar.",
+    ],
+  },
+  {
+    id: "summary", roles: ["supervisor", "admin"], title: "Resumen y leyenda",
+    bullets: [
+      "Pestaña «Resumen» de cada campaña: la tabla de indicadores de la Matriz (establecimientos a intervenir, con correo o teléfono válido, sin contacto, prioridades, empresas con 2+ establecimientos, zonas, vencidas hace más de 5 años), por Vencidas, Sin licencia y Total, calculada al momento.",
+      "Debajo, la leyenda: qué significa P1, P2 y P3; cada resultado de llamada y de visita y qué pasa después; los estatus SIGTUR, los canales y los estados de la tarea.",
+    ],
+  },
+  {
+    id: "followup", roles: ["supervisor", "admin"], title: "Seguimiento del equipo",
+    bullets: [
+      "Pestaña «Seguimiento»: una fila por persona con tareas asignadas, abiertas, para hoy, seguimientos vencidos y sin actividad hace más de 3 días, además de su disponibilidad. Cada número abre esas tareas.",
+      "«Mover sus tareas abiertas»: las pasa de forma permanente a una persona o las reparte de forma equitativa (puede considerar la carga actual).",
+      "Si alguien tiene una ausencia hoy o en los próximos 14 días, aparece un aviso con sus tareas abiertas sin cubrir. «Cubrir durante la ausencia» elige quién las atiende (una persona o repartidas). Pasan a esa persona el primer día de la ausencia y vuelven solas a su dueño después del último día, si la campaña sigue abierta. Las llamadas quedan registradas a nombre de quien las hizo.",
+    ],
+  },
+  {
+    id: "absences", roles: ["admin"], title: "Ausencias (vacaciones, días libres)",
+    steps: [
+      "«Usuarios» → «Ausencias» en la fila de la persona.",
+      "Elija desde, hasta y el tipo (Vacaciones, Día libre o No disponible); la nota es opcional. Son días completos.",
+      "Mientras está ausente, la persona aparece como «Ausente» y queda fuera de la asignación automática. Si elimina la ausencia, las tareas cubiertas vuelven a ella de inmediato.",
     ],
   },
   {
@@ -190,7 +215,8 @@ const EN: Section[] = [
     steps: [
       "“Campaigns” → “+ New campaign” (administrators) opens a pop-up: name, start and end dates, max attempts and follow-up days.",
       "“Bulk upload”: download the master template, paste the establishments (same headers as the Matriz) and upload it. You see a preview before confirming.",
-      "“Tasks & assignment”: the list shows each establishment with its last result. “Assign tasks” opens a panel with the method (split evenly, by zone or all to one agent); establishments of the same company stay with the same agent. You can also tick rows and use “Assign selected to”, or change a row's agent (it saves on its own).",
+      "“Tasks & assignment”: the list shows each establishment with its last result. “Assign tasks” opens a panel with the method (split evenly, by zone or all to one agent); establishments of the same company stay with the same agent. Next to each person you see their current load (“N open”) and, if absent today, “Absent” (left unticked). With “Take each person's current workload into account”, an even split gives more to whoever has less open work in active campaigns. You can also tick rows and use “Assign selected to”, or change a row's agent (it saves on its own). The “Follow-up” filter shows: open, due today, overdue follow-up, no activity for more than N days, or covered for an absence.",
+      "“Settings” → “Call script” (administrators and supervisors): the text agents see under “Script” when they open each task of the campaign, in Spanish and, optionally, English.",
       "“Emails”: log the mass email's send date and upload bounced emails.",
       "“Status update”: upload the SIGTUR status to measure who moved to “En proceso”.",
       "“Export”: tick the sheets you want (Matriz, Calls, Phones, Visits, Status changes) and, under “Choose columns”, the columns of each. You can filter by dates, assigned agent, zone, priority, result and task status. “Download Excel” gets only what you chose; your last choice is remembered in that browser. You can also download every call as CSV.",
@@ -211,6 +237,29 @@ const EN: Section[] = [
       "Click the date to open the summary: who answered and their role, the answers, the commitment, the obstacle, the notes and whether a WhatsApp was sent.",
       "Supervisors and administrators: write a comment (optional) and press “Mark as reviewed”. You can update the review later.",
       "Agents: see only their own calls and the review comment, also in the task history. A saved call can't be edited.",
+    ],
+  },
+  {
+    id: "summary", roles: ["supervisor", "admin"], title: "Summary and legend",
+    bullets: [
+      "Each campaign's “Summary” tab: the Matriz indicator table (establishments to work on, with a valid email or phone, no contact, priorities, companies with 2+ establishments, zones, expired more than 5 years ago), by Vencidas, Sin licencia and Total, calculated live.",
+      "Below, the legend: what P1, P2 and P3 mean; every call and visit result and what happens next; SIGTUR statuses, channels and task statuses.",
+    ],
+  },
+  {
+    id: "followup", roles: ["supervisor", "admin"], title: "Team follow-up",
+    bullets: [
+      "“Follow-up” tab: one row per person with tasks assigned, open, due today, overdue follow-ups and no activity for more than 3 days, plus their availability. Each number opens those tasks.",
+      "“Move their open tasks”: hands them over permanently to one person or shares them evenly (optionally by current workload).",
+      "If someone has an absence today or in the next 14 days, a notice shows their open tasks not covered. “Cover during the absence” chooses who handles them (one person or shared). They move to that person on the first absent day and go back to the owner by themselves after the last one, if the campaign is still open. Calls stay recorded under whoever made them.",
+    ],
+  },
+  {
+    id: "absences", roles: ["admin"], title: "Absences (vacations, days off)",
+    steps: [
+      "“Users” → “Absences” on the person's row.",
+      "Choose from, to and the type (Vacation, Day off or Unavailable); the note is optional. Whole days only.",
+      "While absent, the person shows as “Absent” and is left out of automatic assignment. If you delete the absence, covered tasks go back to them at once.",
     ],
   },
   {
