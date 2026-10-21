@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { blob, index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 const now = sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`;
 
@@ -14,6 +14,8 @@ export const users = sqliteTable("users", {
   mustChangePassword: integer("must_change_password", { mode: "boolean" }).notNull().default(true),
   failedLogins: integer("failed_logins").notNull().default(0),
   lockedUntil: text("locked_until"),
+  // Last time the person opened "Informes generados" (for the "new" counter)
+  reportsSeenAt: text("reports_seen_at"),
   createdAt: text("created_at").notNull().default(now),
 });
 
@@ -254,6 +256,41 @@ export const absences = sqliteTable(
     createdAt: text("created_at").notNull().default(now),
   },
   (t) => [index("absences_user").on(t.userId)],
+);
+
+// Saved report choices ("plantillas"), optionally generated on a schedule.
+export const reportTemplates = sqliteTable("report_templates", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  // JSON: ReportOptions (campaigns, relative period, title, comments, sections, format…)
+  options: text("options").notNull(),
+  // none | weekly | biweekly | monthly
+  frequency: text("frequency").notNull().default("none"),
+  // weekly/biweekly: 1 = Monday … 7 = Sunday; monthly: day of month 1–28
+  runDay: integer("run_day"),
+  nextRunOn: text("next_run_on"),
+  paused: integer("paused", { mode: "boolean" }).notNull().default(false),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: text("created_at").notNull().default(now),
+});
+
+// Report files kept for 12 months (scheduled ones, and "Generar ahora").
+export const generatedReports = sqliteTable(
+  "generated_reports",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    templateId: integer("template_id"),
+    name: text("name").notNull(),
+    periodLabel: text("period_label"),
+    format: text("format").notNull(),
+    fileName: text("file_name").notNull(),
+    content: blob("content", { mode: "buffer" }).notNull(),
+    // scheduled | manual
+    source: text("source").notNull(),
+    createdBy: integer("created_by"),
+    createdAt: text("created_at").notNull().default(now),
+  },
+  (t) => [index("generated_reports_at").on(t.createdAt)],
 );
 
 export type User = typeof users.$inferSelect;

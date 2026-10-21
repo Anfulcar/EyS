@@ -8,7 +8,7 @@ import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
-import { absences, campaigns, companies, establishments, importLogs, phones, users } from "@/db/schema";
+import { absences, campaigns, companies, establishments, importLogs, phones, reportTemplates, users } from "@/db/schema";
 import { logActivity, logError } from "@/lib/audit";
 import { assertUser, clearSession, homeFor, MANAGERS, recentlyAuthenticated, setSessionCookie } from "@/lib/auth";
 import { CALL_CODES, PHONE_KINDS, PHONE_REASONS, ROLES, SIGTUR_STATUSES, VISIT_CODES } from "@/lib/catalog";
@@ -16,6 +16,8 @@ import { nowIso, toIsoDate, todayLocal } from "@/lib/dates";
 import { DICTS } from "@/lib/i18n";
 import { getDict } from "@/lib/i18n-server";
 import { buildRecords, commitImport, previewImport } from "@/lib/importer";
+import { cleanOptions, firstRun, FREQUENCIES, type Frequency } from "@/lib/report-options";
+import { generateAndStore } from "@/lib/report-run";
 import { reviewCall } from "@/lib/reviews";
 import { ABSENCE_KINDS, coverTasks, distribute, moveTasks, syncCoverage, workload } from "@/lib/team";
 import { formatPhone, normalizePhone, readTable, str } from "@/lib/sheets";
@@ -694,4 +696,84 @@ export async function updateScriptAction(_: ActionState, form: FormData): Promis
   revalidatePath(`/campaigns/${id}`, "layout");
   revalidatePath("/calls", "layout");
   return { ok: true, message: t.saved };
+}
+
+// ---------- Report templates ("Estadísticas globales" → informe) ----------
+
+export async function saveReportTemplateAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const me = await assertUser(MANAGERS);
+  const { t } = await getDict();
+  const name = String(form.get("name") ?? "").trim().slice(0, 80);
+  if (!name) return { error: t.reportNameRequired };
+  let options;
+  try {
+    options = cleanOptions(JSON.parse(String(form.get("options") ?? "{}")));
+  } catch {
+    return { error: "Not found" };
+  }
+  const frequency = (FREQUENCIES as readonly string[]).includes(String(form.get("frequency"))) ? (String(form.get("frequency")) as Frequency) : "none";
+  const runDay = Math.max(1, Math.min(frequency === "monthly" ? 28 : 7, Number(form.get("runDay")) || 1));
+  const values = {
+    name,
+    options: JSON.stringify(options),
+    frequency,
+    runDay: frequency === "none" ? null : runDay,
+    nextRunOn: firstRun(frequency, runDay, todayLocal()),
+    paused: false,
+  };
+  const id = Number(form.get("templateId")) || 0;
+  if (id) {
+    const existing = await db.query.reportTemplates.findFirst({ where: eq(reportTemplates.id, id) });
+    if (!existing) return { error: "Not found" };
+    await db.update(reportTemplates).set(values).where(eq(reportTemplates.id, id));
+  } else {
+    await db.insert(reportTemplates).values({ ...values, createdBy: me.id });
+  }
+  await logActivity(me, "report.template_saved", { entity: "report", entityId: id || null, summary: `${name} · ${frequency}` });
+  revalidatePath("/stats", "layout");
+  revalidatePath("/reports");
+  return { ok: true, message: t.reportTemplateSaved };
+}
+
+export async function deleteReportTemplateAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const me = await assertUser(MANAGERS);
+  const { t } = await getDict();
+  const id = Number(form.get("templateId"));
+  const tpl = await db.query.reportTemplates.findFirst({ where: eq(reportTemplates.id, id) });
+  if (!tpl) return { error: "Not found" };
+  await db.delete(reportTemplates).where(eq(reportTemplates.id, id));
+  await logActivity(me, "report.template_deleted", { entity: "report", entityId: id, summary: tpl.name });
+  revalidatePath("/reports");
+  revalidatePath("/stats", "layout");
+  return { ok: true, message: t.saved };
+}
+
+export async function pauseReportTemplateAction(_: ActionState, form: FormData): Promise<ActionState> {
+  await assertUser(MANAGERS);
+  const { t } = await getDict();
+  const id = Number(form.get("templateId"));
+  const tpl = await db.query.reportTemplates.findFirst({ where: eq(reportTemplates.id, id) });
+  if (!tpl) return { error: "Not found" };
+  const paused = !tpl.paused;
+  // When resumed, the next run is recalculated from today (missed runs are not made up).
+  await db
+    .update(reportTemplates)
+    .set({ paused, nextRunOn: paused ? tpl.nextRunOn : firstRun(tpl.frequency as Frequency, tpl.runDay ?? 1, todayLocal()) })
+    .where(eq(reportTemplates.id, id));
+  revalidatePath("/reports");
+  return { ok: true, message: t.saved };
+}
+
+export async function generateReportNowAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const me = await assertUser(MANAGERS);
+  const { t } = await getDict();
+  const id = Number(form.get("templateId"));
+  try {
+    await generateAndStore(id, "manual", me.id);
+  } catch {
+    return { error: "Not found" };
+  }
+  await logActivity(me, "report.generated", { entity: "report", entityId: id, summary: "Generado a pedido" });
+  revalidatePath("/reports");
+  return { ok: true, message: t.reportGenerated };
 }

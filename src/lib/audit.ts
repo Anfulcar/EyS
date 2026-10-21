@@ -11,7 +11,7 @@ export const ACTIONS = [
   "user.created", "user.updated", "user.role_changed", "user.status_changed", "user.password_reset",
   "campaign.created", "campaign.updated", "campaign.status_changed", "campaign.deleted",
   "upload.establishments", "upload.bounces", "upload.status", "emails.marked_sent",
-  "assignment.run", "task.reassigned", "call.logged", "call.reviewed", "task.moved", "task.covered", "absence.added", "absence.deleted", "campaign.script_updated", "phone.added", "visit.logged",
+  "assignment.run", "task.reassigned", "call.logged", "call.reviewed", "task.moved", "task.covered", "absence.added", "absence.deleted", "campaign.script_updated", "report.downloaded", "report.generated", "report.template_saved", "report.template_deleted", "phone.added", "visit.logged",
   "export.downloaded",
 ] as const;
 export type ActivityAction = (typeof ACTIONS)[number];

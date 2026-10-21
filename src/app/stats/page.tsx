@@ -1,21 +1,29 @@
-import { desc } from "drizzle-orm";
+import { asc, desc } from "drizzle-orm";
+import { FileDown } from "lucide-react";
 import Link from "next/link";
+import { Overlay } from "@/components/Overlay";
+import { ReportBuilder } from "@/components/ReportBuilder";
 import { StatsView } from "@/components/StatsView";
 import { fmtPct, StatusBadge } from "@/components/ui";
 import { db } from "@/db";
-import { campaigns } from "@/db/schema";
+import { campaigns, reportTemplates } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { fmtDate } from "@/lib/dates";
 import type { Dict } from "@/lib/i18n";
 import { getDict } from "@/lib/i18n-server";
+import { cleanOptions, type Frequency } from "@/lib/report-options";
+import { runDueReports } from "@/lib/report-run";
 import { computeStatsByCampaign } from "@/lib/stats";
+import { saveReportTemplateAction } from "../actions";
 
 export default async function GlobalStatsPage({ searchParams }: { searchParams: Promise<{ include?: string }> }) {
-  const [, { t, lang }, sp, list] = await Promise.all([
+  const [, { t, lang }, sp, list, templates] = await Promise.all([
     requireUser(["admin", "supervisor"]),
     getDict(),
     searchParams,
     db.select().from(campaigns).orderBy(desc(campaigns.startDate)),
+    db.select().from(reportTemplates).orderBy(asc(reportTemplates.name)),
+    runDueReports().catch((e) => console.error("[reports]", e)),
   ]);
   const includeClosed = sp.include !== "open";
   const ids = list.filter((c) => includeClosed || c.status !== "closed").map((c) => c.id);
@@ -26,7 +34,17 @@ export default async function GlobalStatsPage({ searchParams }: { searchParams: 
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <h1>{t.globalTitle}</h1>
-        <div className="flex gap-2 text-sm">
+        <div className="flex flex-wrap gap-2 text-sm">
+          <Overlay variant="drawer" width="max-w-3xl" triggerClassName="btn btn-sm" trigger={<><FileDown className="h-4 w-4" />{t.reportGenerate}</>} title={t.reportGenerate}>
+            <ReportBuilder
+              campaigns={list.map((c) => ({ id: c.id, name: c.name, status: c.status }))}
+              templates={templates.map((x) => ({ id: x.id, name: x.name, options: cleanOptions(JSON.parse(x.options)), frequency: x.frequency as Frequency, runDay: x.runDay }))}
+              t={t}
+              lang={lang}
+              saveAction={saveReportTemplateAction}
+            />
+          </Overlay>
+          <Link href="/reports" className="btn-secondary btn-sm">{t.navReports}</Link>
           <Link href="/stats" className={includeClosed ? "btn btn-sm" : "btn-secondary btn-sm"}>{t.all}</Link>
           <Link href="/stats?include=open" className={!includeClosed ? "btn btn-sm" : "btn-secondary btn-sm"}>{t.campaignStatus_active} / {t.campaignStatus_draft}</Link>
         </div>

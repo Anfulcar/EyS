@@ -3,6 +3,7 @@
   "framework": "nextjs",
   "buildCommand": "npm run build",
   "installCommand": "npm install",
+  "crons": [{ "path": "/api/cron/reports", "schedule": "0 11 * * *" }],
   "headers": [
     {
       "source": "/(.*)",
