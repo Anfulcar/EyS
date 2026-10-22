@@ -1,22 +1,23 @@
 import { asc, desc, eq } from "drizzle-orm";
-import { Download, FileText, Pause, Play, Presentation, RefreshCw, Trash2 } from "lucide-react";
-import Link from "next/link";
+import { Download, FileDown, FileText, Pause, Pencil, Play, Presentation, RefreshCw, Trash2 } from "lucide-react";
 import { ActionForm, ConfirmButton, SubmitButton } from "@/components/ActionForm";
+import { Overlay } from "@/components/Overlay";
+import { ReportBuilder } from "@/components/ReportBuilder";
 import { Empty, SectionTitle } from "@/components/ui";
 import { db } from "@/db";
-import { generatedReports, reportTemplates, users } from "@/db/schema";
+import { campaigns, generatedReports, reportTemplates, users } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { fmtDate, fmtDateTime, nowIso } from "@/lib/dates";
 import { getDict } from "@/lib/i18n-server";
 import { cleanOptions, scheduleLabel, type Frequency } from "@/lib/report-options";
 import { runDueReports } from "@/lib/report-run";
-import { deleteReportTemplateAction, generateReportNowAction, pauseReportTemplateAction } from "../actions";
+import { deleteReportTemplateAction, generateReportNowAction, pauseReportTemplateAction, saveReportTemplateAction } from "../actions";
 
 export default async function ReportsPage() {
   const me = await requireUser(["admin", "supervisor"]);
   const { t, lang } = await getDict();
   await runDueReports().catch((e) => console.error("[reports]", e));
-  const [files, templates, people] = await Promise.all([
+  const [files, templates, people, campaignList] = await Promise.all([
     db
       .select({ id: generatedReports.id, name: generatedReports.name, periodLabel: generatedReports.periodLabel, format: generatedReports.format, source: generatedReports.source, createdBy: generatedReports.createdBy, createdAt: generatedReports.createdAt })
       .from(generatedReports)
@@ -24,7 +25,13 @@ export default async function ReportsPage() {
       .limit(200),
     db.select().from(reportTemplates).orderBy(asc(reportTemplates.name)),
     db.select({ id: users.id, name: users.name }).from(users),
+    db.select({ id: campaigns.id, name: campaigns.name, status: campaigns.status }).from(campaigns).orderBy(desc(campaigns.startDate)),
   ]);
+  const builderTemplates = templates.map((x) => ({ id: x.id, name: x.name, options: cleanOptions(JSON.parse(x.options)), frequency: x.frequency as Frequency, runDay: x.runDay }));
+  // Same panel as in «Estadísticas globales»; «Editar» opens it with the template loaded.
+  const builder = (initialTemplateId?: number) => (
+    <ReportBuilder campaigns={campaignList} templates={builderTemplates} t={t} lang={lang} saveAction={saveReportTemplateAction} initialTemplateId={initialTemplateId} />
+  );
   const names = new Map(people.map((p) => [p.id, p.name]));
   const seenBefore = me.reportsSeenAt ?? me.createdAt;
   // Opening this screen clears the "new reports" counter in the menu.
@@ -37,7 +44,9 @@ export default async function ReportsPage() {
           <h1>{t.reportsTitle}</h1>
           <p className="subtitle">{t.reportsSubtitle}</p>
         </div>
-        <Link href="/stats" className="btn-secondary">{t.reportGenerate}</Link>
+        <Overlay variant="drawer" width="max-w-3xl" trigger={<><FileDown className="h-4 w-4" />{t.reportGenerate}</>} title={t.reportGenerate}>
+          {builder()}
+        </Overlay>
       </div>
 
       <div className="card overflow-hidden p-0">
@@ -96,6 +105,9 @@ export default async function ReportsPage() {
                       <td className="whitespace-nowrap text-sm">{scheduled && !x.paused && x.nextRunOn ? fmtDate(x.nextRunOn, lang) : "—"}</td>
                       <td>
                         <div className="flex flex-wrap justify-end gap-2">
+                          <Overlay variant="drawer" width="max-w-3xl" triggerClassName="btn-secondary btn-sm" trigger={<><Pencil className="h-3.5 w-3.5" />{t.edit}</>} title={`${t.edit}: ${x.name}`}>
+                            {builder(x.id)}
+                          </Overlay>
                           <ActionForm action={generateReportNowAction}>
                             <input type="hidden" name="templateId" value={x.id} />
                             <SubmitButton className="btn-secondary btn-sm">{t.reportsGenerateNow}</SubmitButton>
@@ -119,7 +131,6 @@ export default async function ReportsPage() {
             </table>
           </div>
         )}
-        <p className="px-5 pb-5 text-xs text-slate-500">{t.reportsHowToEdit}</p>
       </div>
     </div>
   );
