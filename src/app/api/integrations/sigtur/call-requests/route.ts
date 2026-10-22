@@ -1,5 +1,5 @@
 import { logActivity } from "@/lib/audit";
-import { keyFromRequest, logIntegration, parseCallRequest, receiveCallRequest } from "@/lib/sigtur";
+import { keyFromRequest, logIntegration, PAUSED_MESSAGE, parseCallRequest, receiveCallRequest, requestsCampaign } from "@/lib/sigtur";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +18,11 @@ export async function POST(req: Request) {
   if (typeof r === "string") {
     await logIntegration(key.id, "call_request", false, r);
     return Response.json({ ok: false, error: r }, { status: 400 });
+  }
+  // Switched off by an administrator: SIGTUR is told to try later and nothing is created.
+  if ((await requestsCampaign()).requestsPaused) {
+    await logIntegration(key.id, "call_request", false, `En pausa · ${r.idSigtur} · ${r.solicitadoPor}`);
+    return Response.json({ ok: false, enPausa: true, error: PAUSED_MESSAGE }, { status: 503, headers: { "Retry-After": "3600" } });
   }
   const res = await receiveCallRequest(r);
   const summary = `${r.idSigtur} · ${r.solicitadoPor}: ${r.motivo}`;

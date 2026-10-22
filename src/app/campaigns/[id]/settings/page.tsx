@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { AlertTriangle, FileText, Settings2, Power } from "lucide-react";
 import { ActionForm, ConfirmButton, SubmitButton } from "@/components/ActionForm";
 import { CampaignFields } from "@/components/CampaignFields";
+import { SigturStatusBadge, SigturSwitch } from "@/components/SigturPermanentCard";
 import { SectionTitle, StatusBadge } from "@/components/ui";
 import { db } from "@/db";
 import { campaigns } from "@/db/schema";
@@ -44,6 +45,13 @@ export default async function SettingsPage({ params }: { params: Promise<{ id: s
         <div className="flex justify-end"><SubmitButton>{t.save}</SubmitButton></div>
       </ActionForm>
 
+      {c.kind === "sigtur_requests" ? (
+        <div className="card space-y-4">
+          <SectionTitle icon={<Power className="h-4 w-4" />}>{t.sigturReceiveRequests}</SectionTitle>
+          <div className="flex flex-wrap items-center justify-between gap-3"><SigturStatusBadge paused={c.requestsPaused} t={t} /><SigturSwitch paused={c.requestsPaused} t={t} /></div>
+          <p className="text-sm text-slate-500">{t.sigturPermanentLocked}</p>
+        </div>
+      ) : (
       <div className="space-y-6">
         <div className="card space-y-4">
           <SectionTitle icon={<Power className="h-4 w-4" />}>{t.campaignStatusTitle}</SectionTitle>
@@ -68,6 +76,7 @@ export default async function SettingsPage({ params }: { params: Promise<{ id: s
           </ActionForm>
         </div>
       </div>
+      )}
     </div>
     {script}
     </div>

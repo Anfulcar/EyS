@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { apiKeys, callAttempts, callResults, campaigns, companies, establishments, users } from "@/db/schema";
 import {
   buildInteractions, createApiKey, keyFromRequest, parseCallRequest, parseSigturCampaign, receiveCallRequest, receiveSigturCampaign,
-  requestsCampaign, setAutoAssignees,
+  requestsCampaign, requestsOverview, setAutoAssignees, setRequestsPaused,
 } from "@/lib/sigtur";
 
 const req = (key?: string) => new Request("http://x/api/integrations/sigtur/interactions", { headers: key ? { authorization: `Bearer ${key}` } : {} });
@@ -75,5 +75,17 @@ describe("SIGTUR integration", () => {
     expect(items[0]).toMatchObject({ idSigtur: "SG-INT", rut: "R-1", canal: "Llamada", realizadoPor: "Ana Llamadas", personaContactada: "Luis", fechaCompromiso: "2026-11-05" });
     expect(items[0].resultado).not.toMatch(/^\d+$/);
     expect((await buildInteractions({ idSigtur: "SG-INT", from: "2026-10-21" }))).toHaveLength(0);
+  });
+
+  it("pauses and resumes the permanent campaign without touching open tasks", async () => {
+    const [admin] = await db.insert(users).values({ username: "sg.switch", name: "Admin Interruptor", role: "admin", passwordHash: "x" }).returning();
+    const before = await requestsOverview();
+    await setRequestsPaused(true, admin.id);
+    const paused = await requestsOverview();
+    expect(paused.campaign).toMatchObject({ requestsPaused: true, pausedBy: admin.id, status: "active" });
+    expect(paused.pausedByName).toBe("Admin Interruptor");
+    expect(paused.open).toBe(before.open);
+    await setRequestsPaused(false, admin.id);
+    expect((await requestsCampaign())).toMatchObject({ requestsPaused: false, pausedBy: null, pausedAt: null });
   });
 });
