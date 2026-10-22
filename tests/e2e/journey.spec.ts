@@ -211,6 +211,20 @@ test("main journey: campaign → upload → assign → calls → visit → dashb
   // The PDF downloaded from the panel is also kept in «Informes»
   await expect(page.locator("tr", { hasText: "Informe de prueba" }).getByRole("link", { name: "PDF" })).toBeVisible();
   await expect(page.locator("tr", { hasText: "Semanal Dirección" }).getByText(/Semanal · lunes/)).toBeVisible();
+  // «Editar» opens the same panel with the template loaded
+  await page.locator("tr", { hasText: "Semanal Dirección" }).getByRole("button", { name: "Editar" }).click();
+  const editPanel = page.getByRole("dialog", { name: /Editar: Semanal Dirección/ });
+  await expect(editPanel.locator("#rb-name")).toHaveValue("Semanal Dirección");
+  await expect(editPanel.getByRole("button", { name: "Guardar cambios en la plantilla" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  // «Generar informe» on this screen opens the panel here; the downloaded report shows up in the list
+  await page.getByRole("button", { name: "Generar informe" }).click();
+  const here = page.getByRole("dialog", { name: "Generar informe" });
+  await here.locator("#rb-title").fill("Informe desde Informes");
+  await here.getByRole("button", { name: "PDF" }).click();
+  await Promise.all([page.waitForEvent("download"), here.getByRole("link", { name: "Descargar PDF" }).click()]);
+  await page.keyboard.press("Escape");
+  await expect(page.locator("tr", { hasText: "Informe desde Informes" })).toBeVisible({ timeout: 15000 });
   await page.locator("tr", { hasText: "Semanal Dirección" }).getByRole("button", { name: "Generar ahora" }).click();
   await expect(page.getByText("Informe generado")).toBeVisible();
   await page.reload();

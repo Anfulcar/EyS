@@ -1,6 +1,7 @@
 "use client";
 
 import { Download, FileText, Presentation, Save } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { ActionState } from "@/app/actions";
 import type { Lang } from "@/lib/catalog";
@@ -16,28 +17,38 @@ type Template = { id: number; name: string; options: ReportOptions; frequency: F
 
 const STORE = "eys.report.v1";
 
-export function ReportBuilder({ campaigns, templates, t, lang, saveAction }: {
+export function ReportBuilder({ campaigns, templates, t, lang, saveAction, initialTemplateId }: {
   campaigns: Campaign[];
   templates: Template[];
   t: Dict;
   lang: Lang;
   saveAction: (s: ActionState, f: FormData) => Promise<ActionState>;
+  // Opens with this template loaded («Editar» in «Informes»).
+  initialTemplateId?: number;
 }) {
-  const [o, setO] = useState<ReportOptions>(DEFAULT_OPTIONS);
-  const [templateId, setTemplateId] = useState(0);
-  const [name, setName] = useState("");
-  const [frequency, setFrequency] = useState<Frequency>("none");
-  const [runDay, setRunDay] = useState(1);
+  const start = templates.find((x) => x.id === initialTemplateId);
+  const [o, setO] = useState<ReportOptions>(start ? cleanOptions(start.options) : DEFAULT_OPTIONS);
+  const [templateId, setTemplateId] = useState(start?.id ?? 0);
+  const [name, setName] = useState(start?.name ?? "");
+  const [frequency, setFrequency] = useState<Frequency>(start?.frequency ?? "none");
+  const [runDay, setRunDay] = useState(start?.runDay ?? 1);
   const loaded = useRef(false);
+  const router = useRouter();
 
-  // Comes back with the last choice made in this browser.
+  // Comes back with the last choice made in this browser (unless a template was opened).
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORE);
-      if (raw) setO(cleanOptions(JSON.parse(raw)));
-    } catch {}
+    if (!initialTemplateId) {
+      try {
+        const raw = localStorage.getItem(STORE);
+        if (raw) setO(cleanOptions(JSON.parse(raw)));
+      } catch {}
+    }
     loaded.current = true;
-  }, []);
+  }, [initialTemplateId]);
+  // The downloaded report is also kept in «Informes»: refresh the screen so it shows up in the list.
+  const afterDownload = () => {
+    for (const ms of [2500, 7000]) setTimeout(() => router.refresh(), ms);
+  };
   useEffect(() => {
     if (!loaded.current) return;
     try {
@@ -158,7 +169,7 @@ export function ReportBuilder({ campaigns, templates, t, lang, saveAction }: {
         {noCampaign || o.sections.length === 0 ? (
           <span className="text-sm text-mitur-red">{noCampaign ? t.reportNoCampaign : t.reportNoSection}</span>
         ) : (
-          <a className="btn" href={href} download><Download className="h-4 w-4" />{o.format === "pptx" ? t.reportDownloadPptx : t.reportDownloadPdf}</a>
+          <a className="btn" href={href} download onClick={afterDownload}><Download className="h-4 w-4" />{o.format === "pptx" ? t.reportDownloadPptx : t.reportDownloadPdf}</a>
         )}
       </div>
 
