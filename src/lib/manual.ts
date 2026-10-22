@@ -6,6 +6,7 @@ type Section = { id: string; roles: string[]; title: string; intro?: string; ste
 type L<T> = Record<Lang, T>;
 
 export const WHATS_NEW: { date: string; es: string; en: string }[] = [
+  { date: "2026-10-22", es: "Nuevo: «Nueva campaña con estas tareas» (crea una campaña en borrador con las tareas elegidas de otra campaña), conexión con SIGTUR (solicitudes de llamada con la etiqueta morada «Solicitud SIGTUR», campañas enviadas desde SIGTUR y un registro de interacción por cada llamada, visita y correo), el menú «Integraciones» para administradores y «Descargar interacciones» en «Informes». Los administradores pueden eliminar informes generados.", en: "New: “New campaign from these tasks” (creates a draft campaign with the chosen tasks of another campaign), connection with SIGTUR (call requests with the purple “SIGTUR request” tag, campaigns sent from SIGTUR and an interaction record for every call, visit and email), the “Integrations” menu for administrators and “Download interactions” in “Reports”. Administrators can delete generated reports." },
   { date: "2026-10-22", es: "«Informes» tiene su propio botón «Generar informe» (el mismo panel que en «Estadísticas globales») y un botón «Editar» en cada plantilla. La lista se actualiza sola después de descargar.", en: "“Reports” has its own “Generate report” button (the same panel as in “Global statistics”) and an “Edit” button on each template. The list updates by itself after downloading." },
   { date: "2026-10-21", es: "Los servidores de la aplicación ahora están junto a la base de datos (Ohio): cada pantalla y cada guardado responden más rápido.", en: "The app's servers now sit next to the database (Ohio): every screen and every save responds faster." },
   { date: "2026-10-21", es: "Todo informe descargado desde «Generar informe» también queda guardado en «Informes».", en: "Every report downloaded from “Generate report” is also kept in “Reports”." },
@@ -123,6 +124,45 @@ const ES: Section[] = [
       "Elija PDF o PowerPoint y pulse «Descargar». El informe usa los datos del momento y también queda guardado en «Informes».",
       "«Guardar como plantilla» guarda la elección con un nombre. Con «Programación» (semanal, cada 2 semanas o mensual) se genera sola ese día a primera hora; con «Semana pasada» o «Mes pasado» el período se ajusta solo.",
       "Menú «Informes»: los informes generados (se guardan 12 meses) con un contador rojo de nuevos, y las plantillas para «Editar» (abre el panel con la plantilla cargada), «Generar ahora», pausar o eliminar.",
+      "Solo los administradores ven «Eliminar» junto a cada informe generado (pide confirmación y queda en el «Registro»).",
+      "«Descargar interacciones»: elija las fechas y descargue un Excel con cada llamada, visita y correo del período, con los campos de interacción de SIGTUR.",
+    ],
+  },
+  {
+    id: "transfer", roles: ["supervisor", "admin"], title: "Nueva campaña con resultados de otra",
+    steps: [
+      "En la lista de tareas de una campaña pulse «Nueva campaña con estas tareas».",
+      "Marque los estados que quiere llevar (por ejemplo En seguimiento, Reintentar, Visita) y, si quiere, filtre por resultado, zona, prioridad o persona. El número de tareas se actualiza al momento.",
+      "Complete el nombre, fechas, intentos y días de seguimiento de la nueva campaña y pulse «Crear campaña y transferir».",
+      "La nueva campaña queda en «Borrador», con los establecimientos y teléfonos copiados, el guion de la original y una nota en cada tarea: «Viene de «…»: último resultado …». Revísela, asígnela y actívela.",
+      "En la campaña original esas tareas quedan cerradas como «Transferida», con un enlace a la nueva; ya no se pueden llamar allí.",
+    ],
+  },
+  {
+    id: "sigtur-requests", roles: ["agent", "supervisor", "admin"], title: "Solicitudes SIGTUR",
+    bullets: [
+      "Otros analistas pueden pedir una llamada desde SIGTUR. Llega a la campaña «Solicitudes SIGTUR» (siempre abierta) y se asigna sola, según la carga de trabajo, a las personas elegidas en «Integraciones» (quien está de ausencia no recibe).",
+      "Estas tareas llevan la etiqueta morada «Solicitud SIGTUR» con quién la pidió y por qué, y salen primero en «Para hoy».",
+      "Si la empresa ya tenía una tarea abierta, no se crea otra: esa tarea recibe la etiqueta y vuelve a «Para hoy».",
+      "Las campañas que se creen desde SIGTUR llegan como «Borrador» con sus establecimientos; un supervisor o administrador las revisa, asigna y activa.",
+    ],
+  },
+  {
+    id: "sigtur-interactions", roles: ["supervisor", "admin", "agent"], title: "Interacciones para SIGTUR",
+    bullets: [
+      "Cada llamada (una por establecimiento), visita y correo enviado genera un registro de interacción: ID SIGTUR, RUT, canal, fecha y hora, quién la hizo, número, persona contactada, resultado (en texto), fecha de compromiso, obstáculo y notas.",
+      "Se ve en el resumen de cada llamada, en el recuadro «Registro para SIGTUR».",
+      "SIGTUR los lee solo a través de la conexión; también se pueden descargar en Excel desde «Informes» → «Descargar interacciones».",
+    ],
+  },
+  {
+    id: "integrations", roles: ["admin"], title: "Integraciones (SIGTUR)",
+    steps: [
+      "Menú «Integraciones» → «Crear clave». La clave se muestra una sola vez: cópiela y entréguela al equipo de SIGTUR junto con la guía «docs/sigtur-integracion.md». La aplicación solo guarda una huella, no la clave.",
+      "Si la clave se pierde o se filtra, pulse «Revocar» y cree otra. SIGTUR deja de entrar con la anterior al instante.",
+      "Marque quién recibe las solicitudes de llamada y pulse «Guardar».",
+      "«Simular solicitud SIGTUR» crea una solicitud de prueba, igual a las reales, para ver el recorrido antes de conectar SIGTUR.",
+      "«Últimas solicitudes recibidas» muestra lo que SIGTUR envió o leyó, y si fue aceptado o rechazado.",
     ],
   },
   {
@@ -263,6 +303,45 @@ const EN: Section[] = [
       "Choose PDF or PowerPoint and press “Download”. The report uses the data at that moment and is also kept in “Reports”.",
       "“Save as template” keeps the choice under a name. With “Schedule” (weekly, every 2 weeks or monthly) it is generated by itself that day early in the morning; with “Last week” or “Last month” the period adjusts by itself.",
       "“Reports” menu: the generated reports (kept 12 months) with a red counter for new ones, and the templates to “Edit” (opens the panel with the template loaded), “Generate now”, pause or delete.",
+      "Only administrators see “Delete” next to each generated report (it asks for confirmation and is recorded in the “Log”).",
+      "“Download interactions”: choose the dates and download an Excel with every call, visit and email of the period, with SIGTUR's interaction fields.",
+    ],
+  },
+  {
+    id: "transfer", roles: ["supervisor", "admin"], title: "New campaign from another campaign's results",
+    steps: [
+      "In a campaign's task list press “New campaign from these tasks”.",
+      "Tick the statuses to take (for example Follow-up, Retry, Visit) and, if you want, filter by result, zone, priority or person. The number of tasks updates instantly.",
+      "Fill in the new campaign's name, dates, attempts and follow-up days and press “Create campaign and transfer”.",
+      "The new campaign is a “Draft”, with the establishments and phones copied, the original script and a note on each task: “Comes from «…»: last result …”. Review it, assign it and activate it.",
+      "In the original campaign those tasks are closed as “Transferred”, with a link to the new one; they can no longer be called there.",
+    ],
+  },
+  {
+    id: "sigtur-requests", roles: ["agent", "supervisor", "admin"], title: "SIGTUR requests",
+    bullets: [
+      "Other analysts can request a call from SIGTUR. It arrives in the «Solicitudes SIGTUR» campaign (always open) and is assigned automatically, by workload, to the people chosen in “Integrations” (people on leave are skipped).",
+      "These tasks carry the purple “SIGTUR request” tag with who asked and why, and come first in “Due today”.",
+      "If the company already had an open task, no new one is created: that task gets the tag and goes back to “Due today”.",
+      "Campaigns created from SIGTUR arrive as “Draft” with their establishments; a supervisor or administrator reviews, assigns and activates them.",
+    ],
+  },
+  {
+    id: "sigtur-interactions", roles: ["supervisor", "admin", "agent"], title: "Interactions for SIGTUR",
+    bullets: [
+      "Every call (one per establishment), visit and email sent creates an interaction record: SIGTUR ID, RUT, channel, date and time, who did it, number, person contacted, result (as text), commitment date, obstacle and notes.",
+      "It is shown in each call's summary, in the “Record for SIGTUR” box.",
+      "SIGTUR reads them only through the connection; they can also be downloaded as Excel from “Reports” → “Download interactions”.",
+    ],
+  },
+  {
+    id: "integrations", roles: ["admin"], title: "Integrations (SIGTUR)",
+    steps: [
+      "“Integrations” menu → “Create key”. The key is shown only once: copy it and give it to SIGTUR's team together with the guide «docs/sigtur-integracion.md». The app keeps only a fingerprint, not the key.",
+      "If the key is lost or leaked, press “Revoke” and create another. SIGTUR can no longer get in with the old one, immediately.",
+      "Tick who receives call requests and press “Save”.",
+      "“Simulate a SIGTUR request” creates a test request, just like the real ones, to see the flow before SIGTUR connects.",
+      "“Latest requests received” shows what SIGTUR sent or read, and whether it was accepted or rejected.",
     ],
   },
   {

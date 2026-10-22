@@ -338,3 +338,78 @@ test("sensitive actions ask for the password again after 10 minutes", async ({ p
   await page.goto("/logs?action=user.role_changed");
   await expect(page.locator("td", { hasText: "agente1: agent → supervisor" })).toBeVisible();
 });
+
+test("delete a report, new campaign from results, and the SIGTUR connection", async ({ page, request }) => {
+  await signIn(page, "admin", NEW_PW);
+  page.on("dialog", (d) => d.accept());
+
+  // Administrators can delete a generated report
+  await page.goto("/reports");
+  const generated = page.locator(".card", { hasText: "Informes generados" }).locator("tbody tr");
+  const before = await generated.count();
+  expect(before).toBeGreaterThan(0);
+  await generated.first().getByRole("button", { name: "Eliminar" }).click();
+  await expect(generated).toHaveCount(before - 1);
+
+  // New campaign with the tasks of another one: the copies arrive as a draft and the originals are closed as transferred
+  await page.goto("/campaigns");
+  await page.locator("a.card", { hasText: "Campaña de prueba" }).click();
+  await expect(page).toHaveURL(/\/campaigns\/\d+$/);
+  const fromUrl = page.url();
+  await page.goto(fromUrl + "/companies");
+  await page.getByRole("button", { name: "Nueva campaña con estas tareas" }).click();
+  const tr = page.getByRole("dialog", { name: "Nueva campaña con estas tareas" });
+  for (const box of await tr.locator("input[name=statuses]").all()) await box.check();
+  await expect(tr.getByText(/^[1-9]\d* tareas pasarán a la nueva campaña\.$/)).toBeVisible();
+  await tr.locator("input[name=name]").fill("Campaña de prueba – seguimiento");
+  await tr.locator("input[name=endDate]").fill("2030-12-31");
+  await tr.getByRole("button", { name: "Crear campaña y transferir" }).click();
+  await expect(page).not.toHaveURL(fromUrl + "/companies");
+  await expect(page).toHaveURL(/\/campaigns\/\d+\/companies$/);
+  await expect(page.getByText("Viene de «Campaña de prueba»", { exact: false }).first()).toBeVisible();
+  await page.goto(fromUrl + "/companies");
+  await expect(page.getByRole("link", { name: "Transferida a otra campaña →" }).first()).toBeVisible();
+
+  // Integraciones: create a key (shown once), choose who receives requests
+  await page.goto("/integrations");
+  await page.getByRole("button", { name: "Crear clave" }).click();
+  const created = page.getByText(/Clave creada\./);
+  await expect(created).toBeVisible();
+  const key = (await created.textContent())!.match(/eys_[A-Za-z0-9_-]+/)![0];
+  await page.locator("label.choice", { hasText: "Admin Prueba" }).locator("input").check();
+  await page.locator("form", { has: page.locator("input[name=people]") }).getByRole("button", { name: "Guardar" }).click();
+  await expect(page.locator("form", { has: page.locator("input[name=people]") }).getByText("Guardado")).toBeVisible();
+
+  // Without the key SIGTUR's addresses answer "not found"
+  expect((await request.get("/api/integrations/sigtur/interactions")).status()).toBe(404);
+  expect((await request.post("/api/integrations/sigtur/call-requests", { data: { idSigtur: "X" } })).status()).toBe(404);
+  const auth = { authorization: `Bearer ${key}` };
+  const bad = await request.post("/api/integrations/sigtur/call-requests", { headers: auth, data: { idSigtur: "SIG-E2E" } });
+  expect(bad.status()).toBe(400);
+  const ok = await request.post("/api/integrations/sigtur/call-requests", {
+    headers: auth,
+    data: { idSigtur: "SIG-E2E-1", solicitadoPor: "Analista Licencias", motivo: "Confirmar si sigue operando", nombreComercial: "Hotel Solicitado", telefonos: ["809-555-0199"] },
+  });
+  expect(ok.status()).toBe(200);
+  expect(await ok.json()).toMatchObject({ ok: true, campana: "Solicitudes SIGTUR", asignada: true, tareaExistente: false });
+
+  // The request comes first in "Para hoy", with the purple tag, who asked and why
+  await page.goto("/calls");
+  const first = page.locator("a.card").first();
+  await expect(first).toContainText("Hotel Solicitado");
+  await expect(first).toContainText("Solicitud SIGTUR");
+  await expect(first).toContainText("Pedida por Analista Licencias · Confirmar si sigue operando");
+
+  // SIGTUR reads the interactions with the key; managers download them as Excel
+  const inter = await request.get("/api/integrations/sigtur/interactions?limite=5", { headers: auth });
+  expect(inter.status()).toBe(200);
+  const body = await inter.json();
+  expect(body.interacciones.length).toBeGreaterThan(0);
+  expect(body.interacciones[0].resultado).not.toMatch(/^\d+$/);
+  const xlsx = await page.request.get("/api/interactions?from=2026-01-01");
+  expect((await xlsx.body()).subarray(0, 2).toString()).toBe("PK");
+
+  // Everything SIGTUR sent is listed
+  await page.goto("/integrations");
+  await expect(page.locator("td", { hasText: "SIG-E2E-1 · Analista Licencias" })).toBeVisible();
+});

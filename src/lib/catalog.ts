@@ -61,7 +61,10 @@ export const COMPANY_STATUSES: Record<string, L> = {
   followup: { es: "Seguimiento", en: "Follow-up" },
   visit: { es: "Pasa a visita", en: "Sent to visit" },
   done: { es: "Finalizada", en: "Done" },
+  transferred: { es: "Transferida", en: "Transferred" },
 };
+// Tasks nobody works any more (finished, or moved to another campaign).
+export const CLOSED_STATUSES = ["done", "transferred"];
 
 export const ROLES: Record<string, L> = {
   admin: { es: "Administrador", en: "Administrator" },
@@ -203,6 +206,12 @@ export const ACTIVITY_LABELS: Record<string, L> = {
   "report.generated": { es: "Informe generado", en: "Report generated" },
   "report.template_saved": { es: "Plantilla de informe guardada", en: "Report template saved" },
   "report.template_deleted": { es: "Plantilla de informe eliminada", en: "Report template deleted" },
+  "report.deleted": { es: "Informe eliminado", en: "Report deleted" },
+  "campaign.from_results": { es: "Campaña creada con resultados de otra", en: "Campaign created from another's results" },
+  "integration.key_created": { es: "Clave de integración creada", en: "Integration key created" },
+  "integration.key_revoked": { es: "Clave de integración revocada", en: "Integration key revoked" },
+  "sigtur.call_request": { es: "Solicitud de llamada desde SIGTUR", en: "Call request from SIGTUR" },
+  "sigtur.campaign": { es: "Campaña recibida desde SIGTUR", en: "Campaign received from SIGTUR" },
   "phone.added": { es: "Número agregado", en: "Number added" },
   "visit.logged": { es: "Visita registrada", en: "Visit logged" },
   "export.downloaded": { es: "Descarga de datos", en: "Data downloaded" },

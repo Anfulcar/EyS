@@ -158,7 +158,7 @@ function statsFrom({ ests, results, attempts, comps, vis, people }: StatsData): 
     if (!c.assignedUserId) continue;
     const r = agentRow(c.assignedUserId);
     r.companies++;
-    if (c.status === "done" || c.status === "visit") r.done++;
+    if (c.status === "done" || c.status === "visit" || c.status === "transferred") r.done++;
   }
   for (const a of attempts) {
     const r = agentRow(a.userId);

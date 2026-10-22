@@ -21,7 +21,7 @@ export default async function CampaignsPage() {
   // Counts per campaign (grouped queries, so each card shows its own totals).
   const [taskRows, estRows] = await Promise.all([
     db
-      .select({ id: companies.campaignId, n: sql<number>`count(*)`, done: sql<number>`sum(case when ${companies.status} in ('done','visit') then 1 else 0 end)` })
+      .select({ id: companies.campaignId, n: sql<number>`count(*)`, done: sql<number>`sum(case when ${companies.status} in ('done','visit','transferred') then 1 else 0 end)` })
       .from(companies)
       .where(inArray(companies.campaignId, ids))
       .groupBy(companies.campaignId),

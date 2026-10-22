@@ -1,4 +1,4 @@
-import { ArrowLeft, CheckCircle2, ClipboardCheck, ExternalLink, Phone } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ClipboardCheck, ExternalLink, Phone, Send } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
@@ -8,6 +8,7 @@ import { codeLabel, label, OBSTACLES } from "@/lib/catalog";
 import { fmtDate, fmtDateTime } from "@/lib/dates";
 import { getDict } from "@/lib/i18n-server";
 import { callDetail, canSeeAllCalls } from "@/lib/reviews";
+import { buildInteractions } from "@/lib/sigtur";
 import { reviewCallAction } from "../../actions";
 
 export default async function CallSummaryPage({ params }: { params: Promise<{ id: string }> }) {
@@ -18,6 +19,8 @@ export default async function CallSummaryPage({ params }: { params: Promise<{ id
   if (!c) notFound();
   const { t, lang } = await getDict();
   const manager = canSeeAllCalls(me);
+  // The same record SIGTUR reads through the integration (one per establishment in the call).
+  const interactions = await buildInteractions({ attemptId: id });
   const a = c.a;
   const yn = (v: boolean | null) => (v == null ? "—" : v ? t.yes : t.no);
   const Row = ({ k, v }: { k: string; v: React.ReactNode }) => (
@@ -101,6 +104,22 @@ export default async function CallSummaryPage({ params }: { params: Promise<{ id
                 <SubmitButton>{a.reviewedAt ? t.updateReview : t.markReviewed}</SubmitButton>
               </ActionForm>
             )}
+          </div>
+
+          <div className="card space-y-3">
+            <SectionTitle icon={<Send className="h-4 w-4" />}>{t.interactionsTitle}</SectionTitle>
+            <p className="text-xs text-slate-500">{t.interactionsHelp}</p>
+            {interactions.map((i) => (
+              <dl key={i.id} className="rounded-xl bg-slate-50 px-3 py-2 text-xs">
+                {([
+                  ["ID SIGTUR", i.idSigtur], ["RUT", i.rut], ["Canal", i.canal], ["Fecha y hora", fmtDateTime(i.fechaHora, lang)],
+                  ["Realizado por", i.realizadoPor], ["Número", i.numeroMarcado], ["Contacto", [i.personaContactada, i.cargo].filter(Boolean).join(" · ")],
+                  ["Resultado", i.resultado], ["Compromiso", i.fechaCompromiso && fmtDate(i.fechaCompromiso, lang)], ["Obstáculo", i.obstaculo], ["Notas", i.notas],
+                ] as const).filter(([, v]) => v).map(([k, v]) => (
+                  <div key={k} className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-2 py-0.5"><dt className="text-slate-500">{k}</dt><dd className="break-words text-slate-800">{v}</dd></div>
+                ))}
+              </dl>
+            ))}
           </div>
         </aside>
       </div>

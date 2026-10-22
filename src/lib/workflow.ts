@@ -213,6 +213,7 @@ export async function relatedTasks(company: { id: number; campaignId: number; rn
       and(
         eq(companies.campaignId, company.campaignId),
         ne(companies.id, company.id),
+        ne(companies.status, "transferred"),
         sql`replace(replace(replace(coalesce(${companies.rnc}, ''), '-', ''), ' ', ''), '.', '') = ${key}`,
       ),
     );

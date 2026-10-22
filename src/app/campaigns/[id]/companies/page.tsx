@@ -1,20 +1,23 @@
-import { and, asc, eq, inArray, isNotNull, isNull, like, lt, ne, or, sql, type SQL } from "drizzle-orm";
-import { Search, Users2 } from "lucide-react";
+import { and, asc, eq, inArray, isNotNull, isNull, like, lt, notInArray, or, sql, type SQL } from "drizzle-orm";
+import { CopyPlus, Search, Users2 } from "lucide-react";
 import Link from "next/link";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
 import { Avatar } from "@/components/Avatar";
+import { CampaignFields } from "@/components/CampaignFields";
 import { Overlay } from "@/components/Overlay";
 import { RefreshButton } from "@/components/RefreshButton";
 import { ReassignSelect, SelectAll } from "@/components/TaskSelection";
-import { Empty, PriorityBadge, StatusBadge } from "@/components/ui";
+import { TransferForm } from "@/components/TransferForm";
+import { Empty, PriorityBadge, SigturTag, StatusBadge } from "@/components/ui";
 import { db } from "@/db";
-import { companies, establishments, users } from "@/db/schema";
-import { CODE_SHORT, codeLabel, codeTone, COMPANY_STATUSES, label } from "@/lib/catalog";
+import { campaigns, companies, establishments, users } from "@/db/schema";
+import { CALL_CODES, CLOSED_STATUSES, CODE_SHORT, codeLabel, codeTone, COMPANY_STATUSES, label } from "@/lib/catalog";
 import { fmtDate, nowIso } from "@/lib/dates";
 import { getDict } from "@/lib/i18n-server";
 import { dueCondition } from "@/lib/queue";
 import { absentOn, workload } from "@/lib/team";
-import { assignAction, bulkAssignAction, reassignCompanyAction } from "../../../actions";
+import { TRANSFERABLE } from "@/lib/transfer";
+import { assignAction, bulkAssignAction, countTransferAction, reassignCompanyAction, transferCampaignAction } from "../../../actions";
 
 const PAGE = 200;
 const TONES = { good: "bg-emerald-50 text-emerald-800", info: "bg-brand-50 text-brand-700", warn: "bg-amber-50 text-amber-800", bad: "bg-red-50 text-mitur-red", none: "" };
@@ -24,7 +27,13 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
   const sp = await searchParams;
   const { t, lang } = await getDict();
   const agents = await db.select().from(users).where(and(eq(users.active, true), inArray(users.role, ["agent", "supervisor", "admin"]))).orderBy(asc(users.name));
-  const [load, absent] = await Promise.all([workload(agents.map((a) => a.id)), absentOn()]);
+  const [load, absent, byStatus, campaign] = await Promise.all([
+    workload(agents.map((a) => a.id)),
+    absentOn(),
+    db.select({ status: companies.status, n: sql<number>`count(*)` }).from(companies).where(eq(companies.campaignId, id)).groupBy(companies.status),
+    db.query.campaigns.findFirst({ where: eq(campaigns.id, id) }),
+  ]);
+  const statusCount = new Map(byStatus.map((s) => [s.status, Number(s.n)]));
   const zones = (await db.selectDistinct({ zone: companies.zone }).from(companies).where(eq(companies.campaignId, id))).map((z) => z.zone).filter(Boolean).sort() as string[];
 
   const where: SQL[] = [eq(companies.campaignId, id)];
@@ -37,8 +46,8 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
   const idleDays = Math.max(1, Number(sp.days) || 3);
   if (sp.f === "due") where.push(dueCondition(now));
   if (sp.f === "overdue") where.push(and(eq(companies.status, "followup"), lt(companies.nextActionAt, now))!);
-  if (sp.f === "idle") where.push(and(ne(companies.status, "done"), lt(sql`coalesce(${companies.lastCalledAt}, ${companies.assignedAt}, '')`, new Date(Date.now() - idleDays * 86400000).toISOString()))!);
-  if (sp.f === "open") where.push(ne(companies.status, "done"));
+  if (sp.f === "idle") where.push(and(notInArray(companies.status, CLOSED_STATUSES), lt(sql`coalesce(${companies.lastCalledAt}, ${companies.assignedAt}, '')`, new Date(Date.now() - idleDays * 86400000).toISOString()))!);
+  if (sp.f === "open") where.push(notInArray(companies.status, CLOSED_STATUSES));
   if (sp.f === "covered") where.push(isNotNull(companies.coverAbsenceId));
   if (sp.q) {
     const q = `%${sp.q}%`;
@@ -179,6 +188,20 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
           <SubmitButton className="btn-secondary">{t.apply}</SubmitButton>
         </ActionForm>
         <span className="ml-auto" />
+        <Overlay variant="drawer" width="max-w-2xl" triggerClassName="btn-secondary" trigger={<><CopyPlus className="h-4 w-4" />{t.transferButton}</>} title={t.transferButton}>
+          <TransferForm
+            campaignId={id}
+            t={t}
+            statuses={TRANSFERABLE.map((s) => ({ value: s, label: label(COMPANY_STATUSES, s, lang), n: statusCount.get(s) ?? 0 }))}
+            codes={Object.keys(CALL_CODES).sort().map((k) => ({ value: k, label: codeLabel(k, lang) }))}
+            zones={zones.map((z) => ({ value: z, label: z }))}
+            priorities={["P1", "P2", "P3"].map((p) => ({ value: p, label: p }))}
+            agents={agents.map((a) => ({ value: String(a.id), label: a.name }))}
+            fields={<CampaignFields t={t} values={{ name: `${campaign?.name ?? ""} – seguimiento`, followupDays: campaign?.followupDays, maxAttempts: campaign?.maxAttempts }} />}
+            action={transferCampaignAction}
+            countAction={countTransferAction}
+          />
+        </Overlay>
         <RefreshButton label={t.refresh} />
       </div>
 
@@ -214,8 +237,14 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
                             <div className="flex items-center gap-2">
                               <Link href={`/calls/${c.id}`} className="truncate font-medium text-slate-900 hover:text-brand-700">{name}</Link>
                               <PriorityBadge p={c.priority} />
+                              {c.sigturRequest && <SigturTag by={c.requestedBy} reason={c.requestReason} t={t} />}
                             </div>
                             <div className="truncate text-xs text-slate-500">RUT {e?.rut} · RNC {c.rnc}</div>
+                            {c.sigturRequest && (c.requestedBy || c.requestReason) && <div className="mt-0.5 truncate text-xs text-purple-800">{[c.requestedBy, c.requestReason].filter(Boolean).join(" · ")}</div>}
+                            {c.originNote && <div className="mt-0.5 truncate text-xs text-violet-700" title={c.originNote}>{c.originNote}</div>}
+                            {c.transferredToCampaignId && (
+                              <Link href={`/campaigns/${c.transferredToCampaignId}/companies`} className="mt-0.5 block text-xs font-medium text-violet-700 hover:underline">{t.transferredTag}</Link>
+                            )}
                             {c.coverFromUserId && (
                               <div className="mt-0.5 text-xs font-medium text-amber-700">
                                 {(c.assignedUserId === c.coverUserId ? t.coveringTag : t.coverScheduledTag)

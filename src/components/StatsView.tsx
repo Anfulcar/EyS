@@ -10,7 +10,7 @@ import { fmtPct, pct } from "./ui";
 // Ministerio de Turismo palette (from the logo).
 const C = { blue: "#0b4a92", sky: "#aecbec", yellow: "#f5c400", orange: "#f39019", red: "#d81e1e", green: "#2e9e44", grey: "#94a3b8" };
 const TONE_COLOR = { good: C.green, info: C.blue, warn: C.orange, bad: C.red, none: C.grey };
-const STATUS_COLOR: Record<string, string> = { pending: C.grey, retry: C.yellow, followup: C.blue, visit: C.orange, done: C.green };
+const STATUS_COLOR: Record<string, string> = { pending: C.grey, retry: C.yellow, followup: C.blue, visit: C.orange, done: C.green, transferred: "#a78bfa" };
 
 // Builds the address of the list behind a number; null when the dashboard has no lists.
 type Href = (p: { m?: string; d?: string; v?: string }) => string | null;
@@ -152,7 +152,7 @@ export function StatsView({ s, t, lang, period, listHref }: { s: Stats; t: Dict;
     [t.emailsSent, s.emailsSent, undefined, href({ m: "emailsSent" })],
     [t.emailsBounced, s.emailsBounced, undefined, href({ m: "bounced" })],
   ];
-  const statusParts = ["pending", "retry", "followup", "visit", "done"].map((k) => ({
+  const statusParts = ["pending", "retry", "followup", "visit", "done", "transferred"].map((k) => ({
     label: label(COMPANY_STATUSES, k, lang),
     n: s.companiesByStatus.find((x) => x.key === k)?.n ?? 0,
     color: STATUS_COLOR[k],

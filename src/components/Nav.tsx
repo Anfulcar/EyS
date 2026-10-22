@@ -1,10 +1,10 @@
 "use client";
 
-import { BarChart3, CircleHelp, ClipboardCheck, FileText, Megaphone, MapPin, Phone, ScrollText, Users } from "lucide-react";
+import { BarChart3, CircleHelp, ClipboardCheck, FileText, Megaphone, MapPin, Phone, Plug, ScrollText, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const ICONS = { calls: Phone, reviews: ClipboardCheck, reports: FileText, campaigns: Megaphone, visits: MapPin, stats: BarChart3, users: Users, logs: ScrollText, help: CircleHelp };
+const ICONS = { calls: Phone, reviews: ClipboardCheck, reports: FileText, campaigns: Megaphone, visits: MapPin, stats: BarChart3, users: Users, logs: ScrollText, integrations: Plug, help: CircleHelp };
 export type NavItem = { href: string; label: string; icon: keyof typeof ICONS; badge?: number };
 
 export function Nav({ items, mobile }: { items: NavItem[]; mobile?: boolean }) {
