@@ -19,7 +19,7 @@ import { buildRecords, commitImport, previewImport } from "@/lib/importer";
 import { cleanOptions, firstRun, FREQUENCIES, type Frequency } from "@/lib/report-options";
 import { generateAndStore } from "@/lib/report-run";
 import { reviewCall } from "@/lib/reviews";
-import { createApiKey, logIntegration, parseCallRequest, receiveCallRequest, setAutoAssignees } from "@/lib/sigtur";
+import { createApiKey, logIntegration, parseCallRequest, receiveCallRequest, REQUESTS_CAMPAIGN, requestsCampaign, setAutoAssignees, setRequestsPaused } from "@/lib/sigtur";
 import { countTransfer, transferToNewCampaign, type TransferFilter } from "@/lib/transfer";
 import { ABSENCE_KINDS, coverTasks, distribute, moveTasks, syncCoverage, workload } from "@/lib/team";
 import { formatPhone, normalizePhone, readTable, str } from "@/lib/sheets";
@@ -251,6 +251,9 @@ export async function setCampaignStatusAction(form: FormData) {
   const id = Number(form.get("id"));
   const status = String(form.get("status"));
   if (!["draft", "active", "closed"].includes(status)) return;
+  // The permanent SIGTUR campaign is never closed; it is switched on/off instead.
+  const target = await db.query.campaigns.findFirst({ where: eq(campaigns.id, id) });
+  if (!target || target.kind === "sigtur_requests") return;
   await db.update(campaigns).set({ status }).where(eq(campaigns.id, id));
   await logActivity(u, "campaign.status_changed", { campaignId: id, entity: "campaign", entityId: id, summary: status });
   revalidatePath(`/campaigns/${id}`, "layout");
@@ -263,8 +266,10 @@ export async function deleteCampaignAction(_: ActionState, form: FormData): Prom
   if (reauth) return reauth;
   const id = Number(form.get("id"));
   const c = await db.query.campaigns.findFirst({ where: eq(campaigns.id, id) });
+  if (!c) return { error: "Not found" };
+  if (c.kind === "sigtur_requests") return { error: (await getDict()).t.sigturPermanentLocked };
   await db.delete(campaigns).where(eq(campaigns.id, id));
-  if (c) await logActivity(u, "campaign.deleted", { entity: "campaign", entityId: id, summary: c.name });
+  await logActivity(u, "campaign.deleted", { entity: "campaign", entityId: id, summary: c.name });
   redirect("/campaigns");
 }
 
@@ -850,6 +855,18 @@ export async function revokeApiKeyAction(_: ActionState, form: FormData): Promis
   return { ok: true, message: t.saved };
 }
 
+// The permanent «Solicitudes SIGTUR» campaign: on = receives new requests, off = SIGTUR is told "en pausa".
+export async function setSigturRequestsAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const me = await assertUser(["admin"]);
+  const { t } = await getDict();
+  const on = form.get("on") === "1";
+  await setRequestsPaused(!on, me.id);
+  await logActivity(me, on ? "sigtur.requests_on" : "sigtur.requests_off", { entity: "campaign", summary: REQUESTS_CAMPAIGN });
+  revalidatePath("/campaigns");
+  revalidatePath("/integrations");
+  return { ok: true, message: on ? t.sigturSwitchedOn : t.sigturSwitchedOff };
+}
+
 export async function saveAutoAssigneesAction(_: ActionState, form: FormData): Promise<ActionState> {
   await assertUser(["admin"]);
   const { t } = await getDict();
@@ -867,6 +884,7 @@ export async function simulateCallRequestAction(_: ActionState, form: FormData):
     motivo: form.get("motivo"), solicitadoPor: `${me.name} (${t.integrationSimulated})`,
   });
   if (typeof r === "string") return { error: r };
+  if ((await requestsCampaign()).requestsPaused) return { error: t.sigturPausedSimulate };
   const res = await receiveCallRequest(r);
   await logIntegration(null, "call_request", true, `${r.idSigtur} · ${r.solicitadoPor}: ${r.motivo}`);
   await logActivity(me, "sigtur.call_request", { entity: "task", entityId: res.taskId, summary: `Simulación: ${r.idSigtur}` });

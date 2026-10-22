@@ -212,6 +212,8 @@ export const ACTIVITY_LABELS: Record<string, L> = {
   "integration.key_revoked": { es: "Clave de integración revocada", en: "Integration key revoked" },
   "sigtur.call_request": { es: "Solicitud de llamada desde SIGTUR", en: "Call request from SIGTUR" },
   "sigtur.campaign": { es: "Campaña recibida desde SIGTUR", en: "Campaign received from SIGTUR" },
+  "sigtur.requests_on": { es: "Solicitudes SIGTUR encendidas", en: "SIGTUR requests switched on" },
+  "sigtur.requests_off": { es: "Solicitudes SIGTUR en pausa", en: "SIGTUR requests paused" },
   "phone.added": { es: "Número agregado", en: "Number added" },
   "visit.logged": { es: "Visita registrada", en: "Visit logged" },
   "export.downloaded": { es: "Descarga de datos", en: "Data downloaded" },

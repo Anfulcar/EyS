@@ -2,6 +2,7 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import { headers } from "next/headers";
 import { KeyRound, PhoneIncoming, Plug, ScrollText, Users2 } from "lucide-react";
 import { ActionForm, ConfirmButton, SubmitButton } from "@/components/ActionForm";
+import { SigturStatusBadge, SigturSwitch } from "@/components/SigturPermanentCard";
 import { Empty, SectionTitle } from "@/components/ui";
 import { db } from "@/db";
 import { users } from "@/db/schema";
@@ -77,6 +78,15 @@ export default async function IntegrationsPage() {
         </div>
 
         <div className="space-y-6">
+          <div className="card space-y-3">
+            <SectionTitle icon={<PhoneIncoming className="h-4 w-4" />}>{t.sigturReceiveRequests}</SectionTitle>
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2">
+              <SigturStatusBadge paused={campaign.requestsPaused} t={t} />
+              <SigturSwitch paused={campaign.requestsPaused} t={t} />
+            </div>
+            {campaign.requestsPaused && campaign.pausedAt && <p className="text-xs text-slate-500">{fmtDateTime(campaign.pausedAt, lang)}</p>}
+          </div>
+
           <div className="card space-y-3">
             <SectionTitle icon={<Users2 className="h-4 w-4" />}>{t.integrationAssignees}</SectionTitle>
             <p className="text-sm text-slate-600">{t.integrationAssigneesHelp}</p>

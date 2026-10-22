@@ -47,6 +47,42 @@ export async function requestsCampaign() {
   return c;
 }
 
+export const PAUSED_MESSAGE = "Solicitudes de llamada en pausa. Intente más tarde o comuníquese con el equipo de campañas.";
+
+// Switched on/off by administrators («Campañas» or «Integraciones»). Only new requests stop; open tasks keep going.
+export async function setRequestsPaused(paused: boolean, userId: number) {
+  const c = await requestsCampaign();
+  await db
+    .update(campaigns)
+    .set(paused ? { requestsPaused: true, pausedBy: userId, pausedAt: nowIso() } : { requestsPaused: false, pausedBy: null, pausedAt: null })
+    .where(eq(campaigns.id, c.id));
+}
+
+// Numbers for the «Campaña permanente» block.
+export async function requestsOverview() {
+  const c = await requestsCampaign();
+  const since = localDayStart(todayLocal());
+  const [[counts], [today], people] = await Promise.all([
+    db
+      .select({
+        open: sql<number>`coalesce(sum(case when ${companies.status} in ('done','transferred') then 0 else 1 end), 0)`,
+        done: sql<number>`coalesce(sum(case when ${companies.status} = 'done' then 1 else 0 end), 0)`,
+      })
+      .from(companies)
+      .where(eq(companies.campaignId, c.id)),
+    db.select({ n: sql<number>`count(*)` }).from(companies).where(and(eq(companies.sigturRequest, true), gte(companies.requestedAt, since))),
+    db.select({ id: users.id, name: users.name }).from(users),
+  ]);
+  const names = new Map(people.map((u) => [u.id, u.name]));
+  const chosen: number[] = c.autoAssignees ? JSON.parse(c.autoAssignees) : [];
+  return {
+    campaign: c,
+    open: Number(counts.open), done: Number(counts.done), today: Number(today.n),
+    assignees: chosen.map((id) => names.get(id)).filter((n): n is string => !!n),
+    pausedByName: c.pausedBy ? names.get(c.pausedBy) ?? null : null,
+  };
+}
+
 export type CallRequest = {
   idSigtur: string;
   solicitadoPor: string;

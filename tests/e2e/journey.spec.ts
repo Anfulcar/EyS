@@ -409,6 +409,33 @@ test("delete a report, new campaign from results, and the SIGTUR connection", as
   const xlsx = await page.request.get("/api/interactions?from=2026-01-01");
   expect((await xlsx.body()).subarray(0, 2).toString()).toBe("PK");
 
+  // «Campañas»: the permanent SIGTUR campaign sits apart from the temporary ones and can be paused
+  await page.goto("/campaigns");
+  const permanent = page.getByTestId("sigtur-permanent");
+  await expect(permanent).toContainText("Recibiendo solicitudes");
+  await expect(page.getByText("Campañas temporales")).toBeVisible();
+  await expect(page.locator("a.card", { hasText: "Solicitudes SIGTUR" })).toHaveCount(0);
+  await permanent.getByRole("button", { name: "Encendida" }).click();
+  await expect(permanent).toContainText("En pausa");
+  await expect(permanent).toContainText("Apagada por Admin Prueba");
+  const paused = await request.post("/api/integrations/sigtur/call-requests", {
+    headers: auth,
+    data: { idSigtur: "SIG-E2E-2", solicitadoPor: "Analista Licencias", motivo: "Otra solicitud" },
+  });
+  expect(paused.status()).toBe(503);
+  expect(await paused.json()).toMatchObject({ ok: false, enPausa: true });
+  // Open requests keep going while paused
+  await page.goto("/calls");
+  await expect(page.locator("a.card").first()).toContainText("Hotel Solicitado");
+  await page.goto("/integrations");
+  const sim = page.locator("form", { has: page.locator("input[name=motivo]") });
+  await sim.locator("input[name=idSigtur]").fill("SIG-E2E-3");
+  await sim.locator("input[name=motivo]").fill("Prueba en pausa");
+  await sim.getByRole("button", { name: "Enviar solicitud de prueba" }).click();
+  await expect(sim.getByText("Las solicitudes SIGTUR están en pausa", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "Apagada" }).click();
+  await expect(page.getByRole("button", { name: "Encendida" })).toBeVisible();
+
   // Everything SIGTUR sent is listed
   await page.goto("/integrations");
   await expect(page.locator("td", { hasText: "SIG-E2E-1 · Analista Licencias" })).toBeVisible();

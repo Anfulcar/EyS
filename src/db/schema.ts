@@ -39,6 +39,10 @@ export const campaigns = sqliteTable("campaigns", {
   sourceRef: text("source_ref"),
   // People who receive tasks automatically by workload (SIGTUR requests), JSON list of user ids
   autoAssignees: text("auto_assignees"),
+  // Permanent SIGTUR campaign: when paused, new call requests are refused ("en pausa"); open tasks keep going.
+  requestsPaused: integer("requests_paused", { mode: "boolean" }).notNull().default(false),
+  pausedBy: integer("paused_by").references(() => users.id),
+  pausedAt: text("paused_at"),
   createdBy: integer("created_by").references(() => users.id),
   createdAt: text("created_at").notNull().default(now),
 });

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
 import { CampaignFields } from "@/components/CampaignFields";
 import { Overlay } from "@/components/Overlay";
+import { SigturPermanentCard } from "@/components/SigturPermanentCard";
 import { Empty, StatusBadge } from "@/components/ui";
 import { db } from "@/db";
 import { campaigns, companies, establishments } from "@/db/schema";
@@ -11,12 +12,15 @@ import { requireUser } from "@/lib/auth";
 import { fmtDate } from "@/lib/dates";
 import type { Dict } from "@/lib/i18n";
 import { getDict } from "@/lib/i18n-server";
+import { requestsOverview } from "@/lib/sigtur";
 import { createCampaignAction } from "../actions";
 
 export default async function CampaignsPage() {
   const me = await requireUser(["admin", "supervisor"]);
   const { t, lang } = await getDict();
-  const list = await db.select().from(campaigns).orderBy(desc(campaigns.startDate));
+  // The permanent SIGTUR campaign has its own block; the grid shows only temporary campaigns.
+  const [all, permanent] = await Promise.all([db.select().from(campaigns).orderBy(desc(campaigns.startDate)), requestsOverview()]);
+  const list = all.filter((c) => c.kind !== "sigtur_requests");
   const ids = list.length ? list.map((c) => c.id) : [-1];
   // Counts per campaign (grouped queries, so each card shows its own totals).
   const [taskRows, estRows] = await Promise.all([
@@ -43,6 +47,11 @@ export default async function CampaignsPage() {
           </Overlay>
         )}
       </div>
+      <section className="space-y-3">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t.sigturPermanent}</h2>
+        <SigturPermanentCard o={permanent} t={t} lang={lang} isAdmin={me.role === "admin"} />
+      </section>
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t.sigturTemporary}</h2>
       {list.length === 0 ? (
         <Empty>{t.noCampaigns}</Empty>
       ) : (

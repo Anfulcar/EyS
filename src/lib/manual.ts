@@ -6,6 +6,7 @@ type Section = { id: string; roles: string[]; title: string; intro?: string; ste
 type L<T> = Record<Lang, T>;
 
 export const WHATS_NEW: { date: string; es: string; en: string }[] = [
+  { date: "2026-10-22", es: "«Campañas» separa la «Campaña permanente» (Solicitudes SIGTUR) de las «Campañas temporales». Los administradores pueden encender o poner en pausa las solicitudes de llamada de SIGTUR; las tareas abiertas siguen en curso.", en: "“Campaigns” separates the “Permanent campaign” (Solicitudes SIGTUR) from the “Temporary campaigns”. Administrators can switch SIGTUR call requests on or pause them; open tasks keep going." },
   { date: "2026-10-22", es: "Nuevo: «Nueva campaña con estas tareas» (crea una campaña en borrador con las tareas elegidas de otra campaña), conexión con SIGTUR (solicitudes de llamada con la etiqueta morada «Solicitud SIGTUR», campañas enviadas desde SIGTUR y un registro de interacción por cada llamada, visita y correo), el menú «Integraciones» para administradores y «Descargar interacciones» en «Informes». Los administradores pueden eliminar informes generados.", en: "New: “New campaign from these tasks” (creates a draft campaign with the chosen tasks of another campaign), connection with SIGTUR (call requests with the purple “SIGTUR request” tag, campaigns sent from SIGTUR and an interaction record for every call, visit and email), the “Integrations” menu for administrators and “Download interactions” in “Reports”. Administrators can delete generated reports." },
   { date: "2026-10-22", es: "«Informes» tiene su propio botón «Generar informe» (el mismo panel que en «Estadísticas globales») y un botón «Editar» en cada plantilla. La lista se actualiza sola después de descargar.", en: "“Reports” has its own “Generate report” button (the same panel as in “Global statistics”) and an “Edit” button on each template. The list updates by itself after downloading." },
   { date: "2026-10-21", es: "Los servidores de la aplicación ahora están junto a la base de datos (Ohio): cada pantalla y cada guardado responden más rápido.", en: "The app's servers now sit next to the database (Ohio): every screen and every save responds faster." },
@@ -96,6 +97,7 @@ const ES: Section[] = [
       "«Correos»: registre la fecha de envío del correo masivo y cargue los correos rebotados.",
       "«Actualización de estatus»: cargue el estatus de SIGTUR para medir quién pasó a «En proceso».",
       "«Exportar»: marque las hojas que quiere (Matriz, Llamadas, Teléfonos, Visitas, Cambios de estatus) y, en «Elegir columnas», las columnas de cada una. Puede filtrar por fechas, agente asignado, zona, prioridad, resultado y estado de la tarea. «Descargar Excel» baja solo lo elegido; su última elección se recuerda en ese navegador. También puede bajar todas las llamadas en CSV.",
+      "La pantalla «Campañas» tiene dos bloques: arriba la «Campaña permanente» (Solicitudes SIGTUR, sin fechas, con su interruptor) y debajo las «Campañas temporales».",
     ],
   },
   {
@@ -144,6 +146,7 @@ const ES: Section[] = [
       "Otros analistas pueden pedir una llamada desde SIGTUR. Llega a la campaña «Solicitudes SIGTUR» (siempre abierta) y se asigna sola, según la carga de trabajo, a las personas elegidas en «Integraciones» (quien está de ausencia no recibe).",
       "Estas tareas llevan la etiqueta morada «Solicitud SIGTUR» con quién la pidió y por qué, y salen primero en «Para hoy».",
       "Si la empresa ya tenía una tarea abierta, no se crea otra: esa tarea recibe la etiqueta y vuelve a «Para hoy».",
+      "Un administrador puede apagar o encender las solicitudes con el interruptor del bloque «Campaña permanente» (en «Campañas» o «Integraciones»). Apagada, SIGTUR recibe «Solicitudes de llamada en pausa» y no llegan llamadas nuevas; las tareas abiertas siguen con sus agentes y se pueden terminar. Los supervisores ven si está encendida o en pausa. Esta campaña no se cierra ni se elimina.",
       "Las campañas que se creen desde SIGTUR llegan como «Borrador» con sus establecimientos; un supervisor o administrador las revisa, asigna y activa.",
     ],
   },
@@ -161,6 +164,7 @@ const ES: Section[] = [
       "Menú «Integraciones» → «Crear clave». La clave se muestra una sola vez: cópiela y entréguela al equipo de SIGTUR junto con la guía «docs/sigtur-integracion.md». La aplicación solo guarda una huella, no la clave.",
       "Si la clave se pierde o se filtra, pulse «Revocar» y cree otra. SIGTUR deja de entrar con la anterior al instante.",
       "Marque quién recibe las solicitudes de llamada y pulse «Guardar».",
+      "«Recibir solicitudes de llamada»: interruptor Encendida / Apagada (pide confirmación para apagar). Apagada, SIGTUR recibe «en pausa» y la simulación tampoco crea tareas.",
       "«Simular solicitud SIGTUR» crea una solicitud de prueba, igual a las reales, para ver el recorrido antes de conectar SIGTUR.",
       "«Últimas solicitudes recibidas» muestra lo que SIGTUR envió o leyó, y si fue aceptado o rechazado.",
     ],
@@ -275,6 +279,7 @@ const EN: Section[] = [
       "“Emails”: log the mass email's send date and upload bounced emails.",
       "“Status update”: upload the SIGTUR status to measure who moved to “En proceso”.",
       "“Export”: tick the sheets you want (Matriz, Calls, Phones, Visits, Status changes) and, under “Choose columns”, the columns of each. You can filter by dates, assigned agent, zone, priority, result and task status. “Download Excel” gets only what you chose; your last choice is remembered in that browser. You can also download every call as CSV.",
+      "The “Campaigns” screen has two blocks: at the top the “Permanent campaign” (Solicitudes SIGTUR, no dates, with its switch) and below the “Temporary campaigns”.",
     ],
   },
   {
@@ -323,6 +328,7 @@ const EN: Section[] = [
       "Other analysts can request a call from SIGTUR. It arrives in the «Solicitudes SIGTUR» campaign (always open) and is assigned automatically, by workload, to the people chosen in “Integrations” (people on leave are skipped).",
       "These tasks carry the purple “SIGTUR request” tag with who asked and why, and come first in “Due today”.",
       "If the company already had an open task, no new one is created: that task gets the tag and goes back to “Due today”.",
+      "An administrator can switch requests off or on with the switch in the “Permanent campaign” block (in “Campaigns” or “Integrations”). When off, SIGTUR is told “call requests paused” and no new calls arrive; open tasks stay with their agents and can be finished. Supervisors see whether it is on or paused. This campaign can’t be closed or deleted.",
       "Campaigns created from SIGTUR arrive as “Draft” with their establishments; a supervisor or administrator reviews, assigns and activates them.",
     ],
   },
@@ -340,6 +346,7 @@ const EN: Section[] = [
       "“Integrations” menu → “Create key”. The key is shown only once: copy it and give it to SIGTUR's team together with the guide «docs/sigtur-integracion.md». The app keeps only a fingerprint, not the key.",
       "If the key is lost or leaked, press “Revoke” and create another. SIGTUR can no longer get in with the old one, immediately.",
       "Tick who receives call requests and press “Save”.",
+      "“Receive call requests”: On / Off switch (asks for confirmation to switch off). When off, SIGTUR is told “paused” and the simulation doesn’t create tasks either.",
       "“Simulate a SIGTUR request” creates a test request, just like the real ones, to see the flow before SIGTUR connects.",
       "“Latest requests received” shows what SIGTUR sent or read, and whether it was accepted or rejected.",
     ],

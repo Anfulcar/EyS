@@ -72,6 +72,16 @@ Respuesta `200`:
 
 Errores `400`: `{ "ok": false, "error": "Falta motivo" }` (o `Falta idSigtur`, `Falta solicitadoPor`, `JSON inválido`).
 
+**En pausa (`503`).** Un administrador puede apagar las solicitudes de llamada. Mientras estén apagadas, la respuesta es
+`503` con la cabecera `Retry-After: 3600` y:
+
+```json
+{ "ok": false, "enPausa": true, "error": "Solicitudes de llamada en pausa. Intente más tarde o comuníquese con el equipo de campañas." }
+```
+
+No se crea nada. Recomendado: mostrar el mensaje al analista y no reintentar en automático más de una vez por hora.
+Las campañas (sección 2) y la lectura de interacciones (sección 3) no se ven afectadas.
+
 ## 2. Campaña creada en SIGTUR
 
 `POST /api/integrations/sigtur/campaigns` con cuerpo JSON. La campaña llega como **«Borrador»**: un supervisor o
