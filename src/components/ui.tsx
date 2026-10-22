@@ -1,4 +1,5 @@
-import { Inbox } from "lucide-react";
+import { Inbox, Send } from "lucide-react";
+import type { Dict } from "@/lib/i18n";
 
 export function Kpi({ label, value, sub, target, pct }: { label: string; value: string | number; sub?: string; target?: string; pct?: number }) {
   const met = pct != null && target != null ? pct >= parseFloat(target.replace(/[^\d.]/g, "")) : null;
@@ -30,6 +31,7 @@ const STATUS_COLORS: Record<string, [string, string]> = {
   followup: ["bg-brand-50 text-brand-700", "bg-brand-600"],
   visit: ["bg-orange-50 text-orange-800", "bg-mitur-orange"],
   done: ["bg-emerald-50 text-emerald-800", "bg-mitur-green"],
+  transferred: ["bg-violet-50 text-violet-700", "bg-violet-400"],
   draft: ["bg-slate-100 text-slate-700", "bg-slate-400"],
   active: ["bg-emerald-50 text-emerald-800", "bg-mitur-green"],
   closed: ["bg-slate-100 text-slate-500", "bg-slate-300"],
@@ -69,5 +71,25 @@ export function SectionTitle({ icon, children, action }: { icon?: React.ReactNod
       </h2>
       {action}
     </div>
+  );
+}
+
+// Purple tag for calls requested from SIGTUR, with who asked and why.
+export function SigturTag({ by, reason, t }: { by: string | null; reason: string | null; t: Dict }) {
+  const who = by ? t.sigturRequestBy.replace("{who}", by) : "";
+  return (
+    <span className="badge bg-purple-600 text-white" title={[who, reason].filter(Boolean).join(": ")}>
+      <Send className="h-3 w-3" />{t.sigturTag}
+    </span>
+  );
+}
+
+export function SigturRequestNote({ by, reason, t }: { by: string | null; reason: string | null; t: Dict }) {
+  return (
+    <p className="flex flex-wrap items-center gap-2 rounded-xl bg-purple-50 px-4 py-3 text-sm text-purple-900">
+      <SigturTag by={by} reason={reason} t={t} />
+      {by && <span className="font-medium">{t.sigturRequestBy.replace("{who}", by)}</span>}
+      {reason && <span>· {reason}</span>}
+    </p>
   );
 }

@@ -1,13 +1,13 @@
-import { and, asc, eq, gt, gte, inArray, ne, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, ne, sql, type SQL } from "drizzle-orm";
 import { AlertTriangle, BellRing, Building2, ChevronRight, Clock, MessageCircle, Phone, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { Avatar } from "@/components/Avatar";
 import { RefreshButton } from "@/components/RefreshButton";
-import { Empty, PriorityBadge, StatusBadge } from "@/components/ui";
+import { Empty, PriorityBadge, SigturTag, StatusBadge } from "@/components/ui";
 import { db } from "@/db";
 import { campaigns, companies, establishments, phones, users } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
-import { codeLabel, COMPANY_STATUSES, label } from "@/lib/catalog";
+import { CLOSED_STATUSES, codeLabel, COMPANY_STATUSES, label } from "@/lib/catalog";
 import { fmtDateTime, nowIso, todayLocal } from "@/lib/dates";
 import { getDict } from "@/lib/i18n-server";
 import { attentionSummary, daysSince, dueCondition } from "@/lib/queue";
@@ -45,7 +45,7 @@ export default async function CallsPage({ searchParams }: { searchParams: Promis
     due: dueCondition(now),
     scheduled: and(inArray(companies.status, ["retry", "followup"]), gt(companies.nextActionAt, now))!,
     visit: eq(companies.status, "visit"),
-    done: eq(companies.status, "done"),
+    done: inArray(companies.status, CLOSED_STATUSES),
   };
   const attemptsFilter: Record<string, SQL> = {
     "0": eq(companies.attempts, 0),
@@ -54,11 +54,11 @@ export default async function CallsPage({ searchParams }: { searchParams: Promis
     "3": gte(companies.attempts, 3),
   };
   const att = sp.att && attemptsFilter[sp.att] ? sp.att : "";
-  // "Para hoy": never-called tasks first, then the ones waiting longest; same-company tasks stay together.
+  // "Para hoy": calls requested from SIGTUR first, then never-called tasks, then the ones waiting longest; same-company tasks stay together.
   const waitingSince = sql`coalesce(${companies.lastCalledAt}, ${companies.assignedAt}, '')`;
   const order =
     tab === "due"
-      ? [sql`case when ${companies.attempts} = 0 then 0 else 1 end`, asc(waitingSince), asc(companies.priority), asc(rncKey), asc(companies.id)]
+      ? [desc(companies.sigturRequest), sql`case when ${companies.attempts} = 0 then 0 else 1 end`, asc(waitingSince), asc(companies.priority), asc(rncKey), asc(companies.id)]
       : [sql`case when ${companies.nextActionAt} is null then 1 else 0 end`, asc(companies.nextActionAt), asc(companies.priority), asc(rncKey), asc(companies.id)];
   // Tab counts, the attention notice and the list are asked for at the same time.
   const [counts, attention, rows, agents] = await Promise.all([
@@ -180,6 +180,7 @@ export default async function CallsPage({ searchParams }: { searchParams: Promis
                     <span className="truncate text-base font-semibold text-slate-900">{name}</span>
                     <PriorityBadge p={c.priority} />
                     {c.whatsappSuggested && <span className="badge bg-green-50 text-green-700"><MessageCircle className="h-3 w-3" />WhatsApp</span>}
+                    {c.sigturRequest && <SigturTag by={c.requestedBy} reason={c.requestReason} t={t} />}
                     {c.attempts === 0 && tab === "due" && <span className="badge bg-brand-600 text-white"><Sparkles className="h-3 w-3" />{t.newTask}</span>}
                     {followupDue && (
                       <span className="badge bg-mitur-yellow text-slate-900"><BellRing className="h-3 w-3" />
@@ -190,6 +191,11 @@ export default async function CallsPage({ searchParams }: { searchParams: Promis
                   <div className="mt-0.5 truncate text-sm text-slate-500">
                     {c.razonSocial}{e?.municipio ? ` · ${e.municipio}` : ""}{open.length > 1 ? ` · ${campaignName.get(c.campaignId)}` : ""}
                   </div>
+                  {c.sigturRequest && (c.requestedBy || c.requestReason) && (
+                    <div className="mt-1 text-sm text-purple-800">
+                      {c.requestedBy ? t.sigturRequestBy.replace("{who}", c.requestedBy) : ""}{c.requestedBy && c.requestReason ? " · " : ""}{c.requestReason}
+                    </div>
+                  )}
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
                     {e?.status && <span className={`badge ${e.status === "Vencida" ? "bg-rose-50 text-rose-700" : "bg-amber-50 text-amber-700"}`}>{e.status}</span>}
                     {sib > 0 && <span className="badge bg-brand-50 text-brand-700"><Building2 className="h-3 w-3" />+{sib} {t.ofSameCompany}</span>}

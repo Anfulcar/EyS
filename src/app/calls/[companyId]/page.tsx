@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
 import { Avatar } from "@/components/Avatar";
 import { CallForm, type RelatedTask } from "@/components/CallForm";
-import { PriorityBadge, SectionTitle, StatusBadge } from "@/components/ui";
+import { PriorityBadge, SectionTitle, SigturRequestNote, StatusBadge } from "@/components/ui";
 import { db } from "@/db";
 import { callAttempts, callResults, campaigns, companies, establishments, phones, users } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
@@ -85,6 +85,7 @@ export default async function TaskPage({ params }: { params: Promise<{ companyId
           <div className="text-lg font-semibold text-slate-900">{company.attempts} / {campaign?.maxAttempts}</div>
         </div>
       </div>
+      {company.sigturRequest && <SigturRequestNote by={company.requestedBy} reason={company.requestReason} t={t} />}
       {outside && <p className="flex items-center gap-2 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800"><AlertTriangle className="h-4 w-4" />{t.outsideDates}</p>}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_21rem]">
@@ -94,6 +95,12 @@ export default async function TaskPage({ params }: { params: Promise<{ companyId
             <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-slate-600">{(lang === "en" ? campaign?.scriptEn || campaign?.scriptEs : campaign?.scriptEs) || t.scriptText}</p>
           </details>
 
+          {company.status === "transferred" ? (
+            <p className="rounded-xl bg-violet-50 px-4 py-3 text-sm text-violet-800">
+              {t.transferredLocked}{" "}
+              {company.transferredToCampaignId && <Link className="font-medium underline" href={`/campaigns/${company.transferredToCampaignId}/companies`}>{t.transferredTag}</Link>}
+            </p>
+          ) : (
           <CallForm
             companyId={companyId}
             establishments={ests.map((e) => ({ id: e.id, name: e.nombreComercial ?? e.sigturId, status: e.estatusRnt }))}
@@ -104,9 +111,11 @@ export default async function TaskPage({ params }: { params: Promise<{ companyId
             whatsappSuggested={company.whatsappSuggested}
             action={logCallAction}
           />
+          )}
 
           <div className="card">
             <SectionTitle icon={<History className="h-4 w-4" />}>{t.history}</SectionTitle>
+            {company.originNote && <p className="mb-3 rounded-lg bg-violet-50 px-3 py-2 text-sm text-violet-800">{company.originNote}</p>}
             {attempts.length === 0 ? (
               <p className="text-sm text-slate-500">{t.noHistory}</p>
             ) : (

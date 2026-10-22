@@ -32,6 +32,13 @@ export const campaigns = sqliteTable("campaigns", {
   // Call script shown to agents (empty = the standard text)
   scriptEs: text("script_es"),
   scriptEn: text("script_en"),
+  // standard | sigtur_requests (the always-open campaign that receives SIGTUR call requests)
+  kind: text("kind").notNull().default("standard"),
+  // manual | transfer (made from another campaign's results) | sigtur
+  source: text("source").notNull().default("manual"),
+  sourceRef: text("source_ref"),
+  // People who receive tasks automatically by workload (SIGTUR requests), JSON list of user ids
+  autoAssignees: text("auto_assignees"),
   createdBy: integer("created_by").references(() => users.id),
   createdAt: text("created_at").notNull().default(now),
 });
@@ -52,6 +59,14 @@ export const companies = sqliteTable(
     coverFromUserId: integer("cover_from_user_id"),
     coverUserId: integer("cover_user_id"),
     coverAbsenceId: integer("cover_absence_id"),
+    // Moved to another campaign («Nueva campaña con estas tareas»), or where it came from.
+    transferredToCampaignId: integer("transferred_to_campaign_id"),
+    originNote: text("origin_note"),
+    // Call requested from SIGTUR (shown with its own tag and first in "Para hoy").
+    sigturRequest: integer("sigtur_request", { mode: "boolean" }).notNull().default(false),
+    requestedBy: text("requested_by"),
+    requestReason: text("request_reason"),
+    requestedAt: text("requested_at"),
     // pending | retry | followup | visit | done
     status: text("status").notNull().default("pending"),
     attempts: integer("attempts").notNull().default(0),
@@ -291,6 +306,33 @@ export const generatedReports = sqliteTable(
     createdAt: text("created_at").notNull().default(now),
   },
   (t) => [index("generated_reports_at").on(t.createdAt)],
+);
+
+// Keys that let SIGTUR use the app's integration door (only a hash is stored).
+export const apiKeys = sqliteTable("api_keys", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  prefix: text("prefix").notNull(),
+  hash: text("hash").notNull().unique(),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: text("created_at").notNull().default(now),
+  lastUsedAt: text("last_used_at"),
+  revokedAt: text("revoked_at"),
+});
+
+// What SIGTUR sent or read, and whether it worked («Integraciones»).
+export const integrationLog = sqliteTable(
+  "integration_log",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    at: text("at").notNull().default(now),
+    keyId: integer("key_id"),
+    // call_request | campaign | interactions
+    kind: text("kind").notNull(),
+    ok: integer("ok", { mode: "boolean" }).notNull(),
+    summary: text("summary"),
+  },
+  (t) => [index("integration_log_at").on(t.at)],
 );
 
 export type User = typeof users.$inferSelect;

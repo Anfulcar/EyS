@@ -1,8 +1,8 @@
 import "server-only";
-import { and, eq, gte, inArray, isNotNull, lte, ne, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, lte, ne, notInArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { absences, campaigns, companies, establishments, type Company } from "@/db/schema";
-import { PRIORITY_ORDER } from "./catalog";
+import { CLOSED_STATUSES, PRIORITY_ORDER } from "./catalog";
 import { nowIso, todayLocal } from "./dates";
 
 export const ABSENCE_KINDS = ["vacation", "day_off", "unavailable"] as const;
@@ -32,7 +32,7 @@ export async function workload(userIds: number[], excludeCompanyIds: number[] = 
     .from(companies)
     .innerJoin(campaigns, eq(campaigns.id, companies.campaignId))
     .leftJoin(establishments, eq(establishments.companyId, companies.id))
-    .where(and(inArray(companies.assignedUserId, userIds), ne(companies.status, "done"), ne(campaigns.status, "closed")))
+    .where(and(inArray(companies.assignedUserId, userIds), notInArray(companies.status, CLOSED_STATUSES), ne(campaigns.status, "closed")))
     .groupBy(companies.id);
   const skip = new Set(excludeCompanyIds);
   for (const r of rows) if (r.userId && !skip.has(r.companyId)) load.set(r.userId, (load.get(r.userId) ?? 0) + Math.max(1, Number(r.n)));
@@ -87,7 +87,7 @@ async function setAssignee(assignment: Map<number, number>, extra: Partial<typeo
 
 // Open tasks of one person in a campaign (not finished).
 export async function openTasksOf(campaignId: number, userId: number) {
-  return db.select().from(companies).where(and(eq(companies.campaignId, campaignId), eq(companies.assignedUserId, userId), ne(companies.status, "done")));
+  return db.select().from(companies).where(and(eq(companies.campaignId, campaignId), eq(companies.assignedUserId, userId), notInArray(companies.status, CLOSED_STATUSES)));
 }
 
 // Permanent move of someone's open tasks: to one person, or shared evenly by workload.

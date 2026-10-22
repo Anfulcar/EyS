@@ -1,17 +1,17 @@
 "use server";
 
 import bcrypt from "bcryptjs";
-import { and, eq, inArray, isNull, ne } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, notInArray } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
-import { absences, campaigns, companies, establishments, importLogs, phones, reportTemplates, users } from "@/db/schema";
+import { absences, apiKeys, campaigns, companies, establishments, generatedReports, importLogs, phones, reportTemplates, users } from "@/db/schema";
 import { logActivity, logError } from "@/lib/audit";
 import { assertUser, clearSession, homeFor, MANAGERS, recentlyAuthenticated, setSessionCookie } from "@/lib/auth";
-import { CALL_CODES, PHONE_KINDS, PHONE_REASONS, ROLES, SIGTUR_STATUSES, VISIT_CODES } from "@/lib/catalog";
+import { CLOSED_STATUSES, CALL_CODES, PHONE_KINDS, PHONE_REASONS, ROLES, SIGTUR_STATUSES, VISIT_CODES } from "@/lib/catalog";
 import { nowIso, toIsoDate, todayLocal } from "@/lib/dates";
 import { DICTS } from "@/lib/i18n";
 import { getDict } from "@/lib/i18n-server";
@@ -19,6 +19,8 @@ import { buildRecords, commitImport, previewImport } from "@/lib/importer";
 import { cleanOptions, firstRun, FREQUENCIES, type Frequency } from "@/lib/report-options";
 import { generateAndStore } from "@/lib/report-run";
 import { reviewCall } from "@/lib/reviews";
+import { createApiKey, logIntegration, parseCallRequest, receiveCallRequest, setAutoAssignees } from "@/lib/sigtur";
+import { countTransfer, transferToNewCampaign, type TransferFilter } from "@/lib/transfer";
 import { ABSENCE_KINDS, coverTasks, distribute, moveTasks, syncCoverage, workload } from "@/lib/team";
 import { formatPhone, normalizePhone, readTable, str } from "@/lib/sheets";
 import { applyStatusUpdates, canWorkCompany, logCall, logVisit, relatedTasks, type CallInput } from "@/lib/workflow";
@@ -340,7 +342,7 @@ export async function assignAction(_: ActionState, form: FormData): Promise<Acti
   const where = [eq(companies.campaignId, campaignId)];
   if (scope === "unassigned") where.push(isNull(companies.assignedUserId));
   else if (scope === "notStarted") where.push(eq(companies.status, "pending"));
-  else where.push(ne(companies.status, "done"));
+  else where.push(notInArray(companies.status, CLOSED_STATUSES));
   const list = await db.select().from(companies).where(and(...where));
   const sizes = await db.select({ companyId: establishments.companyId }).from(establishments).where(eq(establishments.campaignId, campaignId));
   const size = new Map<number, number>();
@@ -422,6 +424,8 @@ export async function logCallAction(_: ActionState, form: FormData): Promise<Act
     // The same call can be logged on sibling tasks (same RNC) that the user is allowed to work.
     const main = await canWorkCompany(u, input.companyId);
     if (!main) return { error: "Not found" };
+    // A task moved to another campaign is worked there, not here.
+    if (main.status === "transferred") return { error: t.transferredLocked };
     const asked = [...new Set(input.relatedCompanyIds ?? [])];
     const allowed = asked.length ? new Set((await relatedTasks(main)).map((c) => c.id)) : new Set<number>();
     const extra = asked.filter((id) => allowed.has(id));
@@ -776,4 +780,96 @@ export async function generateReportNowAction(_: ActionState, form: FormData): P
   await logActivity(me, "report.generated", { entity: "report", entityId: id, summary: "Generado a pedido" });
   revalidatePath("/reports");
   return { ok: true, message: t.reportGenerated };
+}
+
+// Only administrators delete reports kept in «Informes».
+export async function deleteGeneratedReportAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const me = await assertUser(["admin"]);
+  const { t } = await getDict();
+  const id = Number(form.get("reportId"));
+  const [r] = await db.select({ id: generatedReports.id, name: generatedReports.name, periodLabel: generatedReports.periodLabel }).from(generatedReports).where(eq(generatedReports.id, id));
+  if (!r) return { error: "Not found" };
+  await db.delete(generatedReports).where(eq(generatedReports.id, id));
+  await logActivity(me, "report.deleted", { entity: "report", entityId: id, summary: `${r.name} · ${r.periodLabel ?? ""}` });
+  revalidatePath("/reports");
+  return { ok: true, message: t.saved };
+}
+
+// ---------- New campaign from another campaign's results ----------
+
+function transferFilter(form: FormData): TransferFilter {
+  const v = (k: string) => String(form.get(k) ?? "").trim() || undefined;
+  return { statuses: form.getAll("statuses").map(String), code: v("code"), zone: v("zone"), priority: v("priority"), agent: v("agent") };
+}
+
+// Live count shown while choosing.
+export async function countTransferAction(campaignId: number, f: TransferFilter): Promise<number> {
+  await assertUser(MANAGERS);
+  return countTransfer(Number(campaignId), { statuses: Array.isArray(f.statuses) ? f.statuses.map(String) : [], code: f.code || undefined, zone: f.zone || undefined, priority: f.priority || undefined, agent: f.agent || undefined });
+}
+
+export async function transferCampaignAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const me = await assertUser(MANAGERS);
+  const { t } = await getDict();
+  const fromId = Number(form.get("campaignId"));
+  const from = await db.query.campaigns.findFirst({ where: eq(campaigns.id, fromId) });
+  if (!from) return { error: "Not found" };
+  const parsed = campaignSchema.safeParse(Object.fromEntries(form));
+  if (!parsed.success) return { error: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") };
+  const r = await transferToNewCampaign(from, transferFilter(form), parsed.data, me.id);
+  if (!r) return { error: t.transferNone };
+  await logActivity(me, "campaign.from_results", { campaignId: r.campaign.id, entity: "campaign", entityId: r.campaign.id, summary: `${r.count} tareas de «${from.name}» → «${r.campaign.name}»` });
+  revalidatePath("/campaigns", "layout");
+  redirect(`/campaigns/${r.campaign.id}/companies`);
+}
+
+// ---------- Integraciones (SIGTUR) — administrators ----------
+
+export async function createApiKeyAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const me = await assertUser(["admin"]);
+  const reauth = await reauthRequired();
+  if (reauth) return reauth;
+  const { t } = await getDict();
+  const name = String(form.get("name") ?? "").trim().slice(0, 60) || "SIGTUR";
+  const key = await createApiKey(name, me.id);
+  await logActivity(me, "integration.key_created", { entity: "integration", summary: name });
+  revalidatePath("/integrations");
+  // Shown once on screen; only its fingerprint is stored.
+  return { ok: true, message: `${t.integrationKeyCreated} ${key}` };
+}
+
+export async function revokeApiKeyAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const me = await assertUser(["admin"]);
+  const { t } = await getDict();
+  const id = Number(form.get("keyId"));
+  const [k] = await db.select().from(apiKeys).where(eq(apiKeys.id, id));
+  if (!k) return { error: "Not found" };
+  await db.update(apiKeys).set({ revokedAt: nowIso() }).where(eq(apiKeys.id, id));
+  await logActivity(me, "integration.key_revoked", { entity: "integration", entityId: id, summary: `${k.name} (${k.prefix}…)` });
+  revalidatePath("/integrations");
+  return { ok: true, message: t.saved };
+}
+
+export async function saveAutoAssigneesAction(_: ActionState, form: FormData): Promise<ActionState> {
+  await assertUser(["admin"]);
+  const { t } = await getDict();
+  await setAutoAssignees(form.getAll("people").map(Number).filter((n) => Number.isInteger(n) && n > 0));
+  revalidatePath("/integrations");
+  return { ok: true, message: t.saved };
+}
+
+// Same path as a real SIGTUR request, to try it before SIGTUR connects.
+export async function simulateCallRequestAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const me = await assertUser(["admin"]);
+  const { t } = await getDict();
+  const r = parseCallRequest({
+    idSigtur: form.get("idSigtur"), nombreComercial: form.get("nombreComercial"), telefonos: [String(form.get("telefono") ?? "")].filter(Boolean),
+    motivo: form.get("motivo"), solicitadoPor: `${me.name} (${t.integrationSimulated})`,
+  });
+  if (typeof r === "string") return { error: r };
+  const res = await receiveCallRequest(r);
+  await logIntegration(null, "call_request", true, `${r.idSigtur} · ${r.solicitadoPor}: ${r.motivo}`);
+  await logActivity(me, "sigtur.call_request", { entity: "task", entityId: res.taskId, summary: `Simulación: ${r.idSigtur}` });
+  revalidatePath("/", "layout");
+  return { ok: true, message: res.existing ? t.integrationAddedToExisting : t.integrationRequestCreated };
 }

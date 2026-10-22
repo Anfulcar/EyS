@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { AlertTriangle, ArrowRightLeft, CalendarOff, CheckCircle2, Users2 } from "lucide-react";
 import Link from "next/link";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
@@ -8,7 +8,7 @@ import { ReceiversFields } from "@/components/ReceiversFields";
 import { Empty, SectionTitle } from "@/components/ui";
 import { db } from "@/db";
 import { companies, users } from "@/db/schema";
-import { ABSENCE_LABELS, label } from "@/lib/catalog";
+import { CLOSED_STATUSES, ABSENCE_LABELS, label } from "@/lib/catalog";
 import { fmtDate, nowIso, todayLocal } from "@/lib/dates";
 import { getDict } from "@/lib/i18n-server";
 import { dueCondition } from "@/lib/queue";
@@ -29,10 +29,10 @@ export default async function FollowupPage({ params }: { params: Promise<{ id: s
       .select({
         userId: companies.assignedUserId,
         total: sql<number>`count(*)`,
-        open: n(sql`${companies.status} <> 'done'`),
+        open: n(sql`${companies.status} not in ('done', 'transferred')`),
         due: n(sql`${dueCondition(now)}`),
         overdue: n(sql`${companies.status} = 'followup' and ${companies.nextActionAt} < ${now}`),
-        idle: n(sql`${companies.status} <> 'done' and coalesce(${companies.lastCalledAt}, ${companies.assignedAt}, '') < ${idleSince}`),
+        idle: n(sql`${companies.status} not in ('done', 'transferred') and coalesce(${companies.lastCalledAt}, ${companies.assignedAt}, '') < ${idleSince}`),
         covering: n(sql`${companies.coverAbsenceId} is not null and ${companies.assignedUserId} = ${companies.coverUserId}`),
         scheduled: n(sql`${companies.coverAbsenceId} is not null and ${companies.assignedUserId} = ${companies.coverFromUserId}`),
       })
@@ -49,7 +49,7 @@ export default async function FollowupPage({ params }: { params: Promise<{ id: s
       ? db
           .select({ userId: companies.assignedUserId, n: sql<number>`count(*)` })
           .from(companies)
-          .where(and(eq(companies.campaignId, id), ne(companies.status, "done"), inArray(companies.assignedUserId, absences.map((a) => a.userId)), sql`${companies.coverAbsenceId} is null`))
+          .where(and(eq(companies.campaignId, id), notInArray(companies.status, CLOSED_STATUSES), inArray(companies.assignedUserId, absences.map((a) => a.userId)), sql`${companies.coverAbsenceId} is null`))
           .groupBy(companies.assignedUserId)
       : [],
     db.select({ absenceId: companies.coverAbsenceId, n: sql<number>`count(*)` }).from(companies).where(and(eq(companies.campaignId, id), sql`${companies.coverAbsenceId} is not null`)).groupBy(companies.coverAbsenceId),

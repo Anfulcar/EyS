@@ -1,5 +1,5 @@
 import { asc, desc, eq } from "drizzle-orm";
-import { Download, FileDown, FileText, Pause, Pencil, Play, Presentation, RefreshCw, Trash2 } from "lucide-react";
+import { Download, FileDown, FileText, Pause, Pencil, Play, Presentation, RefreshCw, Send, Trash2 } from "lucide-react";
 import { ActionForm, ConfirmButton, SubmitButton } from "@/components/ActionForm";
 import { Overlay } from "@/components/Overlay";
 import { ReportBuilder } from "@/components/ReportBuilder";
@@ -7,11 +7,11 @@ import { Empty, SectionTitle } from "@/components/ui";
 import { db } from "@/db";
 import { campaigns, generatedReports, reportTemplates, users } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
-import { fmtDate, fmtDateTime, nowIso } from "@/lib/dates";
+import { fmtDate, fmtDateTime, nowIso, todayLocal } from "@/lib/dates";
 import { getDict } from "@/lib/i18n-server";
 import { cleanOptions, scheduleLabel, type Frequency } from "@/lib/report-options";
 import { runDueReports } from "@/lib/report-run";
-import { deleteReportTemplateAction, generateReportNowAction, pauseReportTemplateAction, saveReportTemplateAction } from "../actions";
+import { deleteGeneratedReportAction, deleteReportTemplateAction, generateReportNowAction, pauseReportTemplateAction, saveReportTemplateAction } from "../actions";
 
 export default async function ReportsPage() {
   const me = await requireUser(["admin", "supervisor"]);
@@ -70,13 +70,33 @@ export default async function ReportsPage() {
                     </td>
                     <td className="whitespace-nowrap text-sm">{f.periodLabel}</td>
                     <td className="whitespace-nowrap text-sm">{fmtDateTime(f.createdAt, lang)}</td>
-                    <td className="text-right"><a href={`/api/reports/${f.id}`} className="btn-secondary btn-sm" download><Download className="h-3.5 w-3.5" />{f.format === "pptx" ? "PowerPoint" : "PDF"}</a></td>
+                    <td>
+                      <div className="flex justify-end gap-2">
+                        <a href={`/api/reports/${f.id}`} className="btn-secondary btn-sm" download><Download className="h-3.5 w-3.5" />{f.format === "pptx" ? "PowerPoint" : "PDF"}</a>
+                        {me.role === "admin" && (
+                          <ActionForm action={deleteGeneratedReportAction}>
+                            <input type="hidden" name="reportId" value={f.id} />
+                            <ConfirmButton message={t.reportsDeleteFileConfirm} className="btn-secondary btn-sm"><Trash2 className="h-3.5 w-3.5" />{t.delete}</ConfirmButton>
+                          </ActionForm>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         )}
+      </div>
+
+      <div className="card space-y-3">
+        <SectionTitle icon={<Send className="h-4 w-4" />}>{t.interactionsDownload}</SectionTitle>
+        <p className="text-sm text-slate-600">{t.interactionsDownloadHelp}</p>
+        <form action="/api/interactions" method="get" className="flex flex-wrap items-end gap-3">
+          <div><label className="label" htmlFor="int-from">{t.from}</label><input id="int-from" type="date" name="from" className="input" defaultValue={`${todayLocal().slice(0, 8)}01`} /></div>
+          <div><label className="label" htmlFor="int-to">{t.to}</label><input id="int-to" type="date" name="to" className="input" defaultValue={todayLocal()} /></div>
+          <button className="btn-secondary"><Download className="h-4 w-4" />{t.interactionsDownload}</button>
+        </form>
       </div>
 
       <div className="card overflow-hidden p-0">
