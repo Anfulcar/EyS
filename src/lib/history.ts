@@ -94,7 +94,17 @@ export async function historyFor(campaignId: number, ests: { rut: string | null;
 
 // Before a campaign is deleted its commitments and closures are copied, so the warnings stay.
 export async function archiveCampaignHistory(campaignId: number) {
-  const rows = await liveRows(and(eq(establishments.campaignId, campaignId)), null);
+  return archive(await liveRows(and(eq(establishments.campaignId, campaignId)), null));
+}
+
+// Same, for tasks removed from a campaign («Eliminar de la campaña»).
+export async function archiveTasksHistory(companyIds: number[]) {
+  let n = 0;
+  for (let i = 0; i < companyIds.length; i += 500) n += await archive(await liveRows(and(inArray(establishments.companyId, companyIds.slice(i, i + 500))), null));
+  return n;
+}
+
+async function archive(rows: Row[]) {
   for (let i = 0; i < rows.length; i += 200) {
     await db.insert(historyArchive).values(
       rows.slice(i, i + 200).map((r) => ({ kind: r.kind, rut: r.rut, rnc: rncKey(r.rnc) || null, sigturId: r.sigturId, establishment: r.establishment, campaignName: r.campaignName, date: r.date, source: r.source, byName: r.byName, at: r.at })),

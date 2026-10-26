@@ -232,6 +232,7 @@ export const ACTIVITY_LABELS: Record<string, L> = {
   "sigtur.requests_off": { es: "Solicitudes SIGTUR en pausa", en: "SIGTUR requests paused" },
   "phone.added": { es: "Número agregado", en: "Number added" },
   "visit.logged": { es: "Visita registrada", en: "Visit logged" },
+  "tasks.removed": { es: "RUT eliminados de una campaña", en: "RUTs removed from a campaign" },
   "task.to_visit": { es: "Pasada a visita", en: "Sent to visit" },
   "task.followup_scheduled": { es: "Seguimiento programado", en: "Follow-up scheduled" },
   "task.cover_started": { es: "Tareas cubiertas al empezar una ausencia", en: "Tasks covered as an absence starts" },

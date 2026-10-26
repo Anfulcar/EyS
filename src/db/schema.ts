@@ -441,3 +441,24 @@ export const historyArchive = sqliteTable(
   },
   (t) => [index("history_archive_rut").on(t.rut), index("history_archive_rnc").on(t.rnc)],
 );
+
+// RUTs removed from a campaign (the task and its calls are deleted; this record stays, with the reason).
+export const removedTasks = sqliteTable(
+  "removed_tasks",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    campaignId: integer("campaign_id").notNull().references(() => campaigns.id, { onDelete: "cascade" }),
+    rut: text("rut"),
+    sigturId: text("sigtur_id"),
+    establishment: text("establishment"),
+    rnc: text("rnc"),
+    lastStatus: text("last_status"),
+    calls: integer("calls").notNull().default(0),
+    visits: integer("visits").notNull().default(0),
+    reason: text("reason").notNull(),
+    removedBy: integer("removed_by").references(() => users.id),
+    removedByName: text("removed_by_name"),
+    removedAt: text("removed_at").notNull().default(now),
+  },
+  (t) => [index("removed_tasks_campaign").on(t.campaignId)],
+);

@@ -20,6 +20,8 @@ import { cleanOptions, firstRun, FREQUENCIES, type Frequency } from "@/lib/repor
 import { generateAndStore } from "@/lib/report-run";
 import { reviewCall } from "@/lib/reviews";
 import { archiveCampaignHistory } from "@/lib/history";
+import { idsByFilters, idsByKeys, MAX_REMOVE, previewRemoval, removeTasks, type RemovalPreview } from "@/lib/remove";
+import { cleanTaskFilters } from "@/lib/task-filters";
 import { flushOutbox, queueCallInteractions, queueChanges, queueEmailInteractions, queueVisitInteraction, resolveRequest, retryFailed, setPushEnabled, setPushUrl, pushSettings, validPushUrl } from "@/lib/sigtur-push";
 import { createApiKey, logIntegration, parseCallRequest, receiveCallRequest, REQUESTS_CAMPAIGN, requestsCampaign, setAutoAssignees, setRequestsPaused } from "@/lib/sigtur";
 import { countTransfer, transferToNewCampaign, type TransferFilter } from "@/lib/transfer";
@@ -976,4 +978,58 @@ export async function simulateCallRequestAction(_: ActionState, form: FormData):
   await logActivity(me, "sigtur.call_request", { entity: "task", entityId: res.taskId, summary: `Simulación: ${r.idSigtur}` });
   revalidatePath("/", "layout");
   return { ok: true, message: res.existing ? t.integrationAddedToExisting : t.integrationRequestCreated };
+}
+
+// ---------- «Eliminar de la campaña» (administrators only) ----------
+
+type RemovalSelection = { ids?: number[]; filters?: Record<string, string> };
+
+// Counts shown before anything is deleted (from ticked tasks or "all filtered").
+export async function previewRemovalAction(campaignId: number, sel: RemovalSelection): Promise<RemovalPreview | null> {
+  await assertUser(["admin"]);
+  const id = Number(campaignId);
+  const ids = sel.filters ? await idsByFilters(id, cleanTaskFilters(sel.filters)) : Array.isArray(sel.ids) ? sel.ids.map(Number) : [];
+  return previewRemoval(id, ids);
+}
+
+// Same, from a file with «RUT» or «ID SIGTUR» (screen «Actualizar estatus»).
+export async function previewRemovalFileAction(_: ActionState, form: FormData): Promise<ActionState> {
+  await assertUser(["admin"]);
+  const { t } = await getDict();
+  const campaignId = Number(form.get("campaignId"));
+  const file = form.get("file");
+  if (!(file instanceof File) || file.size === 0) return { error: t.chooseFile };
+  const { rows, headers } = await readTable(file, ["RUT", "ID SIGTUR", "Identificador"]);
+  const { normHeader } = await import("@/lib/sheets");
+  const cols = headers.filter((h) => ["rut", "idsigtur", "identificador"].includes(normHeader(h)));
+  if (!cols.length) return { error: t.removeFileColumns };
+  const keys = rows.flatMap((r) => cols.map((c) => str(r[c])?.replace(/\.0$/, "") ?? "")).filter(Boolean);
+  const { ids, notFound } = await idsByKeys(campaignId, keys);
+  return { ok: true, data: await previewRemoval(campaignId, ids, notFound) };
+}
+
+export async function removeTasksAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const me = await assertUser(["admin"]);
+  const reauth = await reauthRequired();
+  if (reauth) return reauth;
+  const { t } = await getDict();
+  const campaignId = Number(form.get("campaignId"));
+  const reason = String(form.get("reason") ?? "").trim().slice(0, 200);
+  if (reason.length < 3) return { error: t.removeReasonRequired };
+  if (String(form.get("confirm") ?? "").trim().toUpperCase() !== "ELIMINAR") return { error: t.removeConfirmWrong };
+  let ids: number[] = [];
+  try {
+    const sel = JSON.parse(String(form.get("selection") ?? "{}")) as RemovalSelection;
+    ids = sel.filters ? await idsByFilters(campaignId, cleanTaskFilters(sel.filters)) : Array.isArray(sel.ids) ? sel.ids.map(Number) : [];
+  } catch {
+    return { error: "Not found" };
+  }
+  const r = await removeTasks(me, campaignId, ids, reason);
+  if (r.closed) return { error: t.removeClosed };
+  if (r.tooMany) return { error: t.removeTooMany.replace("{n}", String(MAX_REMOVE)) };
+  if (!r.removed) return { error: t.removeNone };
+  await logActivity(me, "tasks.removed", { campaignId, entity: "campaign", entityId: campaignId, summary: `${r.removed} RUT eliminados de la campaña · motivo: ${reason}` });
+  revalidatePath(`/campaigns/${campaignId}`, "layout");
+  revalidatePath("/calls", "layout");
+  return { ok: true, message: t.removeDone.replace("{n}", String(r.removed)) };
 }

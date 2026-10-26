@@ -6,6 +6,7 @@ type Section = { id: string; roles: string[]; title: string; intro?: string; ste
 type L<T> = Record<Lang, T>;
 
 export const WHATS_NEW: { date: string; es: string; en: string }[] = [
+  { date: "2026-10-26", es: "Los administradores pueden eliminar RUT de una campaña en curso, desde un archivo («Actualización de estatus») o con los filtros de «Tareas y asignación» (nuevos filtros: estatus RNT, subsector / tipo, prioridad y último resultado). Antes de borrar se ven los conteos; queda el motivo en «Eliminadas».", en: "Administrators can remove RUTs from a running campaign, from a file (“Status update”) or with the “Tasks and assignment” filters (new filters: RNT status, subsector / type, priority and last result). Counts are shown before deleting; the reason stays in “Removed”." },
   { date: "2026-10-26", es: "Avisos de otras campañas (compromiso anterior o encontrado cerrado), estatus RNT en «Misma empresa», «Actualizar datos» en llamadas y visitas, plazos en las solicitudes SIGTUR, «Estado de operación» en Resumen, Estadísticas, informes y filtros, «Registro» con las decisiones de la aplicación y «Envío automático a SIGTUR» listo (apagado hasta completar la conexión).", en: "Warnings from other campaigns (earlier commitment or found closed), RNT status in “Same company”, “Update details” in calls and visits, deadlines on SIGTUR requests, “Operating status” in Summary, Statistics, reports and filters, “Log” with the app's own decisions and “Automatic sending to SIGTUR” ready (off until the connection is complete)." },
   { date: "2026-10-22", es: "«Campañas» separa la «Campaña permanente» (Solicitudes SIGTUR) de las «Campañas temporales». Los administradores pueden encender o poner en pausa las solicitudes de llamada de SIGTUR; las tareas abiertas siguen en curso.", en: "“Campaigns” separates the “Permanent campaign” (Solicitudes SIGTUR) from the “Temporary campaigns”. Administrators can switch SIGTUR call requests on or pause them; open tasks keep going." },
   { date: "2026-10-22", es: "Nuevo: «Nueva campaña con estas tareas» (crea una campaña en borrador con las tareas elegidas de otra campaña), conexión con SIGTUR (solicitudes de llamada con la etiqueta morada «Solicitud SIGTUR», campañas enviadas desde SIGTUR y un registro de interacción por cada llamada, visita y correo), el menú «Integraciones» para administradores y «Descargar interacciones» en «Informes». Los administradores pueden eliminar informes generados.", en: "New: “New campaign from these tasks” (creates a draft campaign with the chosen tasks of another campaign), connection with SIGTUR (call requests with the purple “SIGTUR request” tag, campaigns sent from SIGTUR and an interaction record for every call, visit and email), the “Integrations” menu for administrators and “Download interactions” in “Reports”. Administrators can delete generated reports." },
@@ -97,6 +98,7 @@ const ES: Section[] = [
       "«Configuración» → «Guion de llamada» (administradores y supervisores): el texto que ven los agentes en «Guion» al abrir cada tarea de la campaña, en español y, si quiere, en inglés.",
       "«Correos»: registre la fecha de envío del correo masivo y cargue los correos rebotados.",
       "«Actualización de estatus»: cargue el estatus de SIGTUR para medir quién pasó a «En proceso».",
+      "Filtros extra en «Tareas y asignación»: estatus RNT, subsector / tipo, prioridad y último resultado.",
       "«Exportar»: marque las hojas que quiere (Matriz, Llamadas, Teléfonos, Visitas, Cambios de estatus) y, en «Elegir columnas», las columnas de cada una. Puede filtrar por fechas, agente asignado, zona, prioridad, resultado y estado de la tarea. «Descargar Excel» baja solo lo elegido; su última elección se recuerda en ese navegador. También puede bajar todas las llamadas en CSV.",
       "La pantalla «Campañas» tiene dos bloques: arriba la «Campaña permanente» (Solicitudes SIGTUR, sin fechas, con su interruptor) y debajo las «Campañas temporales».",
     ],
@@ -188,6 +190,16 @@ const ES: Section[] = [
       "En la llamada, al elegir el resultado «Cambió dueño / nombre / dirección» aparecen «Nuevo nombre comercial», «Nueva dirección» y «Dueño / responsable» dentro del mismo recuadro del establecimiento.",
       "En la visita, «Actualizar datos (si cambió)» debajo de las notas.",
       "Cada dato que cambia una persona (estos campos, el correo actualizado, «¿En operación?», la fecha de cierre y los teléfonos agregados, sustituidos o marcados como equivocados) se envía a SIGTUR como solicitud de cambio y queda en «Registro».",
+    ],
+  },
+  {
+    id: "remove-ruts", roles: ["admin"], title: "Eliminar RUT de una campaña",
+    steps: [
+      "Desde un archivo: «Actualización de estatus» → «Eliminar de esta campaña los RUT de un archivo». El archivo necesita una columna «RUT» o «ID SIGTUR». Pulse «Revisar».",
+      "Desde la lista: «Tareas y asignación», aplique los filtros (estado, estatus RNT, subsector / tipo, zona, prioridad, último resultado…) o marque filas, y pulse «Eliminar de la campaña…». Elija «Todas las tareas con los filtros actuales» o «Solo las marcadas» y pulse «Revisar».",
+      "Antes de borrar verá cuántas tareas, establecimientos, llamadas y visitas se borran, las solicitudes SIGTUR abiertas y los RUT del archivo que no están en la campaña.",
+      "Escriba el motivo y la palabra ELIMINAR y confirme (si hace más de 10 minutos que ingresó, le pedirá su contraseña). No se puede deshacer: se borran la tarea, sus establecimientos, teléfonos, llamadas y visitas, y dejan de contar en los números de la campaña.",
+      "Queda registrado: «Eliminadas (N)» en «Tareas y asignación» (fecha, RUT, establecimiento, motivo, llamadas, quién) con descarga en Excel, una línea en «Registro» y los compromisos y cierres para los avisos de otras campañas. Solo administradores; no se puede en campañas cerradas; máximo 5 000 RUT por vez.",
     ],
   },
   {
@@ -316,6 +328,7 @@ const EN: Section[] = [
       "“Settings” → “Call script” (administrators and supervisors): the text agents see under “Script” when they open each task of the campaign, in Spanish and, optionally, English.",
       "“Emails”: log the mass email's send date and upload bounced emails.",
       "“Status update”: upload the SIGTUR status to measure who moved to “En proceso”.",
+      "Extra filters in “Tasks and assignment”: RNT status, subsector / type, priority and last result.",
       "“Export”: tick the sheets you want (Matriz, Calls, Phones, Visits, Status changes) and, under “Choose columns”, the columns of each. You can filter by dates, assigned agent, zone, priority, result and task status. “Download Excel” gets only what you chose; your last choice is remembered in that browser. You can also download every call as CSV.",
       "The “Campaigns” screen has two blocks: at the top the “Permanent campaign” (Solicitudes SIGTUR, no dates, with its switch) and below the “Temporary campaigns”.",
     ],
@@ -407,6 +420,16 @@ const EN: Section[] = [
       "In a call, choosing the result “Changed owner / name / address” shows “New trade name”, “New address” and “Owner / person in charge” inside the same establishment box.",
       "In a visit, “Update details (if changed)” below the notes.",
       "Each detail a person changes (these fields, the updated email, “Operating?”, the closing date and phones added, replaced or marked wrong) is sent to SIGTUR as a change request and recorded in “Log”.",
+    ],
+  },
+  {
+    id: "remove-ruts", roles: ["admin"], title: "Removing RUTs from a campaign",
+    steps: [
+      "From a file: “Status update” → “Remove this file's RUTs from this campaign”. The file needs a “RUT” or “ID SIGTUR” column. Press “Check”.",
+      "From the list: in “Tasks and assignment”, apply the filters (status, RNT status, subsector / type, zone, priority, last result…) or tick rows, and press “Remove from campaign…”. Choose “All tasks matching the current filters” or “Only the ticked ones” and press “Check”.",
+      "Before deleting you see how many tasks, establishments, calls and visits will be erased, open SIGTUR requests and RUTs in the file that are not in the campaign.",
+      "Write the reason and the word ELIMINAR and confirm (if you signed in more than 10 minutes ago, it asks for your password). It can't be undone: the task, its establishments, phones, calls and visits are erased and stop counting in the campaign's numbers.",
+      "What stays: “Removed (N)” in “Tasks and assignment” (date, RUT, establishment, reason, calls, who) with an Excel download, a line in “Log”, and commitments and closures for the warnings in other campaigns. Administrators only; not in closed campaigns; at most 5,000 RUTs at a time.",
     ],
   },
   {
