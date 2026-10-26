@@ -13,6 +13,8 @@ import { currentUser } from "@/lib/auth";
 import { attentionSummary } from "@/lib/queue";
 import { newReportsCount } from "@/lib/report-run";
 import { syncCoverage } from "@/lib/team";
+import { after } from "next/server";
+import { sigturBackground } from "@/lib/sigtur-push";
 import { ROLES } from "@/lib/catalog";
 import { getDict } from "@/lib/i18n-server";
 import { logoutAction, setLangAction } from "./actions";
@@ -25,6 +27,8 @@ const isManagerRole = (r: string | undefined) => r === "admin" || r === "supervi
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   // Covers for absences start and end by date (throttled; never blocks the page on failure).
   const [{ lang, t }, user] = await Promise.all([getDict(), currentUser(), syncCoverage().catch((e) => console.error("[coverage]", e))]);
+  // Overdue SIGTUR requests and sending to SIGTUR, after the page is sent (never slows it down).
+  after(() => sigturBackground().catch((e) => console.error("[sigtur]", e)));
   const role = user?.role;
   const isManager = role === "admin" || role === "supervisor";
   // Administrators and supervisors see "Mis llamadas" only when they have calls assigned.

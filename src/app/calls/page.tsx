@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, gte, inArray, ne, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, ne, sql, type SQL } from "drizzle-orm";
 import { AlertTriangle, BellRing, Building2, ChevronRight, Clock, MessageCircle, Phone, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { Avatar } from "@/components/Avatar";
@@ -10,6 +10,7 @@ import { requireUser } from "@/lib/auth";
 import { CLOSED_STATUSES, codeLabel, COMPANY_STATUSES, label } from "@/lib/catalog";
 import { fmtDateTime, nowIso, todayLocal } from "@/lib/dates";
 import { getDict } from "@/lib/i18n-server";
+import { requestDeadline } from "@/lib/sigtur";
 import { attentionSummary, daysSince, dueCondition } from "@/lib/queue";
 
 const TABS = ["due", "scheduled", "visit", "done"] as const;
@@ -54,11 +55,14 @@ export default async function CallsPage({ searchParams }: { searchParams: Promis
     "3": gte(companies.attempts, 3),
   };
   const att = sp.att && attemptsFilter[sp.att] ? sp.att : "";
+  // Open SIGTUR requests first, the closest (or most overdue) deadline first.
+  const openRequestFirst = sql`case when ${companies.sigturRequest} = 1 and ${companies.requestResolvedAt} is null then 0 else 1 end`;
+  const requestDueOrder = sql`case when ${companies.sigturRequest} = 1 and ${companies.requestResolvedAt} is null then coalesce(${companies.requestDueDate}, substr(${companies.requestedAt}, 1, 10)) end`;
   // "Para hoy": calls requested from SIGTUR first, then never-called tasks, then the ones waiting longest; same-company tasks stay together.
   const waitingSince = sql`coalesce(${companies.lastCalledAt}, ${companies.assignedAt}, '')`;
   const order =
     tab === "due"
-      ? [desc(companies.sigturRequest), sql`case when ${companies.attempts} = 0 then 0 else 1 end`, asc(waitingSince), asc(companies.priority), asc(rncKey), asc(companies.id)]
+      ? [openRequestFirst, requestDueOrder, sql`case when ${companies.attempts} = 0 then 0 else 1 end`, asc(waitingSince), asc(companies.priority), asc(rncKey), asc(companies.id)]
       : [sql`case when ${companies.nextActionAt} is null then 1 else 0 end`, asc(companies.nextActionAt), asc(companies.priority), asc(rncKey), asc(companies.id)];
   // Tab counts, the attention notice and the list are asked for at the same time.
   const [counts, attention, rows, agents] = await Promise.all([
@@ -180,7 +184,7 @@ export default async function CallsPage({ searchParams }: { searchParams: Promis
                     <span className="truncate text-base font-semibold text-slate-900">{name}</span>
                     <PriorityBadge p={c.priority} />
                     {c.whatsappSuggested && <span className="badge bg-green-50 text-green-700"><MessageCircle className="h-3 w-3" />WhatsApp</span>}
-                    {c.sigturRequest && <SigturTag by={c.requestedBy} reason={c.requestReason} t={t} />}
+                    {c.sigturRequest && <SigturTag by={c.requestedBy} reason={c.requestReason} t={t} deadline={requestDeadline(c)} lang={lang} />}
                     {c.attempts === 0 && tab === "due" && <span className="badge bg-brand-600 text-white"><Sparkles className="h-3 w-3" />{t.newTask}</span>}
                     {followupDue && (
                       <span className="badge bg-mitur-yellow text-slate-900"><BellRing className="h-3 w-3" />

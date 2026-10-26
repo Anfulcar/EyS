@@ -71,6 +71,11 @@ export const companies = sqliteTable(
     requestedBy: text("requested_by"),
     requestReason: text("request_reason"),
     requestedAt: text("requested_at"),
+    // SIGTUR's own request number, its deadline (empty = 2 working days), when it was solved and when it went overdue.
+    requestRef: text("request_ref"),
+    requestDueDate: text("request_due_date"),
+    requestResolvedAt: text("request_resolved_at"),
+    requestOverdueAt: text("request_overdue_at"),
     // pending | retry | followup | visit | done
     status: text("status").notNull().default("pending"),
     attempts: integer("attempts").notNull().default(0),
@@ -139,6 +144,8 @@ export const establishments = sqliteTable(
     contactoNombre: text("contacto_nombre"),
     contactoCargo: text("contacto_cargo"),
     correoActualizado: text("correo_actualizado"),
+    // Owner / person in charge reported in a call or visit («Actualizar datos»)
+    propietario: text("propietario"),
     cerradoDesde: text("cerrado_desde"),
     obstaculo: text("obstaculo"),
     extra: text("extra"),
@@ -146,6 +153,7 @@ export const establishments = sqliteTable(
   (t) => [
     uniqueIndex("establishments_campaign_sigtur").on(t.campaignId, t.sigturId),
     index("establishments_company").on(t.companyId),
+    index("establishments_rut").on(t.rut),
   ],
 );
 
@@ -387,4 +395,49 @@ export const errorLog = sqliteTable(
     detail: text("detail"),
   },
   (t) => [index("errors_at").on(t.at)],
+);
+
+// Everything waiting to go to SIGTUR (interactions, change requests, solved requests). Kept even when sending is off.
+export const sigturOutbox = sqliteTable(
+  "sigtur_outbox",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    // interaction | change | resolved
+    kind: text("kind").notNull(),
+    // Stable identifier SIGTUR can use to spot repeats (e.g. llamada-12, cambio-5)
+    ref: text("ref").notNull(),
+    sigturId: text("sigtur_id"),
+    summary: text("summary"),
+    payload: text("payload").notNull(),
+    // pending | sent | error
+    status: text("status").notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    lastError: text("last_error"),
+    nextTryAt: text("next_try_at"),
+    createdAt: text("created_at").notNull().default(now),
+    sentAt: text("sent_at"),
+  },
+  (t) => [uniqueIndex("sigtur_outbox_ref").on(t.ref), index("sigtur_outbox_status").on(t.status, t.id)],
+);
+
+// Commitments and closures of campaigns that were deleted, so the warnings survive (live campaigns are read directly).
+export const historyArchive = sqliteTable(
+  "history_archive",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    // commitment | closed
+    kind: text("kind").notNull(),
+    rut: text("rut"),
+    rnc: text("rnc"),
+    sigturId: text("sigtur_id"),
+    establishment: text("establishment"),
+    campaignName: text("campaign_name").notNull(),
+    // Commitment date, or "closed since" (free text such as 2023 or 03/2026)
+    date: text("date"),
+    // How it was recorded, e.g. "Llamada 01" or "Visita V4"
+    source: text("source"),
+    byName: text("by_name"),
+    at: text("at"),
+  },
+  (t) => [index("history_archive_rut").on(t.rut), index("history_archive_rnc").on(t.rnc)],
 );

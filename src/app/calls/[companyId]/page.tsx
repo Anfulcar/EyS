@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
 import { Avatar } from "@/components/Avatar";
 import { CallForm, type RelatedTask } from "@/components/CallForm";
-import { PriorityBadge, SectionTitle, SigturRequestNote, StatusBadge } from "@/components/ui";
+import { HistoryNotes, PriorityBadge, SectionTitle, SigturRequestNote, StatusBadge, historyShort, type HistoryNoteView } from "@/components/ui";
 import { db } from "@/db";
 import { callAttempts, callResults, campaigns, companies, establishments, phones, users } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
@@ -13,6 +13,8 @@ import { codeLabel, COMPANY_STATUSES, label, OBSTACLES, PHONE_KINDS, PHONE_REASO
 import { fmtDate, fmtDateTime, todayLocal } from "@/lib/dates";
 import type { Dict } from "@/lib/i18n";
 import { getDict } from "@/lib/i18n-server";
+import { historyDay, historyFor } from "@/lib/history";
+import { requestDeadline } from "@/lib/sigtur";
 import { mayWork, relatedTasks } from "@/lib/workflow";
 import { addPhoneAction, logCallAction } from "../../actions";
 
@@ -45,6 +47,10 @@ export default async function TaskPage({ params }: { params: Promise<{ companyId
     relIds.length ? db.select().from(phones).where(inArray(phones.companyId, relIds)) : [],
   ]);
   const names = new Map(people.map((p) => [p.id, p.name]));
+  // Commitments and closures of the same RUTs (or closures of the same company) in other campaigns.
+  const history: HistoryNoteView[] = (await historyFor(company.campaignId, [...ests, ...relEsts])).map((n) => ({ ...n, day: historyDay(n) }));
+  const ownRuts = new Set(ests.map((e) => e.rut).filter(Boolean));
+  const mainNotes = history.filter((n) => (n.rut && ownRuts.has(n.rut)) || (n.kind === "closed" && !(n.rut && ownRuts.has(n.rut)))).map((n) => ({ ...n, sameCompany: !(n.rut && ownRuts.has(n.rut)) }));
   const relatedTasksData: RelatedTask[] = related.map((r) => {
     const es = relEsts.filter((e) => e.companyId === r.id);
     return {
@@ -52,6 +58,8 @@ export default async function TaskPage({ params }: { params: Promise<{ companyId
       name: es[0]?.nombreComercial ?? r.razonSocial ?? r.key,
       rut: es[0]?.rut ?? null,
       status: label(COMPANY_STATUSES, r.status, lang),
+      rnt: es[0]?.estatusRnt ?? null,
+      warning: history.filter((n) => n.rut && n.rut === es[0]?.rut).map((n) => historyShort(n, t, lang)).join(" · ") || null,
       agentName: r.assignedUserId ? names.get(r.assignedUserId) ?? null : null,
       canWork: me.role !== "agent" || r.assignedUserId === me.id,
       establishments: es.map((e) => ({ id: e.id, name: e.nombreComercial ?? e.sigturId, status: e.estatusRnt })),
@@ -85,7 +93,8 @@ export default async function TaskPage({ params }: { params: Promise<{ companyId
           <div className="text-lg font-semibold text-slate-900">{company.attempts} / {campaign?.maxAttempts}</div>
         </div>
       </div>
-      {company.sigturRequest && <SigturRequestNote by={company.requestedBy} reason={company.requestReason} t={t} />}
+      {company.sigturRequest && <SigturRequestNote by={company.requestedBy} reason={company.requestReason} t={t} deadline={requestDeadline(company)} lang={lang} />}
+      <HistoryNotes notes={mainNotes} t={t} lang={lang} />
       {outside && <p className="flex items-center gap-2 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800"><AlertTriangle className="h-4 w-4" />{t.outsideDates}</p>}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_21rem]">
@@ -255,12 +264,14 @@ export default async function TaskPage({ params }: { params: Promise<{ companyId
                     {r.canWork ? (
                       <Link href={`/calls/${r.id}`} className="block rounded-xl bg-slate-50 px-3 py-2 transition hover:bg-brand-50">
                         <div className="truncate text-sm font-medium text-slate-900">{r.name}</div>
-                        <div className="truncate text-xs text-slate-500">{r.rut} · {r.status}</div>
+                        <div className="truncate text-xs text-slate-500">{r.rut}{r.rnt ? ` · RNT: ${r.rnt}` : ""} · {r.status}</div>
+                        {r.warning && <div className="mt-0.5 truncate text-xs text-rose-700" title={r.warning}>⚠ {r.warning}</div>}
                       </Link>
                     ) : (
                       <div className="rounded-xl bg-slate-50 px-3 py-2 opacity-70">
                         <div className="truncate text-sm font-medium text-slate-900">{r.name}</div>
-                        <div className="truncate text-xs text-slate-500">{r.rut} · {t.assignedToOther} {r.agentName ?? t.unassigned}</div>
+                        <div className="truncate text-xs text-slate-500">{r.rut}{r.rnt ? ` · RNT: ${r.rnt}` : ""} · {r.status} · {t.assignedToOther} {r.agentName ?? t.unassigned}</div>
+                        {r.warning && <div className="mt-0.5 truncate text-xs text-rose-700" title={r.warning}>⚠ {r.warning}</div>}
                       </div>
                     )}
                   </li>

@@ -2,9 +2,10 @@ import "server-only";
 import { inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { callAttempts, callResults, companies, establishments, users, visits } from "@/db/schema";
+import { OPERATION_KEYS, operationOf, type OperationKey } from "./catalog";
 import { addBusinessDays } from "./dates";
 
-export type Breakdown = { key: string; universe: number; called: number; contacted: number; commitments: number; closed: number };
+export type Breakdown = { key: string; universe: number; called: number; contacted: number; operating: number; commitments: number; closed: number };
 
 export type Stats = {
   universe: number;
@@ -38,6 +39,7 @@ export type Stats = {
   byChannel: { key: string; n: number }[];
   byStatus: { key: string; n: number }[];
   companiesByStatus: { key: string; n: number }[];
+  byOperation: { key: OperationKey; n: number }[];
 };
 
 const IN_PROCESS = ["En proceso", "Vigente"];
@@ -116,10 +118,11 @@ function statsFrom({ ests, results, attempts, comps, vis, people }: StatsData): 
     const m = new Map<string, Breakdown>();
     for (const e of ests) {
       const k = keyFn(e) || "—";
-      const b = m.get(k) ?? { key: k, universe: 0, called: 0, contacted: 0, commitments: 0, closed: 0 };
+      const b = m.get(k) ?? { key: k, universe: 0, called: 0, contacted: 0, operating: 0, commitments: 0, closed: 0 };
       b.universe++;
       if (calledSet.has(e.id)) b.called++;
       if (contactedAny(e)) b.contacted++;
+      if (operationOf(e) === "yes") b.operating++;
       if (isCommitment(e)) b.commitments++;
       if (isClosed(e)) b.closed++;
       m.set(k, b);
@@ -207,6 +210,7 @@ function statsFrom({ ests, results, attempts, comps, vis, people }: StatsData): 
     byChannel: tally(ests.map((e) => e.canalLogro)),
     byStatus: tally(ests.map((e) => e.estatusSigturActualizado ?? e.estatusRnt)),
     companiesByStatus: tally(comps.map((c) => c.status)),
+    byOperation: OPERATION_KEYS.map((key) => ({ key, n: ests.filter((e) => operationOf(e) === key).length })),
   };
 }
 
@@ -215,9 +219,10 @@ function statsFrom({ ests, results, attempts, comps, vis, people }: StatsData): 
 export const METRICS = [
   "all", "called", "effective", "contacted", "typified", "operatingContacted", "commitments", "commitmentsDue", "commitmentsKept",
   "closed", "needVisit", "notified", "emailsSent", "bounced", "expiredOperating", "expiredInProcess", "noLicenseOperating", "noLicenseApplied",
+  "operating",
 ] as const;
 export type Metric = (typeof METRICS)[number];
-export const DIMENSIONS = ["code", "status", "estatus", "channel", "zone", "priority", "subsector", "agent"] as const;
+export const DIMENSIONS = ["code", "status", "estatus", "channel", "zone", "priority", "subsector", "agent", "operation"] as const;
 export type Dimension = (typeof DIMENSIONS)[number];
 export type DrillFilter = { metric?: Metric; dim?: Dimension; value?: string };
 
@@ -264,6 +269,7 @@ export async function drillDown(campaignIds: number[], f: DrillFilter) {
     expiredInProcess: (e) => e.estatusRnt === "Vencida" && p.inProcess(e),
     noLicenseOperating: (e) => e.estatusRnt === "Sin licencia" && !p.isClosed(e),
     noLicenseApplied: (e) => e.estatusRnt === "Sin licencia" && p.inProcess(e),
+    operating: (e) => operationOf(e) === "yes",
   };
   const dimValue: Record<Dimension, (e: Est) => string | null> = {
     code: (e) => e.finalCode,
@@ -274,6 +280,7 @@ export async function drillDown(campaignIds: number[], f: DrillFilter) {
     priority: (e) => e.prioridad || "—",
     subsector: (e) => e.subsector || "—",
     agent: (e) => String(compById.get(e.companyId)?.assignedUserId ?? ""),
+    operation: (e) => operationOf(e),
   };
   const metric = f.metric && metricOk[f.metric] ? metricOk[f.metric] : metricOk.all;
   const rows = ests.filter((e) => metric(e) && (!f.dim || !dimValue[f.dim] || dimValue[f.dim](e) === (f.value ?? "")));

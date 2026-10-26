@@ -3,15 +3,16 @@ import type { Lang } from "./catalog";
 
 type L = Record<Lang, string>;
 
-export const REPORT_SECTIONS = ["goals", "counts", "campaigns", "codes", "agents", "breakdowns", "sigtur", "daily", "legend", "detail"] as const;
+export const REPORT_SECTIONS = ["goals", "counts", "campaigns", "codes", "operation", "agents", "breakdowns", "sigtur", "daily", "legend", "detail"] as const;
 export type ReportSection = (typeof REPORT_SECTIONS)[number];
-export const DEFAULT_SECTIONS: ReportSection[] = ["goals", "counts", "campaigns", "codes", "agents", "breakdowns", "daily"];
+export const DEFAULT_SECTIONS: ReportSection[] = ["goals", "counts", "campaigns", "codes", "operation", "agents", "breakdowns", "daily"];
 
 export const SECTION_LABELS: Record<ReportSection, L> = {
   goals: { es: "Resumen ejecutivo: las 4 metas del plan", en: "Executive summary: the plan's 4 goals" },
   counts: { es: "Conteos generales", en: "General counts" },
   campaigns: { es: "Comparación por campaña", en: "Comparison by campaign" },
   codes: { es: "Resultados por tipificación", en: "Results by outcome" },
+  operation: { es: "Estado de operación", en: "Operating status" },
   agents: { es: "Avance por agente", en: "Progress by agent" },
   breakdowns: { es: "Por zona, prioridad y subsector", en: "By zone, priority and subsector" },
   sigtur: { es: "Estatus SIGTUR y canal de logro", en: "SIGTUR status and channel" },

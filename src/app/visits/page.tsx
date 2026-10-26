@@ -68,6 +68,15 @@ export default async function VisitsPage({ searchParams }: { searchParams: Promi
                       </select>
                     </div>
                     <div><label className="label">{t.notes}</label><textarea name="notes" className="input" rows={2} /></div>
+                    <details className="rounded-xl bg-slate-50 px-3 py-2">
+                      <summary className="cursor-pointer text-sm font-medium text-slate-700">{t.updateDataVisit}</summary>
+                      <div className="mt-2 space-y-2">
+                        <div><label className="label">{t.updateName}</label><input name="newName" className="input" maxLength={200} /></div>
+                        <div><label className="label">{t.updateAddress}</label><input name="newAddress" className="input" maxLength={200} /></div>
+                        <div><label className="label">{t.updateOwner}</label><input name="newOwner" className="input" maxLength={200} /></div>
+                        <p className="text-xs text-slate-500">{t.updateDataHelp}</p>
+                      </div>
+                    </details>
                     <SubmitButton>{t.save}</SubmitButton>
                   </ActionForm>
                 </details>

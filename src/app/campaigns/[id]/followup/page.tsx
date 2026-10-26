@@ -35,6 +35,7 @@ export default async function FollowupPage({ params }: { params: Promise<{ id: s
         idle: n(sql`${companies.status} not in ('done', 'transferred') and coalesce(${companies.lastCalledAt}, ${companies.assignedAt}, '') < ${idleSince}`),
         covering: n(sql`${companies.coverAbsenceId} is not null and ${companies.assignedUserId} = ${companies.coverUserId}`),
         scheduled: n(sql`${companies.coverAbsenceId} is not null and ${companies.assignedUserId} = ${companies.coverFromUserId}`),
+        sigturOverdue: n(sql`${companies.sigturRequest} = 1 and ${companies.requestResolvedAt} is null and ${companies.requestOverdueAt} is not null`),
       })
       .from(companies)
       .where(eq(companies.campaignId, id))
@@ -114,6 +115,7 @@ export default async function FollowupPage({ params }: { params: Promise<{ id: s
                   <th className="text-right">{t.dueNow}</th>
                   <th className="text-right">{t.fOverdue}</th>
                   <th className="text-right">{t.fuIdle.replace("{n}", String(IDLE_DAYS))}</th>
+                  <th className="text-right">{t.fSigturOverdue}</th>
                   <th>{t.fuAvailability}</th>
                   <th />
                 </tr>
@@ -138,6 +140,7 @@ export default async function FollowupPage({ params }: { params: Promise<{ id: s
                       <td className="text-right"><Num v={Number(c?.due ?? 0)} href={list({ agent: s.id, f: "due" })} /></td>
                       <td className="text-right"><Num v={Number(c?.overdue ?? 0)} href={list({ agent: s.id, f: "overdue" })} tone="text-mitur-red" /></td>
                       <td className="text-right"><Num v={Number(c?.idle ?? 0)} href={list({ agent: s.id, f: "idle", days: IDLE_DAYS })} tone="text-amber-700" /></td>
+                      <td className="text-right"><Num v={Number(c?.sigturOverdue ?? 0)} href={list({ agent: s.id, f: "sigturOverdue" })} tone="text-mitur-red" /></td>
                       <td className="whitespace-nowrap text-xs">
                         {abs ? (
                           <span className={`badge ${abs.fromDate <= today ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600"}`}>
@@ -171,7 +174,7 @@ export default async function FollowupPage({ params }: { params: Promise<{ id: s
                     <td className="font-medium text-slate-500">{t.unassigned}</td>
                     <td className="text-right"><Num v={Number(unassigned.total)} href={list({ agent: "none" })} /></td>
                     <td className="text-right"><Num v={Number(unassigned.open)} href={list({ agent: "none", f: "open" })} /></td>
-                    <td colSpan={5} />
+                    <td colSpan={6} />
                   </tr>
                 )}
               </tbody>

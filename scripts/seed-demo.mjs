@@ -14,7 +14,7 @@ export const DEMO_USERS = [
 ];
 
 // Tables in delete order (children first).
-const TABLES = ["integration_log", "api_keys", "generated_reports", "report_templates", "absences", "activity_log", "error_log", "call_results", "call_attempts", "visits", "status_changes", "phones", "establishments", "companies", "import_logs", "campaigns", "users"];
+const TABLES = ["sigtur_outbox", "history_archive", "integration_log", "api_keys", "generated_reports", "report_templates", "absences", "activity_log", "error_log", "call_results", "call_attempts", "visits", "status_changes", "phones", "establishments", "companies", "import_logs", "campaigns", "users"];
 
 function rng(seed) {
   return () => {
@@ -244,5 +244,36 @@ export async function seedDemo(client, env = process.env) {
     await setTask(t, { status: "visit", attempts: 0, code: null });
     await client.execute({ sql: "UPDATE establishments SET requiere_visita = 'Sí' WHERE id = ?", args: [t.estId] });
   }
+  // A finished campaign from last quarter: a commitment, a closure and a closed establishment of the same company,
+  // so the warnings «Compromiso anterior» / «Encontrado cerrado» show on tasks of the current campaign.
+  const old = await client.execute({
+    sql: "INSERT INTO campaigns (name, description, start_date, end_date, status, max_attempts, followup_days, created_by) VALUES (?, ?, ?, ?, 'closed', 3, 5, ?) RETURNING id",
+    args: ["Campaña demo – Q3 2026 (cerrada)", "Campaña anterior, para ver los avisos de otras campañas.", shiftDays(-120), shiftDays(-30), userIds["demo.admin"]],
+  });
+  const oldId = Number(old.rows[0].id);
+  const pastCase = async (t, { rut, code, commitment, closedSince, name }) => {
+    if (!t) return;
+    const c = await client.execute({
+      sql: "INSERT INTO companies (campaign_id, key, razon_social, rnc, assigned_user_id, status, attempts, last_code) VALUES (?, ?, ?, ?, ?, 'done', 1, ?) RETURNING id",
+      args: [oldId, `RUT:${rut}`, t.e.razonSocial, t.e.rnc, t.agent, code],
+    });
+    const e = await client.execute({
+      sql: "INSERT INTO establishments (campaign_id, company_id, sigtur_id, rut, estatus_rnt, nombre_comercial, razon_social, rnc, final_code, en_operacion, fecha_compromiso, cerrado_desde) VALUES (?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id",
+      args: [oldId, Number(c.rows[0].id), `${t.e.sigturId}-Q3${rut === t.e.rut ? "" : "B"}`, rut, t.e.estatusRnt, name ?? t.e.nombreComercial, t.e.razonSocial, t.e.rnc, code, code === "05" ? "No" : "Sí", commitment ?? null, closedSince ?? null],
+    });
+    const a = await client.execute({
+      sql: "INSERT INTO call_attempts (campaign_id, company_id, user_id, phone_number, called_at, attempt_no, contacted, attended, spoke_with, is_responsible) VALUES (?, ?, ?, ?, ?, 1, 1, 1, 'Encargado', 1) RETURNING id",
+      args: [oldId, Number(c.rows[0].id), t.agent, t.e.telefono, shiftIso(-60)],
+    });
+    await client.execute({
+      sql: "INSERT INTO call_results (attempt_id, campaign_id, establishment_id, code, en_operacion, commitment_date, closed_since) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      args: [Number(a.rows[0].id), oldId, Number(e.rows[0].id), code, code === "05" ? "No" : "Sí", commitment ?? null, closedSince ?? null],
+    });
+  };
+  const fresh = withPhone.slice(13);
+  await pastCase(fresh[0], { rut: fresh[0]?.e.rut, code: "01", commitment: shiftDays(-45) });
+  await pastCase(fresh[1], { rut: fresh[1]?.e.rut, code: "05", closedSince: "2026" });
+  await pastCase(fresh[2], { rut: `${fresh[2]?.e.rut}-B`, code: "05", closedSince: "03/2026", name: "Sucursal antigua" });
+
   return { users: DEMO_USERS.length, establishments: ests.length, campaignId, date: today() };
 }

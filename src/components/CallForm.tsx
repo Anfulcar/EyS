@@ -13,10 +13,10 @@ import { Message, SubmitButton } from "./ActionForm";
 
 type Est = { id: number; name: string; status: string | null };
 type PhoneOpt = { id: number; number: string; quality: string };
-export type RelatedTask = { id: number; name: string; rut: string | null; status: string | null; agentName: string | null; canWork: boolean; establishments: Est[]; phones: PhoneOpt[] };
-type EstResult = { operating: "" | "Sí" | "No" | "No sabe"; code: string; commitmentDate: string; closedSince: string; obstacle: string; needsVisit: boolean; notes: string };
+export type RelatedTask = { id: number; name: string; rut: string | null; status: string | null; rnt: string | null; warning: string | null; agentName: string | null; canWork: boolean; establishments: Est[]; phones: PhoneOpt[] };
+type EstResult = { operating: "" | "Sí" | "No" | "No sabe"; code: string; commitmentDate: string; closedSince: string; obstacle: string; needsVisit: boolean; notes: string; newName: string; newAddress: string; newOwner: string };
 
-const emptyResult: EstResult = { operating: "", code: "", commitmentDate: "", closedSince: "", obstacle: "", needsVisit: false, notes: "" };
+const emptyResult: EstResult = { operating: "", code: "", commitmentDate: "", closedSince: "", obstacle: "", needsVisit: false, notes: "", newName: "", newAddress: "", newOwner: "" };
 
 const CODE_ICONS: Record<string, LucideIcon> = {
   "01": CalendarCheck, "02": FileCheck2, "03": LifeBuoy, "04": Ban, "05": DoorClosed, "06": RefreshCw,
@@ -136,6 +136,9 @@ export function CallForm({
             obstacle: r.obstacle || null,
             needsVisit: r.needsVisit,
             notes: r.notes || null,
+            newName: r.code === "06" ? r.newName || null : null,
+            newAddress: r.code === "06" ? r.newAddress || null : null,
+            newOwner: r.code === "06" ? r.newOwner || null : null,
           };
         })
       : [],
@@ -163,7 +166,8 @@ export function CallForm({
                   <input type="checkbox" className="h-4 w-4 accent-brand-600" checked={together.includes(r.id)} onChange={(e) => setTogether((x) => (e.target.checked ? [...x, r.id] : x.filter((i) => i !== r.id)))} />
                   <span className="min-w-0">
                     <span className="block truncate">{r.name}</span>
-                    <span className="block truncate text-xs font-normal text-slate-500">{r.rut} · {r.status}</span>
+                    <span className="block truncate text-xs font-normal text-slate-500">{r.rut}{r.rnt ? ` · RNT: ${r.rnt}` : ""} · {r.status}</span>
+                    {r.warning && <span className="block truncate text-xs font-normal text-rose-700" title={r.warning}>⚠ {r.warning}</span>}
                   </span>
                 </label>
               ))}
@@ -263,6 +267,17 @@ export function CallForm({
                           <label className="flex items-center gap-2 self-end pb-3 text-sm"><input type="checkbox" className="h-4 w-4 accent-brand-600" checked={r.needsVisit} onChange={(ev) => setR(e.id, { needsVisit: ev.target.checked })} /> {t.qNeedsVisit}</label>
                         )}
                       </div>
+                      {r.code === "06" && (
+                        <div className="space-y-2">
+                          <div className="label">{t.updateDataTitle}</div>
+                          <div className="grid gap-3 sm:grid-cols-3">
+                            <div><label className="label" htmlFor={`newName-${e.id}`}>{t.updateName}</label><input id={`newName-${e.id}`} className="input" value={r.newName} onChange={(ev) => setR(e.id, { newName: ev.target.value })} maxLength={200} /></div>
+                            <div><label className="label" htmlFor={`newAddress-${e.id}`}>{t.updateAddress}</label><input id={`newAddress-${e.id}`} className="input" value={r.newAddress} onChange={(ev) => setR(e.id, { newAddress: ev.target.value })} maxLength={200} /></div>
+                            <div><label className="label" htmlFor={`newOwner-${e.id}`}>{t.updateOwner}</label><input id={`newOwner-${e.id}`} className="input" value={r.newOwner} onChange={(ev) => setR(e.id, { newOwner: ev.target.value })} maxLength={200} /></div>
+                          </div>
+                          <p className="text-xs text-slate-500">{t.updateDataHelp}</p>
+                        </div>
+                      )}
                     </>
                   )}
                   <div><label className="label">{t.notes}</label><input className="input" value={r.notes} onChange={(ev) => setR(e.id, { notes: ev.target.value })} /></div>

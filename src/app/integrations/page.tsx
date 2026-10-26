@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { headers } from "next/headers";
-import { KeyRound, PhoneIncoming, Plug, ScrollText, Users2 } from "lucide-react";
+import { KeyRound, PhoneIncoming, Plug, ScrollText, Send, Users2 } from "lucide-react";
 import { ActionForm, ConfirmButton, SubmitButton } from "@/components/ActionForm";
 import { SigturStatusBadge, SigturSwitch } from "@/components/SigturPermanentCard";
 import { Empty, SectionTitle } from "@/components/ui";
@@ -10,17 +10,31 @@ import { requireUser } from "@/lib/auth";
 import { fmtDateTime } from "@/lib/dates";
 import { getDict } from "@/lib/i18n-server";
 import { listKeys, recentIntegrationLog, requestsCampaign } from "@/lib/sigtur";
-import { createApiKeyAction, revokeApiKeyAction, saveAutoAssigneesAction, simulateCallRequestAction } from "../actions";
+import { outboxOverview, pushSettings } from "@/lib/sigtur-push";
+import { createApiKeyAction, retrySigturPushAction, revokeApiKeyAction, saveAutoAssigneesAction, saveSigturPushUrlAction, setSigturPushAction, simulateCallRequestAction } from "../actions";
 
 export default async function IntegrationsPage() {
   await requireUser(["admin"]);
   const { t, lang } = await getDict();
-  const [keys, log, campaign, staff] = await Promise.all([
+  const [keys, log, campaign, staff, push, outbox] = await Promise.all([
     listKeys(),
     recentIntegrationLog(30),
     requestsCampaign(),
     db.select({ id: users.id, name: users.name, role: users.role }).from(users).where(and(eq(users.active, true), inArray(users.role, ["agent", "supervisor", "admin"]))).orderBy(asc(users.name)),
+    pushSettings(),
+    outboxOverview(50),
   ]);
+  const PUSH_KIND: Record<string, string> = { interaction: t.pushKindInteraction, change: t.pushKindChange, resolved: t.pushKindResolved };
+  const PUSH_STATUS: Record<string, [string, string]> = {
+    pending: [t.pushStatusPending, "bg-slate-100 text-slate-600"],
+    sent: [t.pushStatusSent, "bg-emerald-50 text-emerald-800"],
+    error: [t.pushStatusError, "bg-red-50 text-mitur-red"],
+  };
+  const track = (on: boolean) => (
+    <span className={`relative inline-block h-6 w-11 rounded-full transition ${on ? "bg-emerald-500" : "bg-slate-300"}`}>
+      <span className={`absolute top-[3px] h-[18px] w-[18px] rounded-full bg-white shadow ${on ? "right-[3px]" : "left-[3px]"}`} />
+    </span>
+  );
   const chosen = new Set<number>(campaign.autoAssignees ? JSON.parse(campaign.autoAssignees) : []);
   const h = await headers();
   const origin = `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host") ?? ""}`;
@@ -113,6 +127,67 @@ export default async function IntegrationsPage() {
               <div className="sm:col-span-2 flex justify-end"><SubmitButton>{t.integrationSimulateButton}</SubmitButton></div>
             </ActionForm>
           </div>
+        </div>
+      </div>
+
+      <div className="card space-y-4" data-testid="sigtur-push">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <SectionTitle icon={<Send className="h-4 w-4" />}>{t.pushTitle}</SectionTitle>
+            <p className="text-sm text-slate-600">{t.pushHelp}</p>
+          </div>
+          <ActionForm action={setSigturPushAction}>
+            <input type="hidden" name="on" value={push.enabled ? "0" : "1"} />
+            {push.enabled ? (
+              <ConfirmButton message={t.pushOffConfirm} className="flex items-center gap-2 text-sm font-medium text-slate-700">{track(true)}{t.pushOn}</ConfirmButton>
+            ) : (
+              <button className="flex items-center gap-2 text-sm font-medium text-slate-700">{track(false)}{t.pushOff}</button>
+            )}
+          </ActionForm>
+        </div>
+        <div className="grid gap-3 text-sm md:grid-cols-3">
+          <ActionForm action={saveSigturPushUrlAction} className="space-y-2 rounded-xl bg-slate-50 p-3">
+            <label className="label" htmlFor="push-url">{t.pushUrl}: {!push.url && <span className="text-amber-700">{t.pushUrlMissing}</span>}</label>
+            <div className="flex gap-2">
+              <input id="push-url" name="url" type="url" className="input" defaultValue={push.url} placeholder="https://" maxLength={300} />
+              <SubmitButton className="btn-secondary">{t.save}</SubmitButton>
+            </div>
+            <p className="text-xs text-slate-500">{t.pushUrlHelp}</p>
+          </ActionForm>
+          <div className="space-y-1 rounded-xl bg-slate-50 p-3">
+            <div>{t.pushKey}: {push.hasKey ? <span className="font-medium text-emerald-700">{t.pushKeyOk}</span> : <span className="font-medium text-amber-700">{t.pushKeyMissing}</span>}</div>
+            <p className="text-xs text-slate-500">{t.pushKeyHelp}</p>
+          </div>
+          <div className="space-y-2 rounded-xl bg-slate-50 p-3">
+            <div><b className="tabular-nums">{outbox.pending}</b> {t.pushPending}</div>
+            <div><b className="tabular-nums text-mitur-red">{outbox.error}</b> {t.pushErrors} · <b className="tabular-nums">{outbox.sent}</b> {t.pushSentCount}</div>
+            {push.enabled && outbox.error > 0 && (
+              <ActionForm action={retrySigturPushAction}><SubmitButton className="btn-secondary btn-sm">{t.pushRetry}</SubmitButton></ActionForm>
+            )}
+          </div>
+        </div>
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-slate-700">{t.pushQueue}</h3>
+          {outbox.recent.length === 0 ? (
+            <p className="text-sm text-slate-500">{t.pushNoQueue}</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="table">
+                <thead><tr><th>{t.calledAtCol}</th><th>{t.what}</th><th>ID SIGTUR</th><th>{t.integrationDetail}</th><th>{t.status}</th></tr></thead>
+                <tbody>
+                  {outbox.recent.map((o) => (
+                    <tr key={o.id}>
+                      <td className="whitespace-nowrap text-sm">{fmtDateTime(o.createdAt, lang)}</td>
+                      <td className="whitespace-nowrap text-sm">{PUSH_KIND[o.kind] ?? o.kind}</td>
+                      <td className="whitespace-nowrap font-mono text-xs">{o.sigturId ?? "—"}</td>
+                      <td className="text-sm text-slate-600">{o.summary}{o.lastError ? <span className="block text-xs text-mitur-red">{o.lastError}</span> : null}</td>
+                      <td><span className={`badge ${PUSH_STATUS[o.status]?.[1] ?? ""}`}>{PUSH_STATUS[o.status]?.[0] ?? o.status}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
 

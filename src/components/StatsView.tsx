@@ -1,6 +1,6 @@
 import { CalendarClock, CheckCircle2, CircleAlert, MousePointerClick } from "lucide-react";
 import Link from "next/link";
-import { codeLabel, codeTone, COMPANY_STATUSES, label, type Lang } from "@/lib/catalog";
+import { codeLabel, codeTone, COMPANY_STATUSES, label, OPERATION_LABELS, type Lang } from "@/lib/catalog";
 import type { Dict } from "@/lib/i18n";
 import type { Breakdown, Stats } from "@/lib/stats";
 import { DashTabs } from "./DashTabs";
@@ -118,7 +118,7 @@ function BreakdownTable({ rows, t, dim, href }: { rows: Breakdown[]; t: Dict; di
   return (
     <table className="table">
       <thead>
-        <tr><th></th><th className="text-right">{t.universe}</th><th className="text-right">{t.called}</th><th className="text-right">{t.contacts}</th><th className="text-right">{t.commitments}</th><th className="text-right">{t.closed}</th></tr>
+        <tr><th></th><th className="text-right">{t.universe}</th><th className="text-right">{t.called}</th><th className="text-right">{t.contacts}</th><th className="text-right">{t.opYes}</th><th className="text-right">{t.commitments}</th><th className="text-right">{t.closed}</th></tr>
       </thead>
       <tbody>
         {rows.map((r) => (
@@ -132,6 +132,7 @@ function BreakdownTable({ rows, t, dim, href }: { rows: Breakdown[]; t: Dict; di
               </div>
             </td>
             <td className="text-right tabular-nums">{cell(r, "contacted", r.contacted)}</td>
+            <td className="text-right tabular-nums">{cell(r, "operating", r.operating)}</td>
             <td className="text-right tabular-nums">{cell(r, "commitments", r.commitments)}</td>
             <td className="text-right tabular-nums">{cell(r, "closed", r.closed)}</td>
           </tr>
@@ -158,6 +159,9 @@ export function StatsView({ s, t, lang, period, listHref }: { s: Stats; t: Dict;
     color: STATUS_COLOR[k],
     href: href({ d: "status", v: k }),
   }));
+
+  const OP_COLOR: Record<string, string> = { yes: C.green, no: C.red, unknown: C.yellow, none: "#cbd5e1" };
+  const operationParts = s.byOperation.map((o) => ({ label: label(OPERATION_LABELS, o.key, lang), n: o.n, color: OP_COLOR[o.key], href: href({ d: "operation", v: o.key }) }));
 
   return (
     <div className="space-y-6">
@@ -223,6 +227,9 @@ export function StatsView({ s, t, lang, period, listHref }: { s: Stats; t: Dict;
         <div className="card">
           <h3 className="mb-4">{t.companiesByStatus}</h3>
           <StackedBar parts={statusParts} total={s.companies} />
+          <h3 className="mb-1 mt-6">{t.opTitle}</h3>
+          <p className="mb-3 text-xs text-slate-500">{t.opHelp}</p>
+          <StackedBar parts={operationParts} total={s.universe} />
         </div>
         <div className="card">
           <h3 className="mb-4">{t.byStatus}</h3>

@@ -22,6 +22,11 @@ export function addBusinessDays(isoDate: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+// Local (UTC-4) calendar day of a timestamp.
+export function localDateOf(iso: string): string {
+  return new Date(new Date(iso).getTime() + TZ_OFFSET_MIN * 60000).toISOString().slice(0, 10);
+}
+
 export function addHours(iso: string, h: number) {
   return new Date(new Date(iso).getTime() + h * 3600000).toISOString();
 }

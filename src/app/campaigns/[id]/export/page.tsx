@@ -2,7 +2,7 @@ import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
 import { ExportChooser } from "@/components/ExportChooser";
 import { db } from "@/db";
 import { establishments, users } from "@/db/schema";
-import { CALL_CODES, COMPANY_STATUSES, VISIT_CODES } from "@/lib/catalog";
+import { CALL_CODES, COMPANY_STATUSES, OPERATION_LABELS, VISIT_CODES } from "@/lib/catalog";
 import { getDict } from "@/lib/i18n-server";
 
 export default async function ExportPage({ params }: { params: Promise<{ id: string }> }) {
@@ -28,6 +28,7 @@ export default async function ExportPage({ params }: { params: Promise<{ id: str
         priorities={opts(priorities)}
         codes={Object.entries({ ...CALL_CODES, ...VISIT_CODES }).map(([k, v]) => ({ value: k, label: v[lang] }))}
         statuses={Object.entries(COMPANY_STATUSES).map(([k, v]) => ({ value: k, label: v[lang] }))}
+        operations={Object.entries(OPERATION_LABELS).map(([k, v]) => ({ value: k, label: v[lang] }))}
       />
       <div className="card flex flex-wrap items-center justify-between gap-3">
         <div>

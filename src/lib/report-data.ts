@@ -2,7 +2,7 @@ import "server-only";
 import { desc, inArray, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { callAttempts, callResults, campaigns, establishments, statusChanges, users, visits } from "@/db/schema";
-import { CALL_CODES, CHANNELS, codeLabel, COMPANY_STATUSES, label, SIGTUR_STATUSES, VISIT_CODES, type Lang } from "./catalog";
+import { CALL_CODES, CHANNELS, codeLabel, COMPANY_STATUSES, label, OPERATION_LABELS, SIGTUR_STATUSES, VISIT_CODES, type Lang } from "./catalog";
 import { fmtDate, fmtDateTime, localDayEnd, localDayStart, nowIso, todayLocal } from "./dates";
 import { CALL_HELP, CHANNEL_HELP, PRIORITY_HELP, SIGTUR_HELP, STATUS_HELP, VISIT_HELP } from "./legend";
 import { DETAIL_LABELS, PERIOD_LABELS, resolvePeriod, type ReportOptions } from "./report-options";
@@ -29,6 +29,7 @@ export type ReportData = {
   subsectors: { head: string[]; rows: Row[] };
   sigtur: [string, number][];
   channels: [string, number][];
+  operation: [string, number][];
   daily: { label: string; calls: number; contacts: number }[];
   dailyTitle: string;
   legend: { title: string; items: [string, string][] }[];
@@ -249,6 +250,7 @@ export async function buildReport(o: ReportOptions, who: { name: string; schedul
     subsectors: bd(s.bySubsector, t.subsector),
     sigtur: s.byStatus.map((x) => [x.key, x.n]),
     channels: s.byChannel.map((x) => [x.key, x.n]),
+    operation: s.byOperation.map((x) => [OPERATION_LABELS[x.key][lang], x.n]),
     daily,
     dailyTitle,
     legend,

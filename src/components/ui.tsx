@@ -1,4 +1,6 @@
-import { Inbox, Send } from "lucide-react";
+import { AlertTriangle, Inbox, Send } from "lucide-react";
+import type { Lang } from "@/lib/catalog";
+import { fmtDate } from "@/lib/dates";
 import type { Dict } from "@/lib/i18n";
 
 export function Kpi({ label, value, sub, target, pct }: { label: string; value: string | number; sub?: string; target?: string; pct?: number }) {
@@ -74,22 +76,73 @@ export function SectionTitle({ icon, children, action }: { icon?: React.ReactNod
   );
 }
 
+export type Deadline = { due: string; state: "ok" | "tomorrow" | "overdue"; days: number } | null;
+
+// Deadline of an open SIGTUR request: «vence dd/mm», orange «Vence mañana», red «Vencida hace N días».
+export function DeadlineBadge({ d, t, lang }: { d: Deadline; t: Dict; lang: Lang }) {
+  if (!d) return null;
+  if (d.state === "overdue") return <span className="badge bg-red-600 text-white">{d.days === 1 ? t.deadlineOverdueOne : t.deadlineOverdue.replace("{n}", String(d.days))}</span>;
+  if (d.state === "tomorrow") return <span className="badge bg-orange-100 text-orange-800">{t.deadlineTomorrow}</span>;
+  return <span className="badge bg-purple-50 text-purple-800">{t.deadlineDue.replace("{date}", fmtDate(d.due, lang))}</span>;
+}
+
 // Purple tag for calls requested from SIGTUR, with who asked and why.
-export function SigturTag({ by, reason, t }: { by: string | null; reason: string | null; t: Dict }) {
+export function SigturTag({ by, reason, t, deadline, lang = "es" }: { by: string | null; reason: string | null; t: Dict; deadline?: Deadline; lang?: Lang }) {
   const who = by ? t.sigturRequestBy.replace("{who}", by) : "";
   return (
-    <span className="badge bg-purple-600 text-white" title={[who, reason].filter(Boolean).join(": ")}>
-      <Send className="h-3 w-3" />{t.sigturTag}
-    </span>
+    <>
+      <span className="badge bg-purple-600 text-white" title={[who, reason].filter(Boolean).join(": ")}>
+        <Send className="h-3 w-3" />{t.sigturTag}
+      </span>
+      {deadline && <DeadlineBadge d={deadline} t={t} lang={lang} />}
+    </>
   );
 }
 
-export function SigturRequestNote({ by, reason, t }: { by: string | null; reason: string | null; t: Dict }) {
+export function SigturRequestNote({ by, reason, t, deadline, lang = "es" }: { by: string | null; reason: string | null; t: Dict; deadline?: Deadline; lang?: Lang }) {
   return (
     <p className="flex flex-wrap items-center gap-2 rounded-xl bg-purple-50 px-4 py-3 text-sm text-purple-900">
-      <SigturTag by={by} reason={reason} t={t} />
+      <SigturTag by={by} reason={reason} t={t} deadline={deadline} lang={lang} />
       {by && <span className="font-medium">{t.sigturRequestBy.replace("{who}", by)}</span>}
       {reason && <span>· {reason}</span>}
     </p>
+  );
+}
+
+export type HistoryNoteView = {
+  kind: "commitment" | "closed"; rut: string | null; establishment: string | null; campaignName: string;
+  date: string | null; source: string; byName: string | null; day: string | null; sameCompany: boolean;
+};
+
+const showDate = (v: string | null, lang: Lang) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? fmtDate(v, lang) : v ?? "—");
+
+// What happened to this RUT (or, for closures, to the same company) in other campaigns.
+export function historyText(n: HistoryNoteView, t: Dict, lang: Lang) {
+  const tpl = n.kind === "commitment" ? t.histCommitment : n.sameCompany ? t.histClosedCompany : t.histClosed;
+  const how = [n.byName, n.day ? `${n.source} · ${fmtDate(n.day, lang)}` : n.source].filter(Boolean).join(", ");
+  return tpl
+    .replace("{rut}", n.rut ?? "—")
+    .replace("{name}", n.establishment ?? "—")
+    .replace("{campaign}", n.campaignName)
+    .replace("{date}", showDate(n.date, lang))
+    .replace("{how}", how);
+}
+
+// One-line version for the «Misma empresa» lists (keeps the call screen as it is).
+export function historyShort(n: HistoryNoteView, t: Dict, lang: Lang) {
+  return (n.kind === "commitment" ? t.histShortCommitment : t.histShortClosed).replace("{campaign}", n.campaignName).replace("{date}", showDate(n.date, lang));
+}
+
+export function HistoryNotes({ notes, t, lang }: { notes: HistoryNoteView[]; t: Dict; lang: Lang }) {
+  if (!notes.length) return null;
+  return (
+    <div className="space-y-2">
+      {notes.map((n, i) => (
+        <p key={i} className={`flex items-start gap-2 rounded-xl px-4 py-3 text-sm ${n.kind === "commitment" ? "bg-amber-50 text-amber-900" : "bg-rose-50 text-rose-900"}`}>
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span><b>{n.kind === "commitment" ? t.histCommitmentTitle : t.histClosedTitle}</b> {historyText(n, t, lang)}</span>
+        </p>
+      ))}
+    </div>
   );
 }

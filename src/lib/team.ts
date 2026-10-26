@@ -1,7 +1,8 @@
 import "server-only";
 import { and, eq, gte, inArray, isNotNull, lte, ne, notInArray, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { absences, campaigns, companies, establishments, type Company } from "@/db/schema";
+import { absences, campaigns, companies, establishments, users, type Company } from "@/db/schema";
+import { logActivity } from "./audit";
 import { CLOSED_STATUSES, PRIORITY_ORDER } from "./catalog";
 import { nowIso, todayLocal } from "./dates";
 
@@ -135,6 +136,19 @@ export async function syncCoverage(day = todayLocal(), force = false) {
   if (!force && day === lastSyncDay && Date.now() - lastSync < 5 * 60_000) return;
   lastSync = Date.now();
   lastSyncDay = day;
+  // Counted first, so the app's own decision is recorded in «Registro» (per person).
+  const starting = await db.all<{ uid: number; n: number }>(sql`
+    select cover_from_user_id as uid, count(*) as n from companies
+    where cover_absence_id in (select id from absences where from_date <= ${day} and to_date >= ${day})
+      and assigned_user_id is not cover_user_id and assigned_user_id is cover_from_user_id
+    group by cover_from_user_id`);
+  const returning = await db.all<{ uid: number; n: number }>(sql`
+    select cover_from_user_id as uid, count(*) as n from companies
+    where cover_absence_id is not null
+      and cover_absence_id not in (select id from absences where to_date >= ${day})
+      and campaign_id in (select id from campaigns where status <> 'closed')
+      and assigned_user_id is not cover_from_user_id
+    group by cover_from_user_id`);
   // Absence running: the covering person works the task.
   await db.run(sql`
     update companies set assigned_user_id = cover_user_id
@@ -149,6 +163,11 @@ export async function syncCoverage(day = todayLocal(), force = false) {
   await db.run(sql`
     update companies set cover_from_user_id = null, cover_user_id = null, cover_absence_id = null
     where cover_absence_id is not null and cover_absence_id not in (select id from absences where to_date >= ${day})`);
+  if (starting.length || returning.length) {
+    const names = new Map((await db.select({ id: users.id, name: users.name }).from(users)).map((u) => [u.id, u.name]));
+    for (const r of starting) await logActivity(null, "task.cover_started", { entity: "user", entityId: r.uid, summary: `${Number(r.n)} tareas de ${names.get(r.uid) ?? r.uid} pasan a quien cubre` });
+    for (const r of returning) await logActivity(null, "task.cover_returned", { entity: "user", entityId: r.uid, summary: `${Number(r.n)} tareas → ${names.get(r.uid) ?? r.uid}` });
+  }
 }
 
 export function resetSyncThrottle() {
