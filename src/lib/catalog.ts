@@ -16,6 +16,22 @@ export const CALL_CODES: Record<string, L & { contacted: boolean }> = {
   "10": { es: "Buzón / devolver llamada", en: "Voicemail / call back", contacted: false },
 };
 export const CONTACT_CODES = ["01", "02", "03", "04", "05", "06"] as const;
+
+// Operating status of an establishment (Resumen, Estadísticas, informes, filters): closed wins over everything.
+export const OPERATION_KEYS = ["yes", "no", "unknown", "none"] as const;
+export type OperationKey = (typeof OPERATION_KEYS)[number];
+export const OPERATION_LABELS: Record<OperationKey, L> = {
+  yes: { es: "En operación", en: "Operating" },
+  no: { es: "No opera / cerrado", en: "Not operating / closed" },
+  unknown: { es: "No sabe", en: "Doesn't know" },
+  none: { es: "Sin dato", en: "No data" },
+};
+export function operationOf(e: { enOperacion: string | null; finalCode: string | null; estatusSigturActualizado?: string | null }): OperationKey {
+  if (e.enOperacion === "No" || e.finalCode === "05" || e.estatusSigturActualizado === "Inactivo (depurado)") return "no";
+  if (e.enOperacion === "Sí") return "yes";
+  if (e.enOperacion === "No sabe") return "unknown";
+  return "none";
+}
 export const NO_CONTACT_CODES = ["07", "08", "09", "10"] as const;
 
 export const VISIT_CODES: Record<string, L> = {
@@ -216,6 +232,23 @@ export const ACTIVITY_LABELS: Record<string, L> = {
   "sigtur.requests_off": { es: "Solicitudes SIGTUR en pausa", en: "SIGTUR requests paused" },
   "phone.added": { es: "Número agregado", en: "Number added" },
   "visit.logged": { es: "Visita registrada", en: "Visit logged" },
+  "task.to_visit": { es: "Pasada a visita", en: "Sent to visit" },
+  "task.followup_scheduled": { es: "Seguimiento programado", en: "Follow-up scheduled" },
+  "task.cover_started": { es: "Tareas cubiertas al empezar una ausencia", en: "Tasks covered as an absence starts" },
+  "task.cover_returned": { es: "Tareas devueltas tras una ausencia", en: "Tasks handed back after an absence" },
+  "sigtur.request_assigned": { es: "Solicitud SIGTUR asignada", en: "SIGTUR request assigned" },
+  "sigtur.request_resolved": { es: "Solicitud SIGTUR resuelta", en: "SIGTUR request solved" },
+  "sigtur.request_overdue": { es: "Solicitud SIGTUR vencida", en: "SIGTUR request overdue" },
+  "sigtur.sent": { es: "Enviado a SIGTUR", en: "Sent to SIGTUR" },
+  "sigtur.send_failed": { es: "Error al enviar a SIGTUR", en: "Sending to SIGTUR failed" },
+  "sigtur.push_on": { es: "Envío a SIGTUR encendido", en: "Sending to SIGTUR switched on" },
+  "sigtur.push_off": { es: "Envío a SIGTUR apagado", en: "Sending to SIGTUR switched off" },
+  "sigtur.push_url": { es: "Dirección de SIGTUR guardada", en: "SIGTUR address saved" },
+  "sigtur.retry": { es: "Reintento de envío a SIGTUR", en: "SIGTUR sending retried" },
+  "sigtur.assignees_saved": { es: "Personas que reciben solicitudes SIGTUR", en: "People receiving SIGTUR requests" },
+  "report.template_paused": { es: "Programación de informe pausada / reanudada", en: "Report schedule paused / resumed" },
+  "establishment.updated": { es: "Datos del establecimiento actualizados", en: "Establishment details updated" },
+  "phone.marked": { es: "Número marcado", en: "Number marked" },
   "export.downloaded": { es: "Descarga de datos", en: "Data downloaded" },
 };
 

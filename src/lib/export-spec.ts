@@ -18,8 +18,8 @@ export const EXPORT_SHEETS = [
 
 export type ExportSheetKey = (typeof EXPORT_SHEETS)[number]["key"];
 
-export type ExportFilters = { from?: string; to?: string; agent?: string; zone?: string; priority?: string; code?: string; status?: string };
-export const EXPORT_FILTER_KEYS = ["from", "to", "agent", "zone", "priority", "code", "status"] as const;
+export type ExportFilters = { from?: string; to?: string; agent?: string; zone?: string; priority?: string; code?: string; status?: string; op?: string };
+export const EXPORT_FILTER_KEYS = ["from", "to", "agent", "zone", "priority", "code", "status", "op"] as const;
 
 export type ExportChoice = { sheets: Partial<Record<ExportSheetKey, string[]>>; filters: ExportFilters };
 

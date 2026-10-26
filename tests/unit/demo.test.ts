@@ -36,7 +36,9 @@ describe("demo mode", () => {
   it("reloads the same data on every deployment", async () => {
     await client.execute("INSERT INTO campaigns (name, start_date, end_date) VALUES ('creada por un tester', '2026-01-01', '2026-02-01')");
     await seedDemo(client, env);
-    expect(await count("SELECT COUNT(*) n FROM campaigns")).toBe(1);
+    // The demo campaign plus a closed past one (for the «otras campañas» warnings); anything else is wiped.
+    expect(await count("SELECT COUNT(*) n FROM campaigns")).toBe(2);
+    expect(await count("SELECT COUNT(*) n FROM campaigns WHERE name = 'creada por un tester'")).toBe(0);
   });
 
   it("refuses to run on the live site", async () => {

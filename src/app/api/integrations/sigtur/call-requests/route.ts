@@ -28,5 +28,5 @@ export async function POST(req: Request) {
   const summary = `${r.idSigtur} · ${r.solicitadoPor}: ${r.motivo}`;
   await logIntegration(key.id, "call_request", true, `${summary}${res.existing ? " (tarea existente)" : ""}`);
   await logActivity(null, "sigtur.call_request", { entity: "task", entityId: res.taskId, summary });
-  return Response.json({ ok: true, tarea: res.taskId, campana: res.campaign, asignada: res.assignedUserId != null, tareaExistente: res.existing });
+  return Response.json({ ok: true, tarea: res.taskId, campana: res.campaign, asignada: res.assignedUserId != null, tareaExistente: res.existing, vence: res.due });
 }

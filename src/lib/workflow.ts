@@ -5,6 +5,7 @@ import { callAttempts, callResults, campaigns, companies, establishments, phones
 import { CONTACT_CODES } from "./catalog";
 import { addBusinessDays, addHours, businessDayStart, nowIso, todayLocal } from "./dates";
 import { normalizePhone } from "./sheets";
+import type { DataChange } from "./sigtur-push";
 
 export type EstResultInput = {
   establishmentId: number;
@@ -15,6 +16,10 @@ export type EstResultInput = {
   obstacle?: string | null;
   needsVisit?: boolean;
   notes?: string | null;
+  // «Actualizar datos» (result 06): what the person on the phone reported.
+  newName?: string | null;
+  newAddress?: string | null;
+  newOwner?: string | null;
 };
 
 export type CallInput = {
@@ -48,6 +53,11 @@ export async function canWorkCompany(user: User, companyId: number) {
 export function mayWork(user: User, c: { assignedUserId: number | null }) {
   return user.role === "admin" || user.role === "supervisor" || (user.role === "agent" && c.assignedUserId === user.id);
 }
+
+// What a call changed, for the log and for SIGTUR (only changes a person decided).
+export type CallOutcome = { attemptId: number; companyId: number; key: string; campaignId: number; toVisit: boolean; followupAt: string | null; answered: boolean; result: string; changes: DataChange[] };
+
+const PHONE_MARK: Record<string, string> = { "07": "Equivocado", "09": "Fuera de servicio / no existe" };
 
 // `checked` is the task already loaded and permission-checked by the caller (saves a lookup).
 export async function logCall(user: User, input: CallInput, checked?: typeof companies.$inferSelect) {
@@ -90,12 +100,17 @@ export async function logCall(user: User, input: CallInput, checked?: typeof com
 
   const contactCodes = new Set<string>(CONTACT_CODES);
   const ops = [];
+  const changes: DataChange[] = [];
+  let toVisitOut = false;
+  let followupOut: string | null = null;
 
   if (failed) {
     // A wrong / dead number is flagged on this task (matched by number, so it also works for shared calls).
     const dialed = phone?.normalized ?? (input.phoneNumber ? normalizePhone(input.phoneNumber) : null);
     const badNumber = (failCode === "07" || failCode === "09") && dialed ? dialed : null;
     if (badNumber) {
+      const shown = allPhones.find((p) => p.normalized === badNumber)?.number ?? input.phoneNumber ?? badNumber;
+      if (ests[0]) changes.push({ establishmentId: ests[0].id, field: "telefono", label: `Teléfono ${shown}`, from: "Válido", to: PHONE_MARK[failCode] });
       ops.push(
         db
           .update(phones)
@@ -106,6 +121,7 @@ export async function logCall(user: User, input: CallInput, checked?: typeof com
     const usable = allPhones.filter((p) => p.active && p.normalized !== badNumber && (p.quality === "ok" || p.quality === "invalid"));
     const failedAttempts = company.failedAttempts + 1;
     const toVisit = usable.length === 0 || failedAttempts >= campaign.maxAttempts;
+    toVisitOut = toVisit && company.status !== "visit";
     for (const e of ests) {
       ops.push(db.insert(callResults).values({ attemptId: attempt.id, campaignId: company.campaignId, establishmentId: e.id, code: failCode, notes: null }));
       const keepContactResult = e.finalCode && contactCodes.has(e.finalCode);
@@ -150,6 +166,17 @@ export async function logCall(user: User, input: CallInput, checked?: typeof com
       else if (r.code === "06") follow = addBusinessDays(today, 1);
       if (follow && (!nextFollow || follow < nextFollow)) nextFollow = follow;
       if (visit) anyVisit = true;
+      const clean = (v: string | null | undefined) => (v ?? "").trim().slice(0, 200) || null;
+      const newName = r.code === "06" ? clean(r.newName) : null;
+      const newAddress = r.code === "06" ? clean(r.newAddress) : null;
+      const newOwner = r.code === "06" ? clean(r.newOwner) : null;
+      const email = clean(input.updatedEmail);
+      if (enOp !== (e.enOperacion ?? null) && (r.enOperacion || r.code === "05")) changes.push({ establishmentId: e.id, field: "enOperacion", label: "¿En operación?", from: e.enOperacion, to: enOp });
+      if (r.closedSince && r.closedSince !== e.cerradoDesde) changes.push({ establishmentId: e.id, field: "cerradoDesde", label: "Cerrado desde", from: e.cerradoDesde, to: r.closedSince });
+      if (email && email !== (e.correoActualizado ?? e.correo)) changes.push({ establishmentId: e.id, field: "correo", label: "Correo", from: e.correoActualizado ?? e.correo, to: email });
+      if (newName && newName !== e.nombreComercial) changes.push({ establishmentId: e.id, field: "nombreComercial", label: "Nombre comercial", from: e.nombreComercial, to: newName });
+      if (newAddress && newAddress !== e.direccion) changes.push({ establishmentId: e.id, field: "direccion", label: "Dirección", from: e.direccion, to: newAddress });
+      if (newOwner && newOwner !== e.propietario) changes.push({ establishmentId: e.id, field: "propietario", label: "Dueño / responsable", from: e.propietario, to: newOwner });
       ops.push(
         db.insert(callResults).values({
           attemptId: attempt.id,
@@ -176,6 +203,9 @@ export async function logCall(user: User, input: CallInput, checked?: typeof com
             contactoNombre: input.spokeWith || e.contactoNombre,
             contactoCargo: input.spokeRole || e.contactoCargo,
             correoActualizado: input.updatedEmail || e.correoActualizado,
+            nombreComercial: newName ?? e.nombreComercial,
+            direccion: newAddress ?? e.direccion,
+            propietario: newOwner ?? e.propietario,
             responsable: user.name,
             observaciones: r.notes ? [e.observaciones, r.notes].filter(Boolean).join(" | ") : e.observaciones,
           })
@@ -183,6 +213,8 @@ export async function logCall(user: User, input: CallInput, checked?: typeof com
       );
     }
     const status = nextFollow ? "followup" : anyVisit ? "visit" : "done";
+    toVisitOut = status === "visit" && company.status !== "visit";
+    followupOut = nextFollow;
     ops.push(
       db
         .update(companies)
@@ -199,7 +231,11 @@ export async function logCall(user: User, input: CallInput, checked?: typeof com
     );
   }
   if (ops.length) await db.batch(ops as [typeof ops[0], ...typeof ops]);
-  return attempt.id;
+  return {
+    attemptId: attempt.id, companyId: company.id, key: company.key, campaignId: company.campaignId,
+    toVisit: toVisitOut, followupAt: followupOut, answered: !failed,
+    result: failed ? failCode : input.results[0]?.code ?? "", changes,
+  } satisfies CallOutcome;
 }
 
 // Other tasks of the same campaign whose establishment has the same RNC / Cédula.
@@ -221,13 +257,16 @@ export async function relatedTasks(company: { id: number; campaignId: number; rn
 
 export async function logVisit(
   user: User,
-  input: { establishmentId: number; visitDate: string; code: string; commitmentDate: string | null; notes: string | null },
+  input: {
+    establishmentId: number; visitDate: string; code: string; commitmentDate: string | null; notes: string | null;
+    newName?: string | null; newAddress?: string | null; newOwner?: string | null;
+  },
 ) {
   const e = await db.query.establishments.findFirst({ where: eq(establishments.id, input.establishmentId) });
   if (!e) throw new Error("Not found");
   const campaign = (await db.query.campaigns.findFirst({ where: eq(campaigns.id, e.campaignId) }))!;
   const [{ n }] = await db.select({ n: count() }).from(visits).where(eq(visits.establishmentId, e.id));
-  await db.insert(visits).values({
+  const [visit] = await db.insert(visits).values({
     campaignId: e.campaignId,
     establishmentId: e.id,
     userId: user.id,
@@ -236,7 +275,7 @@ export async function logVisit(
     code: input.code,
     commitmentDate: input.commitmentDate,
     notes: input.notes,
-  });
+  }).returning({ id: visits.id });
   const enOperacion = input.code === "V4" ? "No" : ["V1", "V2", "V3", "V7"].includes(input.code) ? "Sí" : e.enOperacion;
   await db
     .update(establishments)
@@ -244,8 +283,18 @@ export async function logVisit(
       enOperacion,
       fechaCompromiso: input.commitmentDate || e.fechaCompromiso,
       observaciones: input.notes ? [e.observaciones, `Visita ${n + 1}: ${input.notes}`].filter(Boolean).join(" | ") : e.observaciones,
+      nombreComercial: input.newName || e.nombreComercial,
+      direccion: input.newAddress || e.direccion,
+      propietario: input.newOwner || e.propietario,
     })
     .where(eq(establishments.id, e.id));
+  // What the inspector found and decided, for SIGTUR's change requests.
+  const changes: DataChange[] = [];
+  if (enOperacion !== e.enOperacion) changes.push({ establishmentId: e.id, field: "enOperacion", label: "¿En operación?", from: e.enOperacion, to: enOperacion });
+  if (input.newName && input.newName !== e.nombreComercial) changes.push({ establishmentId: e.id, field: "nombreComercial", label: "Nombre comercial", from: e.nombreComercial, to: input.newName });
+  if (input.newAddress && input.newAddress !== e.direccion) changes.push({ establishmentId: e.id, field: "direccion", label: "Dirección", from: e.direccion, to: input.newAddress });
+  if (input.newOwner && input.newOwner !== e.propietario) changes.push({ establishmentId: e.id, field: "propietario", label: "Dueño / responsable", from: e.propietario, to: input.newOwner });
+  let followupAt: string | null = null;
   // Plan §6.5: phone follow-up 5 business days after the visit when the establishment is operating.
   if (["V1", "V2", "V7"].includes(input.code)) {
     const base = input.code === "V2" && input.commitmentDate ? input.commitmentDate : input.visitDate;
@@ -256,7 +305,9 @@ export async function logVisit(
       .update(companies)
       .set({ status: "followup", nextActionAt: keepEarlier ? company!.nextActionAt : next })
       .where(eq(companies.id, e.companyId));
+    if (!keepEarlier) followupAt = next.slice(0, 10);
   }
+  return { visitId: visit.id, companyId: e.companyId, campaignId: e.campaignId, sigturId: e.sigturId, changes, followupAt };
 }
 
 // Visits still to do: needs a visit, and no conclusive visit yet (max 2 visits, per the plan).

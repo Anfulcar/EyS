@@ -14,10 +14,13 @@ import { campaigns, companies, establishments, users } from "@/db/schema";
 import { CALL_CODES, CLOSED_STATUSES, CODE_SHORT, codeLabel, codeTone, COMPANY_STATUSES, label } from "@/lib/catalog";
 import { fmtDate, nowIso } from "@/lib/dates";
 import { getDict } from "@/lib/i18n-server";
+import { requestDeadline } from "@/lib/sigtur";
 import { dueCondition } from "@/lib/queue";
 import { absentOn, workload } from "@/lib/team";
 import { TRANSFERABLE } from "@/lib/transfer";
 import { assignAction, bulkAssignAction, countTransferAction, reassignCompanyAction, transferCampaignAction } from "../../../actions";
+
+const OP_CLOSED_SQL = sql`(case when e.en_operacion = 'No' or e.final_code = '05' or e.estatus_sigtur_actualizado = 'Inactivo (depurado)' then 1 else 0 end)`;
 
 const PAGE = 200;
 const TONES = { good: "bg-emerald-50 text-emerald-800", info: "bg-brand-50 text-brand-700", warn: "bg-amber-50 text-amber-800", bad: "bg-red-50 text-mitur-red", none: "" };
@@ -49,6 +52,15 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
   if (sp.f === "idle") where.push(and(notInArray(companies.status, CLOSED_STATUSES), lt(sql`coalesce(${companies.lastCalledAt}, ${companies.assignedAt}, '')`, new Date(Date.now() - idleDays * 86400000).toISOString()))!);
   if (sp.f === "open") where.push(notInArray(companies.status, CLOSED_STATUSES));
   if (sp.f === "covered") where.push(isNotNull(companies.coverAbsenceId));
+  if (sp.f === "sigturOverdue") where.push(and(eq(companies.sigturRequest, true), isNull(companies.requestResolvedAt), isNotNull(companies.requestOverdueAt))!);
+  // Operating status of any of the task's establishments (same rule as the dashboards).
+  const OP: Record<string, SQL> = {
+    opYes: sql`e.en_operacion = 'Sí' and ${OP_CLOSED_SQL} = 0`,
+    opNo: sql`${OP_CLOSED_SQL} = 1`,
+    opUnknown: sql`e.en_operacion = 'No sabe' and ${OP_CLOSED_SQL} = 0`,
+    opNone: sql`e.en_operacion is null and ${OP_CLOSED_SQL} = 0`,
+  };
+  if (sp.f && OP[sp.f]) where.push(sql`exists (select 1 from establishments e where e.company_id = ${companies.id} and ${OP[sp.f]})`);
   if (sp.q) {
     const q = `%${sp.q}%`;
     where.push(or(like(companies.razonSocial, q), like(companies.rnc, q), sql`exists (select 1 from establishments e where e.company_id = ${companies.id} and (e.nombre_comercial like ${q} or e.sigtur_id like ${q} or e.rut like ${q}))`)!);
@@ -109,6 +121,11 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
                 <option value="overdue">{t.fOverdue}</option>
                 <option value="idle">{t.fIdle}</option>
                 <option value="covered">{t.fCovered}</option>
+                <option value="sigturOverdue">{t.fSigturOverdue}</option>
+                <option value="opYes">{t.opYes}</option>
+                <option value="opNo">{t.opNo}</option>
+                <option value="opUnknown">{t.opUnknown}</option>
+                <option value="opNone">{t.opNone}</option>
               </select>
               <input name="days" type="number" min={1} defaultValue={idleDays} className="input w-16 px-2" aria-label={t.fIdleDays} title={t.fIdleDays} />
             </div>
@@ -237,7 +254,7 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
                             <div className="flex items-center gap-2">
                               <Link href={`/calls/${c.id}`} className="truncate font-medium text-slate-900 hover:text-brand-700">{name}</Link>
                               <PriorityBadge p={c.priority} />
-                              {c.sigturRequest && <SigturTag by={c.requestedBy} reason={c.requestReason} t={t} />}
+                              {c.sigturRequest && <SigturTag by={c.requestedBy} reason={c.requestReason} t={t} deadline={requestDeadline(c)} lang={lang} />}
                             </div>
                             <div className="truncate text-xs text-slate-500">RUT {e?.rut} · RNC {c.rnc}</div>
                             {c.sigturRequest && (c.requestedBy || c.requestReason) && <div className="mt-0.5 truncate text-xs text-purple-800">{[c.requestedBy, c.requestReason].filter(Boolean).join(" · ")}</div>}

@@ -2,13 +2,14 @@ import { ArrowLeft, CheckCircle2, ClipboardCheck, ExternalLink, Phone, Send } fr
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
-import { SectionTitle } from "@/components/ui";
+import { HistoryNotes, SectionTitle } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
 import { codeLabel, label, OBSTACLES } from "@/lib/catalog";
 import { fmtDate, fmtDateTime } from "@/lib/dates";
 import { getDict } from "@/lib/i18n-server";
 import { callDetail, canSeeAllCalls } from "@/lib/reviews";
 import { buildInteractions } from "@/lib/sigtur";
+import { historyDay, historyFor } from "@/lib/history";
 import { reviewCallAction } from "../../actions";
 
 export default async function CallSummaryPage({ params }: { params: Promise<{ id: string }> }) {
@@ -21,6 +22,10 @@ export default async function CallSummaryPage({ params }: { params: Promise<{ id
   const manager = canSeeAllCalls(me);
   // The same record SIGTUR reads through the integration (one per establishment in the call).
   const interactions = await buildInteractions({ attemptId: id });
+  // Commitments and closures of the same RUTs (or closures of the same company) in other campaigns.
+  const ownRuts = new Set([c.rut, ...c.results.map((r) => r.rut)].filter(Boolean));
+  const notes = (await historyFor(c.company.campaignId, [{ rut: c.rut, rnc: c.company.rnc }, ...c.results.map((r) => ({ rut: r.rut, rnc: c.company.rnc }))]))
+    .map((n) => ({ ...n, day: historyDay(n), sameCompany: !(n.rut && ownRuts.has(n.rut)) }));
   const a = c.a;
   const yn = (v: boolean | null) => (v == null ? "—" : v ? t.yes : t.no);
   const Row = ({ k, v }: { k: string; v: React.ReactNode }) => (
@@ -43,6 +48,8 @@ export default async function CallSummaryPage({ params }: { params: Promise<{ id
           <Link href={`/calls/${a.companyId}`} className="btn-secondary"><ExternalLink className="h-4 w-4" />{t.openTask}</Link>
         )}
       </div>
+
+      <HistoryNotes notes={notes} t={t} lang={lang} />
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="space-y-6">

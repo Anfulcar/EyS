@@ -47,6 +47,8 @@ el menú **Integraciones**.
 | `provincia`, `municipio`, `zonaOperativa` | No | Ubicación |
 | `prioridad` | No | `P1`, `P2` o `P3` |
 | `estatusRnt` | No | Estatus RNT (por ejemplo `Vencida`, `Sin licencia`) |
+| `idSolicitud` | No | Número de la solicitud en SIGTUR; vuelve en «Solicitud resuelta» (sección 4) |
+| `plazo` | No | Fecha límite `AAAA-MM-DD`. Si no se envía: 2 días laborables (lunes a viernes) desde que llega |
 
 Ejemplo:
 
@@ -67,7 +69,7 @@ Qué pasa en la aplicación:
 Respuesta `200`:
 
 ```json
-{ "ok": true, "tarea": 381, "campana": "Solicitudes SIGTUR", "asignada": true, "tareaExistente": false }
+{ "ok": true, "tarea": 381, "campana": "Solicitudes SIGTUR", "asignada": true, "tareaExistente": false, "vence": "2026-10-28" }
 ```
 
 Errores `400`: `{ "ok": false, "error": "Falta motivo" }` (o `Falta idSigtur`, `Falta solicitadoPor`, `JSON inválido`).
@@ -170,6 +172,70 @@ Una interacción por cada **llamada** (una por establecimiento de la llamada), *
 - Visitas y correos solo tienen fecha; su hora se fija a las 12:00 de la República Dominicana.
 - Recomendado: leer una vez al día con `desde` = día anterior y seguir pidiendo con `siguienteDesplazamiento` mientras
   `hayMas` sea `true`.
+
+## 4. Envío automático a SIGTUR (la aplicación llama a SIGTUR)
+
+Además de que SIGTUR lea las interacciones (sección 3), la aplicación puede **enviar** a SIGTUR cada novedad en cuanto
+ocurre. Para eso el equipo de SIGTUR debe dar:
+
+1. **Una dirección `https://`** donde recibir (`POST`). Un administrador la escribe en **Integraciones → Envío automático
+   a SIGTUR**.
+2. **Una clave** que SIGTUR genere para la aplicación. Se guarda en Vercel con el nombre `SIGTUR_PUSH_KEY` (nunca en
+   el código). La aplicación la manda en la cabecera `Authorization: Bearer <clave>`.
+
+Hasta que un administrador enciende el envío, todo queda **en espera** en la aplicación y no se pierde nada.
+
+Cada envío es un `POST` con este cuerpo:
+
+```json
+{ "tipo": "interaccion" | "solicitudCambio" | "solicitudResuelta", "id": "…", "datos": { … } }
+```
+
+- `id` es único y estable: si SIGTUR recibe dos veces el mismo `id`, debe ignorar el repetido.
+- SIGTUR debe responder `2xx` cuando lo guardó. Cualquier otra respuesta (o ninguna en 10 segundos) se reintenta más
+  tarde (2, 4, 8 … hasta 60 minutos), en el mismo orden.
+
+### 4.1 `interaccion`
+
+`datos` es exactamente una interacción como en la sección 3 (llamada por establecimiento, visita o correo).
+
+### 4.2 `solicitudCambio`
+
+Solo cambios que **decidió una persona** (agente o inspector), nunca los que la aplicación hace sola:
+
+```json
+{
+  "tipo": "solicitudCambio", "id": "cambio-812-direccion-1761490000000-0",
+  "datos": {
+    "idSigtur": "SIG-10422", "rut": "TA-0097", "nombreComercial": "Hotel Las Palmas",
+    "campo": "direccion", "campoTexto": "Dirección",
+    "valorAnterior": "Calle 3, Bávaro", "valorNuevo": "Av. Alemania 14, Bávaro",
+    "solicitadoPor": "Ana Rodríguez", "origen": "Llamada", "fechaHora": "2026-10-26T14:14:00.000Z"
+  }
+}
+```
+
+Valores de `campo`: `telefono` (agregado, sustituido o marcado como equivocado / fuera de servicio), `enOperacion`
+(`Sí`, `No`, `No sabe`), `cerradoDesde`, `correo`, `nombreComercial`, `direccion`, `propietario`.
+SIGTUR decide si aprueba o rechaza cada cambio.
+
+### 4.3 `solicitudResuelta`
+
+Cuando una solicitud de llamada (sección 1) queda resuelta: alguien contestó (resultados 01–06) o la tarea pasó a visita.
+
+```json
+{
+  "tipo": "solicitudResuelta", "id": "resuelta-381-1761490100000",
+  "datos": {
+    "idSolicitud": "SOL-2026-118", "idSigtur": "SIG-10422", "rut": "TA-0097",
+    "solicitadoPor": "María Pérez (Licencias)", "motivo": "Confirmar si sigue operando",
+    "recibidaEn": "2026-10-24T13:00:00.000Z", "resueltaEn": "2026-10-26T14:15:00.000Z",
+    "resultado": "En operación – iniciará solicitud (compromiso)", "interaccion": "llamada-5521"
+  }
+}
+```
+
+SIGTUR puede mostrarle al analista que pidió la llamada que ya está resuelta, con el resultado.
 
 ## Pruebas
 

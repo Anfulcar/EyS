@@ -4,7 +4,8 @@ import { and, asc, eq, gte, inArray, isNull, lte, ne, notInArray, sql } from "dr
 import { db } from "@/db";
 import { apiKeys, callAttempts, callResults, campaigns, companies, establishments, integrationLog, users, visits } from "@/db/schema";
 import { CLOSED_STATUSES, codeLabel, label, MATRIX_COLUMNS, OBSTACLES } from "./catalog";
-import { localDayEnd, localDayStart, nowIso, todayLocal } from "./dates";
+import { logActivity } from "./audit";
+import { addBusinessDays, localDateOf, localDayEnd, localDayStart, nowIso, todayLocal } from "./dates";
 import { buildRecords, commitImport, companyKey } from "./importer";
 import { absentOn, distribute, establishmentCounts, workload } from "./team";
 
@@ -98,6 +99,8 @@ export type CallRequest = {
   zonaOperativa?: string;
   prioridad?: string;
   estatusRnt?: string;
+  idSolicitud?: string;
+  plazo?: string;
 };
 
 const clean = (v: unknown, max = 200) => (v == null ? "" : String(v).trim().slice(0, max));
@@ -112,13 +115,18 @@ export function parseCallRequest(body: unknown): CallRequest | string {
   if (!motivo) return "Falta motivo";
   const telefonos = Array.isArray(b.telefonos) ? b.telefonos.map((x) => clean(x, 40)).filter(Boolean).slice(0, 10) : [];
   const opt = (k: string) => clean(b[k]) || undefined;
-  return { idSigtur, solicitadoPor, motivo, telefonos, rut: opt("rut"), nombreComercial: opt("nombreComercial"), razonSocial: opt("razonSocial"), rnc: opt("rnc"), correo: opt("correo"), provincia: opt("provincia"), municipio: opt("municipio"), zonaOperativa: opt("zonaOperativa"), prioridad: opt("prioridad"), estatusRnt: opt("estatusRnt") };
+  const plazo = clean(b.plazo, 10);
+  if (plazo && !/^\d{4}-\d{2}-\d{2}$/.test(plazo)) return "plazo inválido: use AAAA-MM-DD";
+  return { idSolicitud: clean(b.idSolicitud, 60) || undefined, plazo: plazo || undefined, idSigtur, solicitadoPor, motivo, telefonos, rut: opt("rut"), nombreComercial: opt("nombreComercial"), razonSocial: opt("razonSocial"), rnc: opt("rnc"), correo: opt("correo"), provincia: opt("provincia"), municipio: opt("municipio"), zonaOperativa: opt("zonaOperativa"), prioridad: opt("prioridad"), estatusRnt: opt("estatusRnt") };
 }
 
 // A request for an establishment that already has an open task flags that task; otherwise a new task is
 // created in «Solicitudes SIGTUR» and given to whoever has the least work among the chosen people.
 export async function receiveCallRequest(r: CallRequest) {
-  const flag = { sigturRequest: true, requestedBy: r.solicitadoPor, requestReason: r.motivo, requestedAt: nowIso(), nextActionAt: null };
+  const flag = {
+    sigturRequest: true, requestedBy: r.solicitadoPor, requestReason: r.motivo, requestedAt: nowIso(), nextActionAt: null,
+    requestRef: r.idSolicitud ?? null, requestDueDate: r.plazo ?? null, requestResolvedAt: null, requestOverdueAt: null,
+  };
   const [open] = await db
     .select({ id: companies.id, campaignName: campaigns.name, assignedUserId: companies.assignedUserId })
     .from(establishments)
@@ -128,7 +136,7 @@ export async function receiveCallRequest(r: CallRequest) {
     .limit(1);
   if (open) {
     await db.update(companies).set(flag).where(eq(companies.id, open.id));
-    return { taskId: open.id, campaign: open.campaignName, assignedUserId: open.assignedUserId, existing: true };
+    return { taskId: open.id, campaign: open.campaignName, assignedUserId: open.assignedUserId, existing: true, due: requestDue(flag) };
   }
 
   const c = await requestsCampaign();
@@ -152,10 +160,14 @@ export async function receiveCallRequest(r: CallRequest) {
       const size = await establishmentCounts([task.id]);
       const pick = distribute([task], people, size, await workload(people));
       assignedUserId = pick.get(task.id) ?? null;
-      if (assignedUserId) await db.update(companies).set({ assignedUserId, assignedAt: nowIso() }).where(eq(companies.id, task.id));
+      if (assignedUserId) {
+        await db.update(companies).set({ assignedUserId, assignedAt: nowIso() }).where(eq(companies.id, task.id));
+        const [u] = await db.select({ name: users.name }).from(users).where(eq(users.id, assignedUserId));
+        await logActivity(null, "sigtur.request_assigned", { campaignId: c.id, entity: "task", entityId: task.id, summary: `${r.idSigtur} → ${u?.name ?? assignedUserId} (menor carga)` });
+      }
     }
   }
-  return { taskId: task.id, campaign: c.name, assignedUserId, existing: false };
+  return { taskId: task.id, campaign: c.name, assignedUserId, existing: false, due: requestDue(flag) };
 }
 
 // ---------- Campaigns created in SIGTUR (arrive as «Borrador») ----------
@@ -242,7 +254,7 @@ export type Interaction = {
   solicitadoPor: string | null;
 };
 
-export type InteractionFilter = { from?: string; to?: string; idSigtur?: string; attemptId?: number; limit?: number; offset?: number };
+export type InteractionFilter = { from?: string; to?: string; idSigtur?: string; attemptId?: number; visitId?: number; emailEstIds?: number[]; limit?: number; offset?: number };
 
 export async function buildInteractions(f: InteractionFilter): Promise<Interaction[]> {
   const fromIso = f.from ? localDayStart(f.from) : "";
@@ -250,7 +262,8 @@ export async function buildInteractions(f: InteractionFilter): Promise<Interacti
   const people = new Map((await db.select({ id: users.id, name: users.name }).from(users)).map((u) => [u.id, u.name]));
   const estW = f.idSigtur ? [eq(establishments.sigturId, f.idSigtur)] : [];
 
-  const calls = await db
+  const only = f.visitId ? "visit" : f.emailEstIds ? "email" : null;
+  const calls = only ? [] : await db
     .select({ r: callResults, a: callAttempts, e: { sigturId: establishments.sigturId, rut: establishments.rut, nombre: establishments.nombreComercial }, campaign: campaigns.name, c: { sigturRequest: companies.sigturRequest, requestedBy: companies.requestedBy } })
     .from(callResults)
     .innerJoin(callAttempts, eq(callAttempts.id, callResults.attemptId))
@@ -271,12 +284,12 @@ export async function buildInteractions(f: InteractionFilter): Promise<Interacti
   }));
   if (f.attemptId) return out;
 
-  const vis = await db
+  const vis = only === "email" ? [] : await db
     .select({ v: visits, e: { sigturId: establishments.sigturId, rut: establishments.rut, nombre: establishments.nombreComercial }, campaign: campaigns.name })
     .from(visits)
     .innerJoin(establishments, eq(establishments.id, visits.establishmentId))
     .innerJoin(campaigns, eq(campaigns.id, visits.campaignId))
-    .where(and(...(f.from ? [gte(visits.visitDate, f.from)] : []), ...(f.to ? [lte(visits.visitDate, f.to)] : []), ...estW));
+    .where(and(...(f.visitId ? [eq(visits.id, f.visitId)] : []), ...(f.from ? [gte(visits.visitDate, f.from)] : []), ...(f.to ? [lte(visits.visitDate, f.to)] : []), ...estW));
   for (const { v, e, campaign } of vis) {
     out.push({
       id: `visita-${v.id}`, idSigtur: e.sigturId, rut: e.rut, nombreComercial: e.nombre,
@@ -287,11 +300,11 @@ export async function buildInteractions(f: InteractionFilter): Promise<Interacti
     });
   }
 
-  const mails = await db
+  const mails = only === "visit" ? [] : await db
     .select({ id: establishments.id, sigturId: establishments.sigturId, rut: establishments.rut, nombre: establishments.nombreComercial, sent: establishments.correoEnviadoFecha, bounced: establishments.correoRebotado, campaign: campaigns.name })
     .from(establishments)
     .innerJoin(campaigns, eq(campaigns.id, establishments.campaignId))
-    .where(and(sql`${establishments.correoEnviadoFecha} is not null`, ...(f.from ? [gte(establishments.correoEnviadoFecha, f.from)] : []), ...(f.to ? [lte(establishments.correoEnviadoFecha, f.to)] : []), ...estW));
+    .where(and(sql`${establishments.correoEnviadoFecha} is not null`, ...(f.emailEstIds ? [inArray(establishments.id, f.emailEstIds.length ? f.emailEstIds : [-1])] : []), ...(f.from ? [gte(establishments.correoEnviadoFecha, f.from)] : []), ...(f.to ? [lte(establishments.correoEnviadoFecha, f.to)] : []), ...estW));
   for (const m of mails) {
     out.push({
       id: `correo-${m.id}`, idSigtur: m.sigturId, rut: m.rut, nombreComercial: m.nombre,
@@ -319,4 +332,43 @@ export async function recentIntegrationLog(limit = 30) {
 
 export async function listKeys() {
   return db.select().from(apiKeys).orderBy(asc(apiKeys.id));
+}
+
+// ---------- Deadlines of SIGTUR requests (2 working days, or the date SIGTUR sent) ----------
+
+export const REQUEST_WORKING_DAYS = 2;
+
+export function requestDue(c: { requestDueDate: string | null; requestedAt: string | null }) {
+  if (c.requestDueDate) return c.requestDueDate;
+  return c.requestedAt ? addBusinessDays(localDateOf(c.requestedAt), REQUEST_WORKING_DAYS) : null;
+}
+
+export type DeadlineState = { due: string; state: "ok" | "tomorrow" | "overdue"; days: number };
+
+// Only while the request is open; solved requests have no deadline any more.
+export function requestDeadline(
+  c: { sigturRequest: boolean; requestDueDate: string | null; requestedAt: string | null; requestResolvedAt: string | null },
+  today = todayLocal(),
+): DeadlineState | null {
+  if (!c.sigturRequest || c.requestResolvedAt) return null;
+  const due = requestDue(c);
+  if (!due) return null;
+  const days = Math.round((new Date(`${today}T12:00:00Z`).getTime() - new Date(`${due}T12:00:00Z`).getTime()) / 86400000);
+  if (days > 0) return { due, state: "overdue", days };
+  if (due === addBusinessDays(today, 1) || days === -1) return { due, state: "tomorrow", days };
+  return { due, state: "ok", days };
+}
+
+// Requests that just went past their deadline are recorded once in «Registro».
+export async function markOverdueRequests(today = todayLocal()) {
+  const open = await db
+    .select({ id: companies.id, campaignId: companies.campaignId, key: companies.key, requestDueDate: companies.requestDueDate, requestedAt: companies.requestedAt, requestedBy: companies.requestedBy, assignedUserId: companies.assignedUserId })
+    .from(companies)
+    .where(and(eq(companies.sigturRequest, true), isNull(companies.requestResolvedAt), isNull(companies.requestOverdueAt)));
+  for (const c of open) {
+    const due = requestDue(c);
+    if (!due || due >= today) continue;
+    await db.update(companies).set({ requestOverdueAt: nowIso() }).where(eq(companies.id, c.id));
+    await logActivity(null, "sigtur.request_overdue", { campaignId: c.campaignId, entity: "task", entityId: c.id, summary: `${c.key} · vencía ${due} · pedida por ${c.requestedBy ?? "—"}` });
+  }
 }

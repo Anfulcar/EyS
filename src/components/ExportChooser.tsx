@@ -11,7 +11,7 @@ type Saved = { sheets: Record<string, string[]>; filters: ExportFilters };
 const STORE = "eys.export.v1";
 const allChosen = (): Record<string, string[]> => Object.fromEntries(EXPORT_SHEETS.map((s) => [s.key, [...s.columns]]));
 
-export function ExportChooser({ action, t, agents, zones, priorities, codes, statuses }: {
+export function ExportChooser({ action, t, agents, zones, priorities, codes, statuses, operations }: {
   action: string;
   t: Dict;
   agents: Opt[];
@@ -19,6 +19,7 @@ export function ExportChooser({ action, t, agents, zones, priorities, codes, sta
   priorities: Opt[];
   codes: Opt[];
   statuses: Opt[];
+  operations: Opt[];
 }) {
   const [chosen, setChosen] = useState<Record<string, string[]>>(allChosen);
   const [filters, setFilters] = useState<ExportFilters>({});
@@ -135,6 +136,7 @@ export function ExportChooser({ action, t, agents, zones, priorities, codes, sta
           {select("priority", t.priority, priorities)}
           {select("code", t.result, codes)}
           {select("status", t.taskStatus, statuses)}
+          {select("op", t.opTitle, operations)}
         </div>
       </div>
 

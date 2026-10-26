@@ -3,7 +3,7 @@ import { BookOpen, Table2 } from "lucide-react";
 import { SectionTitle } from "@/components/ui";
 import { db } from "@/db";
 import { campaigns, establishments } from "@/db/schema";
-import { CALL_CODES, CHANNELS, COMPANY_STATUSES, SIGTUR_STATUSES, VISIT_CODES } from "@/lib/catalog";
+import { CALL_CODES, CHANNELS, COMPANY_STATUSES, OPERATION_KEYS, OPERATION_LABELS, operationOf, SIGTUR_STATUSES, VISIT_CODES } from "@/lib/catalog";
 import { getDict } from "@/lib/i18n-server";
 import { CALL_HELP, CHANNEL_HELP, PRIORITY_HELP, SIGTUR_HELP, STATUS_HELP, VISIT_HELP } from "@/lib/legend";
 
@@ -31,6 +31,8 @@ export default async function SummaryPage({ params }: { params: Promise<{ id: st
     [t.sumMulti, (e) => (perRnc.get(rncKey(e)) ?? 0) >= 2],
     ...zones.map((z) => [`${t.zone} ${z}`, (e: Est) => (e.zonaOperativa ?? "—") === z] as [string, (e: Est) => boolean]),
     [t.sumOver5, (e) => (e.antiguedad ?? "").startsWith("5.")],
+    // Operating status (same rule as «Estadísticas» and the reports)
+    ...OPERATION_KEYS.map((k) => [`${t.opTitle}: ${OPERATION_LABELS[k][lang]}`, (e: Est) => operationOf(e) === k] as [string, (e: Est) => boolean]),
   ];
   const venc = ests.filter((e) => e.estatusRnt === "Vencida");
   const sinLic = ests.filter((e) => e.estatusRnt === "Sin licencia");

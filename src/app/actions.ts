@@ -19,11 +19,13 @@ import { buildRecords, commitImport, previewImport } from "@/lib/importer";
 import { cleanOptions, firstRun, FREQUENCIES, type Frequency } from "@/lib/report-options";
 import { generateAndStore } from "@/lib/report-run";
 import { reviewCall } from "@/lib/reviews";
+import { archiveCampaignHistory } from "@/lib/history";
+import { flushOutbox, queueCallInteractions, queueChanges, queueEmailInteractions, queueVisitInteraction, resolveRequest, retryFailed, setPushEnabled, setPushUrl, pushSettings, validPushUrl } from "@/lib/sigtur-push";
 import { createApiKey, logIntegration, parseCallRequest, receiveCallRequest, REQUESTS_CAMPAIGN, requestsCampaign, setAutoAssignees, setRequestsPaused } from "@/lib/sigtur";
 import { countTransfer, transferToNewCampaign, type TransferFilter } from "@/lib/transfer";
 import { ABSENCE_KINDS, coverTasks, distribute, moveTasks, syncCoverage, workload } from "@/lib/team";
 import { formatPhone, normalizePhone, readTable, str } from "@/lib/sheets";
-import { applyStatusUpdates, canWorkCompany, logCall, logVisit, relatedTasks, type CallInput } from "@/lib/workflow";
+import { applyStatusUpdates, canWorkCompany, logCall, logVisit, relatedTasks, type CallInput, type CallOutcome } from "@/lib/workflow";
 
 export type ActionState = { ok?: boolean; error?: string; message?: string; data?: unknown; needsReauth?: boolean } | null;
 
@@ -268,6 +270,8 @@ export async function deleteCampaignAction(_: ActionState, form: FormData): Prom
   const c = await db.query.campaigns.findFirst({ where: eq(campaigns.id, id) });
   if (!c) return { error: "Not found" };
   if (c.kind === "sigtur_requests") return { error: (await getDict()).t.sigturPermanentLocked };
+  // Commitments and closures stay as history for the warnings in later campaigns.
+  await archiveCampaignHistory(id);
   await db.delete(campaigns).where(eq(campaigns.id, id));
   await logActivity(u, "campaign.deleted", { entity: "campaign", entityId: id, summary: c.name });
   redirect("/campaigns");
@@ -435,9 +439,9 @@ export async function logCallAction(_: ActionState, form: FormData): Promise<Act
     const allowed = asked.length ? new Set((await relatedTasks(main)).map((c) => c.id)) : new Set<number>();
     const extra = asked.filter((id) => allowed.has(id));
     if ((await Promise.all(extra.map((id) => canWorkCompany(u, id)))).some((c) => !c)) return { error: "Not found" };
-    await logCall(u, input, main);
+    const outcomes = [await logCall(u, input, main)];
     // Sibling tasks are separate companies, so they can be saved at the same time.
-    await Promise.all(extra.map((id) => logCall(u, { ...input, companyId: id, phoneId: null })));
+    outcomes.push(...(await Promise.all(extra.map((id) => logCall(u, { ...input, companyId: id, phoneId: null })))));
     const failed = !input.contacted || input.attended === false;
     const result = failed ? (input.contacted ? "10" : input.noContactCode) : [...new Set(input.results.map((r) => r.code))].join(", ");
     // Written right after the answer is sent, so the agent doesn't wait for the activity log.
@@ -445,7 +449,7 @@ export async function logCallAction(_: ActionState, form: FormData): Promise<Act
       logActivity(u, "call.logged", {
         campaignId: main.campaignId, entity: "task", entityId: main.id,
         summary: `${main.key}${extra.length ? ` (+${extra.length} misma empresa)` : ""} · resultado: ${result}`,
-      }),
+      }).then(() => afterCallSaved(u, outcomes)),
     );
   } catch (e) {
     const msg = (e as Error).message;
@@ -454,6 +458,23 @@ export async function logCallAction(_: ActionState, form: FormData): Promise<Act
   }
   revalidatePath("/calls", "layout");
   return { ok: true, message: t.callSaved };
+}
+
+// What follows a saved call, after the agent already has the answer: the app's own decisions go to «Registro»,
+// and the interaction, the changes the agent decided and a solved SIGTUR request are queued for SIGTUR.
+async function afterCallSaved(u: { id: number; name: string }, outcomes: CallOutcome[]) {
+  try {
+    for (const o of outcomes) {
+      if (o.toVisit) await logActivity(null, "task.to_visit", { campaignId: o.campaignId, entity: "task", entityId: o.companyId, summary: `${o.key} · ${o.answered ? "requiere visita" : "intentos fallidos o sin números válidos"}` });
+      if (o.followupAt) await logActivity(null, "task.followup_scheduled", { campaignId: o.campaignId, entity: "task", entityId: o.companyId, summary: `${o.key} · ${o.followupAt}` });
+      await queueCallInteractions(o.attemptId);
+      await queueChanges(o.changes, u, "Llamada");
+      if (o.answered || o.toVisit) await resolveRequest(o.companyId, { result: o.result, attemptId: o.attemptId });
+    }
+    await flushOutbox();
+  } catch (e) {
+    await logError("action", `Después de la llamada: ${(e as Error).message}`, { userId: u.id, path: "/calls", detail: (e as Error).stack ?? null });
+  }
 }
 
 // Supervisors and administrators mark a call as reviewed, with an optional comment the agent will see.
@@ -505,10 +526,20 @@ export async function addPhoneAction(_: ActionState, form: FormData): Promise<Ac
     replacesPhoneId: kind === "substitute" ? replaces : null,
     addedBy: u.id,
   });
-  await logActivity(u, "phone.added", { campaignId: company.campaignId, entity: "task", entityId: companyId, summary: `${company.key}: ${formatPhone(raw)} (${kind}, ${reason})` });
   // A new number reopens a company that went to visit for lack of a working phone.
-  if (company.status === "visit" && company.failedAttempts > 0) {
+  const reopened = company.status === "visit" && company.failedAttempts > 0;
+  if (reopened) {
     await db.update(companies).set({ status: "retry", failedAttempts: 0, nextActionAt: null }).where(eq(companies.id, companyId));
+  }
+  await logActivity(u, "phone.added", { campaignId: company.campaignId, entity: "task", entityId: companyId, summary: `${company.key}: ${formatPhone(raw)} (${kind}, ${reason})${reopened ? " · tarea reabierta para llamar" : ""}` });
+  // Sent to SIGTUR as a change request (the agent decided it).
+  const old = kind === "substitute" && replaces ? await db.query.phones.findFirst({ where: eq(phones.id, replaces) }) : null;
+  const [firstEst] = await db.select({ id: establishments.id }).from(establishments).where(eq(establishments.companyId, companyId)).limit(1);
+  if (firstEst) {
+    after(async () => {
+      await queueChanges([{ establishmentId: firstEst.id, field: "telefono", label: kind === "substitute" ? "Teléfono (sustituye)" : "Teléfono (adicional)", from: old?.number ?? null, to: `${formatPhone(raw)} · ${PHONE_REASONS[reason]?.es ?? reason}` }], u, "Llamada");
+      await flushOutbox();
+    });
   }
   revalidatePath(`/calls/${companyId}`);
   return { ok: true, message: t.saved };
@@ -523,14 +554,24 @@ export async function logVisitAction(_: ActionState, form: FormData): Promise<Ac
   if (!VISIT_CODES[code]) return { error: t.visitResult };
   const visitDate = toIsoDate(String(form.get("visitDate"))) ?? todayLocal();
   const establishmentId = Number(form.get("establishmentId"));
-  await logVisit(u, {
+  const field = (k: string) => String(form.get(k) ?? "").trim().slice(0, 200) || null;
+  const v = await logVisit(u, {
     establishmentId,
     visitDate,
     code,
     commitmentDate: toIsoDate(String(form.get("commitmentDate") ?? "")),
     notes: str(form.get("notes")),
+    newName: field("newName"),
+    newAddress: field("newAddress"),
+    newOwner: field("newOwner"),
   });
-  await logActivity(u, "visit.logged", { entity: "establishment", entityId: establishmentId, summary: `${visitDate} · resultado: ${code}` });
+  await logActivity(u, "visit.logged", { campaignId: v.campaignId, entity: "establishment", entityId: establishmentId, summary: `${v.sigturId} · ${visitDate} · resultado: ${code}` });
+  after(async () => {
+    if (v.followupAt) await logActivity(null, "task.followup_scheduled", { campaignId: v.campaignId, entity: "task", entityId: v.companyId, summary: `${v.sigturId} · después de la visita · ${v.followupAt}` });
+    await queueVisitInteraction(v.visitId);
+    await queueChanges(v.changes, u, "Visita");
+    await flushOutbox();
+  });
   revalidatePath("/visits");
   return { ok: true, message: t.saved };
 }
@@ -548,6 +589,10 @@ export async function markEmailsSentAction(_: ActionState, form: FormData): Prom
   if (form.get("onlyUnsent")) where.push(isNull(establishments.correoEnviadoFecha));
   const res = await db.update(establishments).set({ correoEnviadoFecha: date }).where(and(...where)).returning({ id: establishments.id });
   await logActivity(u, "emails.marked_sent", { campaignId, summary: `${res.length} establecimientos · fecha ${date}${status ? ` · ${status}` : ""}` });
+  after(async () => {
+    for (let i = 0; i < res.length; i += 500) await queueEmailInteractions(res.slice(i, i + 500).map((r) => r.id));
+    await flushOutbox();
+  });
   revalidatePath(`/campaigns/${campaignId}`, "layout");
   return { ok: true, message: `${res.length} ${t.updated}` };
 }
@@ -758,7 +803,7 @@ export async function deleteReportTemplateAction(_: ActionState, form: FormData)
 }
 
 export async function pauseReportTemplateAction(_: ActionState, form: FormData): Promise<ActionState> {
-  await assertUser(MANAGERS);
+  const me = await assertUser(MANAGERS);
   const { t } = await getDict();
   const id = Number(form.get("templateId"));
   const tpl = await db.query.reportTemplates.findFirst({ where: eq(reportTemplates.id, id) });
@@ -769,6 +814,7 @@ export async function pauseReportTemplateAction(_: ActionState, form: FormData):
     .update(reportTemplates)
     .set({ paused, nextRunOn: paused ? tpl.nextRunOn : firstRun(tpl.frequency as Frequency, tpl.runDay ?? 1, todayLocal()) })
     .where(eq(reportTemplates.id, id));
+  await logActivity(me, "report.template_paused", { entity: "report_template", entityId: id, summary: `${tpl.name}: ${paused ? "pausada" : "reanudada"}` });
   revalidatePath("/reports");
   return { ok: true, message: t.saved };
 }
@@ -867,10 +913,50 @@ export async function setSigturRequestsAction(_: ActionState, form: FormData): P
   return { ok: true, message: on ? t.sigturSwitchedOn : t.sigturSwitchedOff };
 }
 
-export async function saveAutoAssigneesAction(_: ActionState, form: FormData): Promise<ActionState> {
-  await assertUser(["admin"]);
+// «Envío automático a SIGTUR» (administrators). It only turns on once SIGTUR's address and key are set.
+export async function setSigturPushAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const me = await assertUser(["admin"]);
   const { t } = await getDict();
-  await setAutoAssignees(form.getAll("people").map(Number).filter((n) => Number.isInteger(n) && n > 0));
+  const on = form.get("on") === "1";
+  if (on && !(await pushSettings()).ready) return { error: t.pushNotReady };
+  await setPushEnabled(on);
+  await logActivity(me, on ? "sigtur.push_on" : "sigtur.push_off", { entity: "integration" });
+  if (on) after(() => flushOutbox(true));
+  revalidatePath("/integrations");
+  return { ok: true, message: on ? t.pushSwitchedOn : t.pushSwitchedOff };
+}
+
+export async function saveSigturPushUrlAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const me = await assertUser(["admin"]);
+  const { t } = await getDict();
+  const url = String(form.get("url") ?? "").trim();
+  if (url && !validPushUrl(url)) return { error: t.pushUrlInvalid };
+  await setPushUrl(url);
+  if (!url) await setPushEnabled(false);
+  await logActivity(me, "sigtur.push_url", { entity: "integration", summary: url || "(vacía)" });
+  revalidatePath("/integrations");
+  return { ok: true, message: t.saved };
+}
+
+export async function retrySigturPushAction(_: ActionState, form: FormData): Promise<ActionState> {
+  void form;
+  const me = await assertUser(["admin"]);
+  const { t } = await getDict();
+  const s = await pushSettings();
+  if (!s.enabled || !s.ready) return { error: t.pushNotReady };
+  const r = await retryFailed();
+  await logActivity(me, "sigtur.retry", { entity: "integration", summary: `${r.sent} enviados · ${r.failed} con error` });
+  revalidatePath("/integrations");
+  return { ok: true, message: t.pushRetried.replace("{sent}", String(r.sent)).replace("{failed}", String(r.failed)) };
+}
+
+export async function saveAutoAssigneesAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const me = await assertUser(["admin"]);
+  const { t } = await getDict();
+  const ids = form.getAll("people").map(Number).filter((n) => Number.isInteger(n) && n > 0);
+  await setAutoAssignees(ids);
+  const names = ids.length ? (await db.select({ name: users.name }).from(users).where(inArray(users.id, ids))).map((x) => x.name) : [];
+  await logActivity(me, "sigtur.assignees_saved", { entity: "integration", summary: names.join(", ") || "Nadie" });
   revalidatePath("/integrations");
   return { ok: true, message: t.saved };
 }

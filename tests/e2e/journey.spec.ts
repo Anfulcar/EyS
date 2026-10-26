@@ -398,6 +398,7 @@ test("delete a report, new campaign from results, and the SIGTUR connection", as
   const first = page.locator("a.card").first();
   await expect(first).toContainText("Hotel Solicitado");
   await expect(first).toContainText("Solicitud SIGTUR");
+  await expect(first).toContainText(/vence|Vence mañana/);
   await expect(first).toContainText("Pedida por Analista Licencias · Confirmar si sigue operando");
 
   // SIGTUR reads the interactions with the key; managers download them as Excel
@@ -439,4 +440,36 @@ test("delete a report, new campaign from results, and the SIGTUR connection", as
   // Everything SIGTUR sent is listed
   await page.goto("/integrations");
   await expect(page.locator("td", { hasText: "SIG-E2E-1 · Analista Licencias" })).toBeVisible();
+
+  // Automatic sending to SIGTUR: off, calls already waiting, and it can't be switched on without SIGTUR's address and key
+  const push = page.getByTestId("sigtur-push");
+  await expect(push).toContainText("pendientes de envío");
+  await expect(push.locator("td", { hasText: "Interacción" }).first()).toBeVisible();
+  await expect(push.getByText("En espera").first()).toBeVisible();
+  await push.getByRole("button", { name: "Apagado" }).click();
+  await expect(push.getByText("Primero hace falta la dirección de SIGTUR")).toBeVisible();
+
+  // The answered SIGTUR request: solved and queued for SIGTUR
+  await page.goto("/calls");
+  await page.locator("a.card", { hasText: "Hotel Solicitado" }).click();
+  await expect(page.getByText("Pedida por Analista Licencias")).toBeVisible();
+  await page.locator("label.choice-yes").nth(0).click(); // reached someone
+  await page.locator("label.choice-yes").nth(1).click(); // was attended
+  const result = page.locator(".rounded-2xl.bg-slate-50\\/80").first();
+  await result.locator("label.choice-yes").click();
+  await result.locator("label.choice", { hasText: "Cambió dueño / nombre / dirección" }).click();
+  await result.getByLabel("Nueva dirección").fill("Av. Nueva 14, Bávaro");
+  await page.getByRole("button", { name: "Guardar" }).click();
+  await expect(page.getByText("Llamada registrada")).toBeVisible();
+  await page.goto("/integrations");
+  await expect(push.locator("td", { hasText: "Solicitud resuelta" }).first()).toBeVisible();
+  await expect(push.locator("td", { hasText: "Av. Nueva 14, Bávaro" }).first()).toContainText("Dirección:");
+
+  // «Registro» shows the app's own decisions
+  await page.goto("/logs?action=task.to_visit");
+  await expect(page.locator("td", { hasText: "Aplicación" }).first()).toBeVisible();
+
+  // Operating status in the dashboards
+  await page.goto("/stats");
+  await expect(page.getByText("Estado de operación").first()).toBeVisible();
 });

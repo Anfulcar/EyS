@@ -6,6 +6,7 @@ type Section = { id: string; roles: string[]; title: string; intro?: string; ste
 type L<T> = Record<Lang, T>;
 
 export const WHATS_NEW: { date: string; es: string; en: string }[] = [
+  { date: "2026-10-26", es: "Avisos de otras campañas (compromiso anterior o encontrado cerrado), estatus RNT en «Misma empresa», «Actualizar datos» en llamadas y visitas, plazos en las solicitudes SIGTUR, «Estado de operación» en Resumen, Estadísticas, informes y filtros, «Registro» con las decisiones de la aplicación y «Envío automático a SIGTUR» listo (apagado hasta completar la conexión).", en: "Warnings from other campaigns (earlier commitment or found closed), RNT status in “Same company”, “Update details” in calls and visits, deadlines on SIGTUR requests, “Operating status” in Summary, Statistics, reports and filters, “Log” with the app's own decisions and “Automatic sending to SIGTUR” ready (off until the connection is complete)." },
   { date: "2026-10-22", es: "«Campañas» separa la «Campaña permanente» (Solicitudes SIGTUR) de las «Campañas temporales». Los administradores pueden encender o poner en pausa las solicitudes de llamada de SIGTUR; las tareas abiertas siguen en curso.", en: "“Campaigns” separates the “Permanent campaign” (Solicitudes SIGTUR) from the “Temporary campaigns”. Administrators can switch SIGTUR call requests on or pause them; open tasks keep going." },
   { date: "2026-10-22", es: "Nuevo: «Nueva campaña con estas tareas» (crea una campaña en borrador con las tareas elegidas de otra campaña), conexión con SIGTUR (solicitudes de llamada con la etiqueta morada «Solicitud SIGTUR», campañas enviadas desde SIGTUR y un registro de interacción por cada llamada, visita y correo), el menú «Integraciones» para administradores y «Descargar interacciones» en «Informes». Los administradores pueden eliminar informes generados.", en: "New: “New campaign from these tasks” (creates a draft campaign with the chosen tasks of another campaign), connection with SIGTUR (call requests with the purple “SIGTUR request” tag, campaigns sent from SIGTUR and an interaction record for every call, visit and email), the “Integrations” menu for administrators and “Download interactions” in “Reports”. Administrators can delete generated reports." },
   { date: "2026-10-22", es: "«Informes» tiene su propio botón «Generar informe» (el mismo panel que en «Estadísticas globales») y un botón «Editar» en cada plantilla. La lista se actualiza sola después de descargar.", en: "“Reports” has its own “Generate report” button (the same panel as in “Global statistics”) and an “Edit” button on each template. The list updates by itself after downloading." },
@@ -146,6 +147,8 @@ const ES: Section[] = [
       "Otros analistas pueden pedir una llamada desde SIGTUR. Llega a la campaña «Solicitudes SIGTUR» (siempre abierta) y se asigna sola, según la carga de trabajo, a las personas elegidas en «Integraciones» (quien está de ausencia no recibe).",
       "Estas tareas llevan la etiqueta morada «Solicitud SIGTUR» con quién la pidió y por qué, y salen primero en «Para hoy».",
       "Si la empresa ya tenía una tarea abierta, no se crea otra: esa tarea recibe la etiqueta y vuelve a «Para hoy».",
+      "Plazo: 2 días laborables (lunes a viernes) desde que llega, o la fecha que mande SIGTUR. La etiqueta muestra «vence dd/mm», luego «Vence mañana» (naranja) y «Vencida hace N días» (rojo); las más urgentes salen primero. «Seguimiento» cuenta las «Solicitudes SIGTUR vencidas» por persona.",
+      "Queda resuelta cuando alguien contesta (resultados 01–06) o la tarea pasa a visita; entonces se avisa a SIGTUR con el resultado («Solicitud resuelta»).",
       "Un administrador puede apagar o encender las solicitudes con el interruptor del bloque «Campaña permanente» (en «Campañas» o «Integraciones»). Apagada, SIGTUR recibe «Solicitudes de llamada en pausa» y no llegan llamadas nuevas; las tareas abiertas siguen con sus agentes y se pueden terminar. Los supervisores ven si está encendida o en pausa. Esta campaña no se cierra ni se elimina.",
       "Las campañas que se creen desde SIGTUR llegan como «Borrador» con sus establecimientos; un supervisor o administrador las revisa, asigna y activa.",
     ],
@@ -167,6 +170,40 @@ const ES: Section[] = [
       "«Recibir solicitudes de llamada»: interruptor Encendida / Apagada (pide confirmación para apagar). Apagada, SIGTUR recibe «en pausa» y la simulación tampoco crea tareas.",
       "«Simular solicitud SIGTUR» crea una solicitud de prueba, igual a las reales, para ver el recorrido antes de conectar SIGTUR.",
       "«Últimas solicitudes recibidas» muestra lo que SIGTUR envió o leyó, y si fue aceptado o rechazado.",
+    ],
+  },
+  {
+    id: "sigtur-push", roles: ["admin"], title: "Envío automático a SIGTUR",
+    steps: [
+      "Desde ahora cada llamada, visita y correo (interacciones), cada cambio de datos que decide una persona (solicitudes de cambio) y cada solicitud SIGTUR resuelta quedan en «Integraciones» → «Envío automático a SIGTUR» → «Pendientes de envío».",
+      "El envío está apagado mientras se completa la conexión: nada sale y nada se pierde.",
+      "Cuando SIGTUR entregue su dirección, escríbala en «Dirección de SIGTUR para recibir» y pulse «Guardar».",
+      "Cuando SIGTUR entregue su clave, péguela en Vercel → su proyecto → Settings → Environment Variables con el nombre SIGTUR_PUSH_KEY y vuelva a desplegar. Nunca la escriba en la aplicación ni la envíe por mensaje.",
+      "Con dirección y clave listas, pulse «Apagado» para encender: lo que estaba en espera sale en orden. Si SIGTUR no responde, se reintenta solo; «Reintentar ahora» fuerza un intento.",
+    ],
+  },
+  {
+    id: "update-data", roles: ["agent", "inspector", "supervisor", "admin"], title: "Actualizar datos del establecimiento",
+    bullets: [
+      "En la llamada, al elegir el resultado «Cambió dueño / nombre / dirección» aparecen «Nuevo nombre comercial», «Nueva dirección» y «Dueño / responsable» dentro del mismo recuadro del establecimiento.",
+      "En la visita, «Actualizar datos (si cambió)» debajo de las notas.",
+      "Cada dato que cambia una persona (estos campos, el correo actualizado, «¿En operación?», la fecha de cierre y los teléfonos agregados, sustituidos o marcados como equivocados) se envía a SIGTUR como solicitud de cambio y queda en «Registro».",
+    ],
+  },
+  {
+    id: "history", roles: ["agent", "supervisor", "admin"], title: "Avisos de otras campañas",
+    bullets: [
+      "Al abrir una tarea, un aviso amarillo «Compromiso anterior» indica que ese RUT se comprometió a formalizarse en otra campaña, con la campaña, la fecha de compromiso y quién lo registró.",
+      "Un aviso rojo «Encontrado cerrado» indica que el RUT (o, si dice «misma empresa», otro RUT con el mismo RNC) se registró como cerrado en otra campaña, con la campaña y desde cuándo.",
+      "En «Misma empresa» cada RUT muestra su estatus en RNT y su estado en la campaña, y una línea corta si tiene avisos.",
+      "Los avisos también aparecen en el resumen de cada llamada y se conservan aunque se elimine la campaña anterior.",
+    ],
+  },
+  {
+    id: "operation", roles: ["supervisor", "admin"], title: "Estado de operación",
+    bullets: [
+      "Cada establecimiento queda como En operación, No opera / cerrado, No sabe o Sin dato, según lo último registrado (llamadas, visitas y estatus SIGTUR). Cerrado tiene prioridad.",
+      "Se ve en «Resumen» (filas al final de la tabla), en «Estadísticas globales» (barra «Estado de operación» y columna «En operación» por zona, prioridad y subsector; cada número abre la lista), en los informes PDF/PowerPoint (sección «Estado de operación»), en el filtro de la lista de tareas y en la exportación a Excel.",
     ],
   },
   {
@@ -198,6 +235,7 @@ const ES: Section[] = [
       "«Usuarios»: «+ Nuevo usuario» abre una ventana (si deja la contraseña vacía será usuario + 123). «Editar» abre la misma ventana para cambiar nombre, usuario, rol, estado o contraseña.",
       "Por seguridad, eliminar una campaña, crear usuarios o cambiar rol, estado o contraseña pide confirmar su contraseña si su último ingreso fue hace más de 10 minutos.",
       "«Registro» → «Actividad»: quién hizo qué y cuándo (ingresos, cambios de usuarios, cargas, asignaciones, llamadas, visitas, descargas de datos). «Errores»: fallos de la aplicación. Se puede filtrar y descargar en CSV. Arriba, «Ubicación y velocidad» muestra dónde están la base de datos y los servidores y cuánto tarda una respuesta; si dice que están lejos, avise a soporte.",
+      "«Registro» también muestra las decisiones de la propia aplicación con «Aplicación» como autor: pasada a visita, seguimiento programado, solicitud SIGTUR asignada, resuelta o vencida, tareas cubiertas o devueltas por ausencias y envíos a SIGTUR.",
     ],
   },
   {
@@ -328,6 +366,8 @@ const EN: Section[] = [
       "Other analysts can request a call from SIGTUR. It arrives in the «Solicitudes SIGTUR» campaign (always open) and is assigned automatically, by workload, to the people chosen in “Integrations” (people on leave are skipped).",
       "These tasks carry the purple “SIGTUR request” tag with who asked and why, and come first in “Due today”.",
       "If the company already had an open task, no new one is created: that task gets the tag and goes back to “Due today”.",
+      "Deadline: 2 working days (Monday to Friday) from arrival, or the date SIGTUR sends. The tag shows “due dd/mm”, then “Due tomorrow” (orange) and “Overdue by N days” (red); the most urgent come first. “Follow-up” counts “Overdue SIGTUR requests” per person.",
+      "It is solved when someone answers (results 01–06) or the task goes to visit; SIGTUR is then told the result (“Request solved”).",
       "An administrator can switch requests off or on with the switch in the “Permanent campaign” block (in “Campaigns” or “Integrations”). When off, SIGTUR is told “call requests paused” and no new calls arrive; open tasks stay with their agents and can be finished. Supervisors see whether it is on or paused. This campaign can’t be closed or deleted.",
       "Campaigns created from SIGTUR arrive as “Draft” with their establishments; a supervisor or administrator reviews, assigns and activates them.",
     ],
@@ -349,6 +389,40 @@ const EN: Section[] = [
       "“Receive call requests”: On / Off switch (asks for confirmation to switch off). When off, SIGTUR is told “paused” and the simulation doesn’t create tasks either.",
       "“Simulate a SIGTUR request” creates a test request, just like the real ones, to see the flow before SIGTUR connects.",
       "“Latest requests received” shows what SIGTUR sent or read, and whether it was accepted or rejected.",
+    ],
+  },
+  {
+    id: "sigtur-push", roles: ["admin"], title: "Automatic sending to SIGTUR",
+    steps: [
+      "From now on every call, visit and email (interactions), every data change a person decides (change requests) and every solved SIGTUR request goes to “Integrations” → “Automatic sending to SIGTUR” → “Waiting to be sent”.",
+      "Sending is off while the connection is completed: nothing leaves and nothing is lost.",
+      "When SIGTUR gives you its address, type it in “SIGTUR's receiving address” and press “Save”.",
+      "When SIGTUR gives you its key, paste it in Vercel → your project → Settings → Environment Variables named SIGTUR_PUSH_KEY and redeploy. Never type it in the app or send it in a message.",
+      "With address and key ready, press “Off” to switch on: what was waiting goes out in order. If SIGTUR doesn't answer, it retries by itself; “Retry now” forces a try.",
+    ],
+  },
+  {
+    id: "update-data", roles: ["agent", "inspector", "supervisor", "admin"], title: "Updating establishment details",
+    bullets: [
+      "In a call, choosing the result “Changed owner / name / address” shows “New trade name”, “New address” and “Owner / person in charge” inside the same establishment box.",
+      "In a visit, “Update details (if changed)” below the notes.",
+      "Each detail a person changes (these fields, the updated email, “Operating?”, the closing date and phones added, replaced or marked wrong) is sent to SIGTUR as a change request and recorded in “Log”.",
+    ],
+  },
+  {
+    id: "history", roles: ["agent", "supervisor", "admin"], title: "Warnings from other campaigns",
+    bullets: [
+      "When a task opens, a yellow “Earlier commitment” warning says that RUT committed to formalize in another campaign, with the campaign, the commitment date and who recorded it.",
+      "A red “Found closed” warning says the RUT (or, when it says “same company”, another RUT with the same RNC) was recorded as closed in another campaign, with the campaign and since when.",
+      "In “Same company” each RUT shows its RNT status and its campaign status, plus a short line if it has warnings.",
+      "The warnings also show in each call summary and stay even if the earlier campaign is deleted.",
+    ],
+  },
+  {
+    id: "operation", roles: ["supervisor", "admin"], title: "Operating status",
+    bullets: [
+      "Each establishment is Operating, Not operating / closed, Doesn't know or No data, from the latest record (calls, visits and SIGTUR status). Closed takes priority.",
+      "It shows in “Summary” (rows at the end of the table), in “Global statistics” (“Operating status” bar and “Operating” column by zone, priority and subsector; each number opens the list), in PDF/PowerPoint reports (“Operating status” section), in the task list filter and in the Excel export.",
     ],
   },
   {
@@ -380,6 +454,7 @@ const EN: Section[] = [
       "“Users”: “+ New user” opens a pop-up (an empty password becomes username + 123). “Edit” opens the same pop-up to change name, username, role, status or password.",
       "For security, deleting a campaign, creating users or changing a role, status or password asks you to confirm your password if your last sign-in was more than 10 minutes ago.",
       "“Log” → “Activity”: who did what and when (sign-ins, user changes, uploads, assignments, calls, visits, data downloads). “Errors”: app failures. Filter and download as CSV. On top, “Location and speed” shows where the database and servers are and how long a response takes; if it says they are far apart, tell support.",
+      "“Log” also shows the app's own decisions with “App” as author: sent to visit, follow-up scheduled, SIGTUR request assigned, solved or overdue, tasks covered or handed back for absences, and sending to SIGTUR.",
     ],
   },
   {

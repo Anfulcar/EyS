@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { logActivity } from "@/lib/audit";
 import { callAttempts, callResults, campaigns, companies, establishments, phones, statusChanges, users, visits } from "@/db/schema";
 import { MANAGERS, notFoundResponse, routeUser } from "@/lib/auth";
-import { codeMatrixText, label, MATRIX_COLUMNS, OBSTACLES, PHONE_KINDS, PHONE_REASONS } from "@/lib/catalog";
+import { codeMatrixText, label, MATRIX_COLUMNS, OBSTACLES, operationOf, PHONE_KINDS, PHONE_REASONS } from "@/lib/catalog";
 import { localDayEnd, localDayStart } from "@/lib/dates";
 import { EXPORT_SHEETS, parseExportChoice, type ExportSheetKey } from "@/lib/export-spec";
 import { styleHeader, workbookResponse } from "@/lib/sheets";
@@ -53,6 +53,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     if (f.priority && e.prioridad !== f.priority) return false;
     if (f.code && e.finalCode !== f.code) return false;
     if (f.status && comp?.status !== f.status) return false;
+    if (f.op && operationOf(e) !== f.op) return false;
     if (f.agent === "none" ? comp?.assignedUserId != null : f.agent && comp?.assignedUserId !== Number(f.agent)) return false;
     return true;
   });

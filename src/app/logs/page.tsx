@@ -100,7 +100,7 @@ export default async function LogsPage({ searchParams }: { searchParams: Promise
                 "action" in r ? (
                   <tr key={r.id}>
                     <td className="whitespace-nowrap text-xs text-slate-500">{fmtDateTime(r.at, lang)}</td>
-                    <td className="whitespace-nowrap">{r.userName ?? "—"}</td>
+                    <td className="whitespace-nowrap">{r.userName ?? <span className="font-medium text-purple-700">{t.logApp}</span>}</td>
                     <td className="whitespace-nowrap font-medium">{label(ACTIVITY_LABELS, r.action, lang)}</td>
                     <td className="text-slate-600">{r.summary}</td>
                   </tr>
