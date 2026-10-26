@@ -473,3 +473,55 @@ test("delete a report, new campaign from results, and the SIGTUR connection", as
   await page.goto("/stats");
   await expect(page.getByText("Estado de operación").first()).toBeVisible();
 });
+
+test("administrators remove RUTs from a running campaign (filters and file); supervisors can't", async ({ page }) => {
+  await signIn(page, "admin", NEW_PW);
+  await page.goto("/campaigns");
+  await page.locator("a.card", { has: page.getByRole("heading", { name: "Campaña de prueba", exact: true }) }).click();
+  await expect(page).toHaveURL(/\/campaigns\/\d+$/);
+  const campaignUrl = page.url();
+
+  // By filters: every «Sin licencia» task
+  await page.goto(`${campaignUrl}/companies?rnt=${encodeURIComponent("Sin licencia")}`);
+  await page.getByRole("button", { name: "Eliminar de la campaña…" }).click();
+  const dialog = page.getByRole("dialog", { name: /Eliminar RUT de/ });
+  await dialog.getByRole("button", { name: "Revisar" }).click();
+  await expect(dialog.getByTestId("removal-summary")).toContainText("1 tareas · 1 establecimientos");
+  await dialog.getByLabel(/Motivo/).fill("Fuera de alcance (prueba)");
+  await dialog.getByLabel("Escriba ELIMINAR para confirmar").fill("ELIMINAR");
+  await dialog.getByRole("button", { name: "Eliminar 1 RUT" }).click();
+  await expect(dialog.getByText("1 RUT eliminados de la campaña.")).toBeVisible();
+
+  // By file, from «Actualizar estatus»: one RUT of the campaign and one that isn't
+  await page.goto(`${campaignUrl}/status`);
+  const card = page.getByTestId("remove-from-file");
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("RUT");
+  ws.addRow(["RUT"]);
+  ws.addRow(["TA-DEMO-0001"]);
+  ws.addRow(["NO-EXISTE-9"]);
+  await card.locator("input[type=file]").setInputFiles({ name: "retirar.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer: Buffer.from(await wb.xlsx.writeBuffer()) });
+  await card.getByRole("button", { name: "Revisar" }).click();
+  await expect(card.getByTestId("removal-summary")).toContainText("1 del archivo no están en esta campaña: NO-EXISTE-9");
+  await card.getByLabel(/Motivo/).fill("Ya formalizado");
+  await card.getByLabel("Escriba ELIMINAR para confirmar").fill("ELIMINAR");
+  await card.getByRole("button", { name: "Eliminar 1 RUT" }).click();
+  await expect(card.getByText("1 RUT eliminados de la campaña.")).toBeVisible();
+
+  // What stays: the «Eliminadas» list with the reason, and the log
+  await page.goto(`${campaignUrl}/companies`);
+  await page.getByRole("link", { name: "Eliminadas (2)" }).click();
+  const removed = page.getByTestId("removed-table");
+  await expect(removed).toContainText("TA-DEMO-0002");
+  await expect(removed).toContainText("Fuera de alcance (prueba)");
+  await expect(removed).toContainText("Ya formalizado");
+  await page.goto("/logs?action=tasks.removed");
+  await expect(page.locator("td", { hasText: "RUT eliminados de la campaña" }).first()).toBeVisible();
+
+  // Supervisors don't get the option
+  await signIn(page, "agente1", "Agente-Clave-1");
+  await page.goto(`${campaignUrl}/companies`);
+  await expect(page.getByRole("button", { name: "Eliminar de la campaña…" })).toHaveCount(0);
+  await page.goto(`${campaignUrl}/status`);
+  await expect(page.getByTestId("remove-from-file")).toHaveCount(0);
+});

@@ -1,5 +1,5 @@
-import { and, asc, eq, inArray, isNotNull, isNull, like, lt, notInArray, or, sql, type SQL } from "drizzle-orm";
-import { CopyPlus, Search, Users2 } from "lucide-react";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { CopyPlus, Download, Search, Trash2, Users2 } from "lucide-react";
 import Link from "next/link";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
 import { Avatar } from "@/components/Avatar";
@@ -7,20 +7,21 @@ import { CampaignFields } from "@/components/CampaignFields";
 import { Overlay } from "@/components/Overlay";
 import { RefreshButton } from "@/components/RefreshButton";
 import { ReassignSelect, SelectAll } from "@/components/TaskSelection";
+import { RemoveFromList } from "@/components/RemoveTasks";
 import { TransferForm } from "@/components/TransferForm";
 import { Empty, PriorityBadge, SigturTag, StatusBadge } from "@/components/ui";
 import { db } from "@/db";
 import { campaigns, companies, establishments, users } from "@/db/schema";
-import { CALL_CODES, CLOSED_STATUSES, CODE_SHORT, codeLabel, codeTone, COMPANY_STATUSES, label } from "@/lib/catalog";
-import { fmtDate, nowIso } from "@/lib/dates";
+import { CALL_CODES, CODE_SHORT, codeLabel, codeTone, COMPANY_STATUSES, label } from "@/lib/catalog";
+import { fmtDate, fmtDateTime } from "@/lib/dates";
 import { getDict } from "@/lib/i18n-server";
 import { requestDeadline } from "@/lib/sigtur";
-import { dueCondition } from "@/lib/queue";
+import { removedCount, removedList } from "@/lib/remove";
+import { TASK_FILTER_KEYS, taskWhere } from "@/lib/task-filters";
+import { requireUser } from "@/lib/auth";
 import { absentOn, workload } from "@/lib/team";
 import { TRANSFERABLE } from "@/lib/transfer";
-import { assignAction, bulkAssignAction, countTransferAction, reassignCompanyAction, transferCampaignAction } from "../../../actions";
-
-const OP_CLOSED_SQL = sql`(case when e.en_operacion = 'No' or e.final_code = '05' or e.estatus_sigtur_actualizado = 'Inactivo (depurado)' then 1 else 0 end)`;
+import { assignAction, bulkAssignAction, countTransferAction, previewRemovalAction, reassignCompanyAction, removeTasksAction, transferCampaignAction } from "../../../actions";
 
 const PAGE = 200;
 const TONES = { good: "bg-emerald-50 text-emerald-800", info: "bg-brand-50 text-brand-700", warn: "bg-amber-50 text-amber-800", bad: "bg-red-50 text-mitur-red", none: "" };
@@ -29,6 +30,7 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
   const id = Number((await params).id);
   const sp = await searchParams;
   const { t, lang } = await getDict();
+  const me = await requireUser(["admin", "supervisor"]);
   const agents = await db.select().from(users).where(and(eq(users.active, true), inArray(users.role, ["agent", "supervisor", "admin"]))).orderBy(asc(users.name));
   const [load, absent, byStatus, campaign] = await Promise.all([
     workload(agents.map((a) => a.id)),
@@ -39,32 +41,19 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
   const statusCount = new Map(byStatus.map((s) => [s.status, Number(s.n)]));
   const zones = (await db.selectDistinct({ zone: companies.zone }).from(companies).where(eq(companies.campaignId, id))).map((z) => z.zone).filter(Boolean).sort() as string[];
 
-  const where: SQL[] = [eq(companies.campaignId, id)];
-  if (sp.status) where.push(eq(companies.status, sp.status));
-  if (sp.agent === "none") where.push(isNull(companies.assignedUserId));
-  else if (sp.agent) where.push(eq(companies.assignedUserId, Number(sp.agent)));
-  if (sp.zone) where.push(eq(companies.zone, sp.zone));
-  // Follow-up filters (also opened from the "Seguimiento" tab)
-  const now = nowIso();
+  const where = taskWhere(id, sp);
+  // Values for the extra filters, and the «Eliminadas» record.
+  const [rnts, subs, codes, nRemoved] = await Promise.all([
+    db.selectDistinct({ v: establishments.estatusRnt }).from(establishments).where(eq(establishments.campaignId, id)),
+    db.selectDistinct({ v: establishments.subsector }).from(establishments).where(eq(establishments.campaignId, id)),
+    db.selectDistinct({ v: companies.lastCode }).from(companies).where(eq(companies.campaignId, id)),
+    removedCount(id),
+  ]);
+  const values = (rows: { v: string | null }[]) => rows.map((r) => r.v).filter((v): v is string => !!v).sort();
+  const showRemoved = sp.view === "removed";
+  const removed = showRemoved ? await removedList(id) : [];
+  const activeFilters = Object.fromEntries(TASK_FILTER_KEYS.filter((k) => sp[k]).map((k) => [k, sp[k]!]));
   const idleDays = Math.max(1, Number(sp.days) || 3);
-  if (sp.f === "due") where.push(dueCondition(now));
-  if (sp.f === "overdue") where.push(and(eq(companies.status, "followup"), lt(companies.nextActionAt, now))!);
-  if (sp.f === "idle") where.push(and(notInArray(companies.status, CLOSED_STATUSES), lt(sql`coalesce(${companies.lastCalledAt}, ${companies.assignedAt}, '')`, new Date(Date.now() - idleDays * 86400000).toISOString()))!);
-  if (sp.f === "open") where.push(notInArray(companies.status, CLOSED_STATUSES));
-  if (sp.f === "covered") where.push(isNotNull(companies.coverAbsenceId));
-  if (sp.f === "sigturOverdue") where.push(and(eq(companies.sigturRequest, true), isNull(companies.requestResolvedAt), isNotNull(companies.requestOverdueAt))!);
-  // Operating status of any of the task's establishments (same rule as the dashboards).
-  const OP: Record<string, SQL> = {
-    opYes: sql`e.en_operacion = 'Sí' and ${OP_CLOSED_SQL} = 0`,
-    opNo: sql`${OP_CLOSED_SQL} = 1`,
-    opUnknown: sql`e.en_operacion = 'No sabe' and ${OP_CLOSED_SQL} = 0`,
-    opNone: sql`e.en_operacion is null and ${OP_CLOSED_SQL} = 0`,
-  };
-  if (sp.f && OP[sp.f]) where.push(sql`exists (select 1 from establishments e where e.company_id = ${companies.id} and ${OP[sp.f]})`);
-  if (sp.q) {
-    const q = `%${sp.q}%`;
-    where.push(or(like(companies.razonSocial, q), like(companies.rnc, q), sql`exists (select 1 from establishments e where e.company_id = ${companies.id} and (e.nombre_comercial like ${q} or e.sigtur_id like ${q} or e.rut like ${q}))`)!);
-  }
   const page = Math.max(0, Number(sp.page ?? 0));
   const [{ total }] = await db.select({ total: sql<number>`count(*)` }).from(companies).where(and(...where));
   const rows = await db.select().from(companies).where(and(...where)).orderBy(asc(companies.priority), asc(companies.razonSocial)).limit(PAGE).offset(page * PAGE);
@@ -131,6 +120,36 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
             </div>
           </div>
           <button className="btn-secondary">{t.filter}</button>
+          <div className="grid gap-3 md:col-span-full md:grid-cols-4">
+            <div>
+              <label className="label">{t.filterRnt}</label>
+              <select name="rnt" defaultValue={sp.rnt ?? ""} className="input">
+                <option value="">{t.all}</option>
+                {values(rnts).map((v) => <option key={v} value={v}>{v}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label">{t.filterSubsector}</label>
+              <select name="sub" defaultValue={sp.sub ?? ""} className="input">
+                <option value="">{t.all}</option>
+                {values(subs).map((v) => <option key={v} value={v}>{v}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label">{t.priority}</label>
+              <select name="prio" defaultValue={sp.prio ?? ""} className="input">
+                <option value="">{t.all}</option>
+                {["P1", "P2", "P3"].map((v) => <option key={v} value={v}>{v}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label">{t.filterLastResult}</label>
+              <select name="code" defaultValue={sp.code ?? ""} className="input">
+                <option value="">{t.all}</option>
+                {values(codes).map((v) => <option key={v} value={v}>{codeLabel(v, lang)}</option>)}
+              </select>
+            </div>
+          </div>
         </form>
       </div>
 
@@ -205,6 +224,16 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
           <SubmitButton className="btn-secondary">{t.apply}</SubmitButton>
         </ActionForm>
         <span className="ml-auto" />
+        {nRemoved > 0 && (
+          <Link href={showRemoved ? `/campaigns/${id}/companies` : `/campaigns/${id}/companies?view=removed`} className="text-sm font-medium text-slate-600 hover:underline">
+            {showRemoved ? t.removedBack : t.removedLink.replace("{n}", String(nRemoved))}
+          </Link>
+        )}
+        {me.role === "admin" && campaign?.status !== "closed" && (
+          <Overlay variant="drawer" triggerClassName="btn-secondary text-rose-700" trigger={<><Trash2 className="h-4 w-4" />{t.removeButton}</>} title={t.removeTitle.replace("{name}", campaign?.name ?? "")}>
+            <RemoveFromList campaignId={id} filters={activeFilters} total={Number(total)} t={t} preview={previewRemovalAction} action={removeTasksAction} />
+          </Overlay>
+        )}
         <Overlay variant="drawer" width="max-w-2xl" triggerClassName="btn-secondary" trigger={<><CopyPlus className="h-4 w-4" />{t.transferButton}</>} title={t.transferButton}>
           <TransferForm
             campaignId={id}
@@ -222,7 +251,31 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
         <RefreshButton label={t.refresh} />
       </div>
 
-      {rows.length === 0 ? (
+      {showRemoved ? (
+        <div className="card overflow-hidden p-0">
+          <div className="flex items-center justify-between px-5 pt-5">
+            <h2 className="text-base">{t.removedTitle}</h2>
+            <a href={`/api/campaigns/${id}/removed`} className="btn-secondary btn-sm"><Download className="h-3.5 w-3.5" />Excel</a>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="table" data-testid="removed-table">
+              <thead><tr><th>{t.calledAtCol}</th><th>RUT</th><th>{t.company}</th><th>{t.removeReason}</th><th className="text-right">{t.calls}</th><th>{t.removedBy}</th></tr></thead>
+              <tbody>
+                {removed.map((r) => (
+                  <tr key={r.id}>
+                    <td className="whitespace-nowrap text-sm">{fmtDateTime(r.removedAt, lang)}</td>
+                    <td className="whitespace-nowrap font-mono text-xs">{r.rut}</td>
+                    <td className="text-sm">{r.establishment}</td>
+                    <td className="text-sm text-slate-600">{r.reason}</td>
+                    <td className="text-right text-sm tabular-nums">{r.calls}</td>
+                    <td className="whitespace-nowrap text-sm">{r.removedByName}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : rows.length === 0 ? (
         <Empty>{t.noData}</Empty>
       ) : (
         <div className="card overflow-hidden p-0">

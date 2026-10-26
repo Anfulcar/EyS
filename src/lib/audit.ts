@@ -11,7 +11,7 @@ export const ACTIONS = [
   "user.created", "user.updated", "user.role_changed", "user.status_changed", "user.password_reset",
   "campaign.created", "campaign.updated", "campaign.status_changed", "campaign.deleted",
   "upload.establishments", "upload.bounces", "upload.status", "emails.marked_sent",
-  "assignment.run", "task.reassigned", "call.logged", "call.reviewed", "task.moved", "task.covered", "absence.added", "absence.deleted", "campaign.script_updated", "report.downloaded", "report.generated", "report.template_saved", "report.template_deleted", "report.deleted", "campaign.from_results", "integration.key_created", "integration.key_revoked", "sigtur.call_request", "sigtur.campaign", "sigtur.requests_on", "sigtur.requests_off", "phone.added", "visit.logged",
+  "assignment.run", "task.reassigned", "call.logged", "call.reviewed", "task.moved", "task.covered", "absence.added", "absence.deleted", "campaign.script_updated", "report.downloaded", "report.generated", "report.template_saved", "report.template_deleted", "report.deleted", "campaign.from_results", "integration.key_created", "integration.key_revoked", "sigtur.call_request", "sigtur.campaign", "sigtur.requests_on", "sigtur.requests_off", "phone.added", "visit.logged", "tasks.removed",
   "task.to_visit", "task.followup_scheduled", "task.cover_started", "task.cover_returned", "sigtur.request_assigned", "sigtur.request_resolved", "sigtur.request_overdue", "sigtur.sent", "sigtur.send_failed", "sigtur.push_on", "sigtur.push_off", "sigtur.push_url", "sigtur.retry", "sigtur.assignees_saved", "report.template_paused", "establishment.updated", "phone.marked",
   "export.downloaded",
 ] as const;
