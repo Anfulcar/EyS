@@ -130,7 +130,7 @@ export default async function FollowupPage({ params }: { params: Promise<{ id: s
                         <div className="flex items-center gap-3">
                           <Avatar name={s.name} size="sm" />
                           <div>
-                            <div className="font-medium text-slate-900">{s.name}</div>
+                            <Link href={`/agents/${s.id}?campaign=${id}`} className="font-medium text-brand-700 hover:underline" title={t.openAgentSummary.replace("{name}", s.name)}>{s.name}</Link>
                             <div className="text-xs text-slate-500">{t.openLoad.replace("{n}", String(load.get(s.id) ?? 0))}</div>
                           </div>
                         </div>

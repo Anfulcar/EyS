@@ -1,17 +1,15 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
-import { CheckCircle2, Circle, MessageSquare } from "lucide-react";
 import Link from "next/link";
+import { CallsTable } from "@/components/CallsTable";
 import { Empty } from "@/components/ui";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
-import { CALL_CODES, CODE_SHORT, codeLabel, codeTone, label } from "@/lib/catalog";
-import { fmtDateTime } from "@/lib/dates";
+import { CALL_CODES } from "@/lib/catalog";
 import { getDict } from "@/lib/i18n-server";
 import { callCampaigns, callRows, canSeeAllCalls, type CallFilters } from "@/lib/reviews";
 
 const PAGE = 100;
-const TONES = { good: "bg-emerald-50 text-emerald-800", info: "bg-brand-50 text-brand-700", warn: "bg-amber-50 text-amber-800", bad: "bg-red-50 text-mitur-red", none: "bg-slate-100 text-slate-600" };
 
 export default async function ReviewsPage({ searchParams }: { searchParams: Promise<CallFilters & { page?: string }> }) {
   const me = await requireUser(["admin", "supervisor", "agent"]);
@@ -77,56 +75,19 @@ export default async function ReviewsPage({ searchParams }: { searchParams: Prom
       {rows.length === 0 ? (
         <Empty>{t.noCallsFound}</Empty>
       ) : (
-        <div className="card overflow-hidden p-0">
-          <div className="overflow-x-auto">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>{t.calledAtCol}</th>
-                  {all && <th>{t.agent}</th>}
-                  <th>{t.company}</th>
-                  <th>{t.phoneNumber}</th>
-                  <th>{t.result}</th>
-                  <th>{t.reviewState}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.slice(0, PAGE).map((r) => (
-                  <tr key={r.a.id}>
-                    <td className="whitespace-nowrap">
-                      <Link href={`/reviews/${r.a.id}`} className="font-medium text-brand-700 hover:underline">{fmtDateTime(r.a.calledAt, lang)}</Link>
-                    </td>
-                    {all && <td className="whitespace-nowrap">{r.agent}</td>}
-                    <td className="min-w-[14rem]">
-                      <div className="font-medium text-slate-900">{r.name}</div>
-                      <div className="text-xs text-slate-500">{r.rut ? `RUT ${r.rut} · ` : ""}{r.campaign}</div>
-                    </td>
-                    <td className="whitespace-nowrap font-mono text-sm">{r.a.phoneNumber ?? "—"}</td>
-                    <td>
-                      <div className="flex flex-wrap gap-1">
-                        {r.codes.map((c) => <span key={c} className={`badge ${TONES[codeTone(c)]}`} title={codeLabel(c, lang)}>{label(CODE_SHORT, c, lang)}</span>)}
-                      </div>
-                    </td>
-                    <td className="whitespace-nowrap">
-                      {r.a.reviewedAt ? (
-                        <span className="inline-flex items-center gap-1 text-sm text-emerald-700"><CheckCircle2 className="h-4 w-4" />{t.reviewed}{r.a.reviewComment && <MessageSquare className="h-3.5 w-3.5" aria-label={t.reviewCommentLabel} />}</span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-sm text-slate-400"><Circle className="h-4 w-4" />{t.notReviewed}</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {(page > 0 || hasMore) && (
+        <CallsTable
+          rows={rows.slice(0, PAGE)}
+          t={t}
+          lang={lang}
+          showAgent={all}
+          pager={(page > 0 || hasMore) && (
             <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-sm">
               {page > 0 ? <Link className="btn-secondary btn-sm" href={qs({ page: String(page - 1) })}>←</Link> : <span />}
               <span className="text-slate-500">{page * PAGE + 1}–{page * PAGE + Math.min(rows.length, PAGE)}</span>
               {hasMore ? <Link className="btn-secondary btn-sm" href={qs({ page: String(page + 1) })}>→</Link> : <span />}
             </div>
           )}
-        </div>
+        />
       )}
     </div>
   );

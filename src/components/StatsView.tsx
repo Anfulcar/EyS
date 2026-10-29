@@ -9,7 +9,7 @@ import { fmtPct, pct } from "./ui";
 
 // Ministerio de Turismo palette (from the logo).
 const C = { blue: "#0b4a92", sky: "#aecbec", yellow: "#f5c400", orange: "#f39019", red: "#d81e1e", green: "#2e9e44", grey: "#94a3b8" };
-const TONE_COLOR = { good: C.green, info: C.blue, warn: C.orange, bad: C.red, none: C.grey };
+export const TONE_COLOR = { good: C.green, info: C.blue, warn: C.orange, bad: C.red, none: C.grey };
 const STATUS_COLOR: Record<string, string> = { pending: C.grey, retry: C.yellow, followup: C.blue, visit: C.orange, done: C.green, transferred: "#a78bfa" };
 
 // Builds the address of the list behind a number; null when the dashboard has no lists.
@@ -70,7 +70,7 @@ function MiniGoal({ title, n, d, target, t, href }: { title: string; n: number; 
   );
 }
 
-function HBars({ rows, total }: { rows: { label: string; n: number; color?: string; href?: string | null }[]; total: number }) {
+export function HBars({ rows, total }: { rows: { label: string; n: number; color?: string; href?: string | null }[]; total: number }) {
   const max = Math.max(1, ...rows.map((r) => r.n));
   return (
     <div className="space-y-3">
@@ -142,7 +142,8 @@ function BreakdownTable({ rows, t, dim, href }: { rows: Breakdown[]; t: Dict; di
   );
 }
 
-export function StatsView({ s, t, lang, period, listHref }: { s: Stats; t: Dict; lang: Lang; period?: { progress: number; daysLeft: number }; listHref?: string }) {
+// agentHref: where an agent's name leads («Resumen del agente»), with {id} for the person.
+export function StatsView({ s, t, lang, period, listHref, agentHref }: { s: Stats; t: Dict; lang: Lang; period?: { progress: number; daysLeft: number }; listHref?: string; agentHref?: string }) {
   if (s.universe === 0) return <div className="card text-sm text-slate-500">{t.noData}</div>;
   const href = makeHref(listHref);
   const counts: [string, number, string | undefined, string | null][] = [
@@ -259,7 +260,7 @@ export function StatsView({ s, t, lang, period, listHref }: { s: Stats; t: Dict;
                   <tbody>
                     {s.byAgent.map((a) => (
                       <tr key={a.agent}>
-                        <td className="font-medium text-slate-800">{a.agent}</td>
+                        <td className="font-medium text-slate-800">{agentHref ? <Link href={agentHref.replace("{id}", String(a.id))} className="text-brand-700 hover:underline" title={t.openAgentSummary.replace("{name}", a.agent)}>{a.agent}</Link> : a.agent}</td>
                         <td className="text-right tabular-nums">{href({ d: "agent", v: String(a.id) }) ? <Link href={href({ d: "agent", v: String(a.id) })!} className="font-medium text-brand-700 hover:underline">{a.companies}</Link> : a.companies}</td>
                         <td className="text-right tabular-nums">{a.done} <span className="text-xs text-slate-400">{fmtPct(a.done, a.companies)}</span></td>
                         <td className="text-right tabular-nums">{a.calls}</td>
