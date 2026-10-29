@@ -75,7 +75,7 @@ export default async function GlobalStatsPage({ searchParams }: { searchParams: 
           </tbody>
         </table>
       </div>
-      <StatsView s={all} t={t} lang={lang} listHref={includeClosed ? "/stats/list" : "/stats/list?include=open"} />
+      <StatsView s={all} t={t} lang={lang} listHref={includeClosed ? "/stats/list" : "/stats/list?include=open"} agentHref="/agents/{id}" />
     </div>
   );
 }

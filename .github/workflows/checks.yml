@@ -15,7 +15,8 @@ permissions:
 jobs:
   checks:
     name: Type check, lint, tests, build, browser test
-    runs-on: ubuntu-latest
+    # Pinned: the browser used by the end-to-end test can not be installed on newer images yet.
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
       # Throw-away database file for the build; never a real database.

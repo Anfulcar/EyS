@@ -6,6 +6,7 @@ type Section = { id: string; roles: string[]; title: string; intro?: string; ste
 type L<T> = Record<Lang, T>;
 
 export const WHATS_NEW: { date: string; es: string; en: string }[] = [
+  { date: "2026-10-29", es: "Nuevo «Resumen del agente»: al pulsar el nombre de una persona en «Estadísticas», «Tablero» o «Seguimiento» se ven sus números, resultados, llamadas por día y todas sus llamadas, cada una con su detalle. Los agentes ven el suyo con «Mi resumen».", en: "New “Agent summary”: pressing a person's name in “Statistics”, “Dashboard” or “Follow-up” shows their numbers, results, calls per day and all their calls, each with its detail. Agents see their own with “My summary”." },
   { date: "2026-10-26", es: "Los administradores pueden eliminar RUT de una campaña en curso, desde un archivo («Actualización de estatus») o con los filtros de «Tareas y asignación» (nuevos filtros: estatus RNT, subsector / tipo, prioridad y último resultado). Antes de borrar se ven los conteos; queda el motivo en «Eliminadas».", en: "Administrators can remove RUTs from a running campaign, from a file (“Status update”) or with the “Tasks and assignment” filters (new filters: RNT status, subsector / type, priority and last result). Counts are shown before deleting; the reason stays in “Removed”." },
   { date: "2026-10-26", es: "Avisos de otras campañas (compromiso anterior o encontrado cerrado), estatus RNT en «Misma empresa», «Actualizar datos» en llamadas y visitas, plazos en las solicitudes SIGTUR, «Estado de operación» en Resumen, Estadísticas, informes y filtros, «Registro» con las decisiones de la aplicación y «Envío automático a SIGTUR» listo (apagado hasta completar la conexión).", en: "Warnings from other campaigns (earlier commitment or found closed), RNT status in “Same company”, “Update details” in calls and visits, deadlines on SIGTUR requests, “Operating status” in Summary, Statistics, reports and filters, “Log” with the app's own decisions and “Automatic sending to SIGTUR” ready (off until the connection is complete)." },
   { date: "2026-10-22", es: "«Campañas» separa la «Campaña permanente» (Solicitudes SIGTUR) de las «Campañas temporales». Los administradores pueden encender o poner en pausa las solicitudes de llamada de SIGTUR; las tareas abiertas siguen en curso.", en: "“Campaigns” separates the “Permanent campaign” (Solicitudes SIGTUR) from the “Temporary campaigns”. Administrators can switch SIGTUR call requests on or pause them; open tasks keep going." },
@@ -49,6 +50,7 @@ const ES: Section[] = [
       "Filtre por número de intentos (sin intentos, 1, 2, 3 o más) con los botones a la derecha de las pestañas.",
       "La etiqueta «+N de la misma empresa» indica otros establecimientos con el mismo RNC.",
       "«Actualizar» recarga la lista sin salir de la página.",
+      "«Mi resumen» (arriba a la derecha) abre su propio resumen: sus números, resultados, llamadas por día y todas sus llamadas.",
     ],
   },
   {
@@ -109,6 +111,17 @@ const ES: Section[] = [
       "«Tablero» de cada campaña: arriba las 4 metas del plan (llamados, contacto efectivo, compromisos, vencidas → en proceso) con una barra verde si se alcanza la meta y naranja si no; la raya oscura marca la meta. Debajo: conteos y avance del periodo, otras metas, gráficos, y las tablas por agente, zona, prioridad y subsector en pestañas.",
       "Haga clic en cualquier número, barra, fila o leyenda (por ejemplo «Requieren visita») para ver la lista de establecimientos que lo forman, con el agente y el último resultado. «Descargar (Excel)» baja esa lista.",
       "«Estadísticas globales»: compara todas las campañas y suma sus resultados.",
+      "En «Por agente», el nombre de cada persona abre su «Resumen del agente».",
+    ],
+  },
+  {
+    id: "agent-summary", roles: ["supervisor", "admin", "agent"], title: "Resumen del agente",
+    bullets: [
+      "Se abre al pulsar el nombre de una persona en «Estadísticas globales» o en el «Tablero» de una campaña («Por agente»), en «Seguimiento», o con «Mi resumen» en «Mis llamadas».",
+      "Arriba: tareas asignadas, abiertas y para hoy, llamadas (y de hoy), contactos con %, compromisos y llamadas sin revisar. Debajo: resultados de sus llamadas (cada uno filtra la lista) y llamadas por día.",
+      "Al final, todas sus llamadas con filtros de resultado y revisión; la fecha abre el resumen completo de la llamada, donde se puede revisar o abrir la tarea.",
+      "Desde una campaña muestra esa campaña («ver todas las campañas» para el resto). «Desde / Hasta» cambia las llamadas, contactos, compromisos y resultados; las tareas se cuentan como están hoy.",
+      "Supervisores y administradores ven el de cualquier persona; cada agente solo el suyo.",
     ],
   },
   {
@@ -231,6 +244,7 @@ const ES: Section[] = [
       "Pestaña «Seguimiento»: una fila por persona con tareas asignadas, abiertas, para hoy, seguimientos vencidos y sin actividad hace más de 3 días, además de su disponibilidad. Cada número abre esas tareas.",
       "«Mover sus tareas abiertas»: las pasa de forma permanente a una persona o las reparte de forma equitativa (puede considerar la carga actual).",
       "Si alguien tiene una ausencia hoy o en los próximos 14 días, aparece un aviso con sus tareas abiertas sin cubrir. «Cubrir durante la ausencia» elige quién las atiende (una persona o repartidas). Pasan a esa persona el primer día de la ausencia y vuelven solas a su dueño después del último día, si la campaña sigue abierta. Las llamadas quedan registradas a nombre de quien las hizo.",
+      "El nombre de cada persona abre su «Resumen del agente» para esta campaña.",
     ],
   },
   {
@@ -279,6 +293,7 @@ const EN: Section[] = [
       "Filter by number of attempts (none, 1, 2, 3 or more) with the buttons to the right of the tabs.",
       "The “+N of the same company” tag shows other establishments with the same RNC.",
       "“Refresh” reloads the list without leaving the page.",
+      "“My summary” (top right) opens your own summary: your numbers, results, calls per day and all your calls.",
     ],
   },
   {
@@ -339,6 +354,17 @@ const EN: Section[] = [
       "Each campaign's “Dashboard”: the plan's 4 goals on top (called, effective contact, commitments, expired → in process), with a green bar when the target is met and orange when not; the dark mark shows the target. Below: counts and period progress, other goals, charts, and the tables by agent, zone, priority and subsector in tabs.",
       "Click any number, bar, row or legend (for example “Need a visit”) to see the list of establishments behind it, with the agent and last result. “Download (Excel)” gets that list.",
       "“Global statistics”: compares every campaign and adds up their results.",
+      "In “By agent”, each person's name opens their “Agent summary”.",
+    ],
+  },
+  {
+    id: "agent-summary", roles: ["supervisor", "admin", "agent"], title: "Agent summary",
+    bullets: [
+      "Opens when you press a person's name in “Global statistics” or a campaign's “Dashboard” (“By agent”), in “Follow-up”, or with “My summary” in “My calls”.",
+      "At the top: assigned tasks, open and due today, calls (and today's), contacts with %, commitments and calls not yet reviewed. Below: results of their calls (each one filters the list) and calls per day.",
+      "At the bottom, all their calls with result and review filters; the date opens the full call summary, where you can review it or open the task.",
+      "From a campaign it shows that campaign (“see all campaigns” for the rest). “From / To” changes calls, contacts, commitments and results; tasks are counted as they are today.",
+      "Supervisors and administrators see anyone's; each agent only their own.",
     ],
   },
   {
@@ -461,6 +487,7 @@ const EN: Section[] = [
       "“Follow-up” tab: one row per person with tasks assigned, open, due today, overdue follow-ups and no activity for more than 3 days, plus their availability. Each number opens those tasks.",
       "“Move their open tasks”: hands them over permanently to one person or shares them evenly (optionally by current workload).",
       "If someone has an absence today or in the next 14 days, a notice shows their open tasks not covered. “Cover during the absence” chooses who handles them (one person or shared). They move to that person on the first absent day and go back to the owner by themselves after the last one, if the campaign is still open. Calls stay recorded under whoever made them.",
+      "Each person's name opens their “Agent summary” for this campaign.",
     ],
   },
   {

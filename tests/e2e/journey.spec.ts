@@ -525,3 +525,48 @@ test("administrators remove RUTs from a running campaign (filters and file); sup
   await page.goto(`${campaignUrl}/status`);
   await expect(page.getByTestId("remove-from-file")).toHaveCount(0);
 });
+
+test("agent summary from statistics and follow-up; agents only see their own", async ({ page }) => {
+  await signIn(page, "admin", NEW_PW);
+
+  // A new agent, to check that agents only open their own summary
+  await page.goto("/users");
+  await page.getByRole("button", { name: "Nuevo usuario" }).click();
+  const newUser = page.getByRole("dialog", { name: "Nuevo usuario" });
+  await newUser.locator("input[name=username]").fill("agente2");
+  await newUser.locator("input[name=name]").fill("Bruno Agente");
+  await newUser.locator("select[name=role]").selectOption("agent");
+  await newUser.getByRole("button", { name: "Crear" }).click();
+  await expect(newUser.getByText("agente2 / agente2123")).toBeVisible();
+
+  // «Estadísticas globales» → «Por agente»: the name opens the summary, with the calls and each call's detail
+  await page.goto("/stats");
+  await page.getByRole("link", { name: "Ana Agente" }).first().click();
+  await expect(page).toHaveURL(/\/agents\/\d+$/);
+  await expect(page.getByRole("heading", { name: "Ana Agente", exact: true })).toBeVisible();
+  await expect(page.getByTestId("agent-kpis")).toContainText("Tareas asignadas");
+  await expect(page.getByText("Llamadas realizadas por Ana Agente")).toBeVisible();
+  await page.locator("#calls table a").first().click();
+  await expect(page).toHaveURL(/\/reviews\/\d+$/);
+
+  // «Seguimiento»: the summary opens for that campaign, with a way to see all campaigns
+  await page.goto("/campaigns");
+  await page.locator("a.card", { has: page.getByRole("heading", { name: "Campaña de prueba", exact: true }) }).click();
+  await expect(page).toHaveURL(/\/campaigns\/\d+$/);
+  await page.goto(page.url() + "/followup");
+  await page.getByRole("link", { name: "Ana Agente" }).first().click();
+  await expect(page).toHaveURL(/\/agents\/\d+\?campaign=\d+$/);
+  await expect(page.getByText("Campaña: Campaña de prueba")).toBeVisible();
+  await page.getByRole("link", { name: "ver todas las campañas" }).click();
+  await expect(page.getByText("Todas las campañas")).toBeVisible();
+  const anaUrl = page.url();
+
+  // An agent: «Mi resumen» opens their own; anyone else's answers "not found"
+  await signIn(page, "agente2", "agente2123");
+  await changeFirstPassword(page, "agente2123", "Bruno-Clave-1");
+  await page.goto("/calls");
+  await page.getByRole("link", { name: "Mi resumen" }).click();
+  await expect(page.getByRole("heading", { name: "Bruno Agente", exact: true })).toBeVisible();
+  await page.goto(anaUrl);
+  await expect(page.getByRole("heading", { name: "No encontrado" })).toBeVisible();
+});

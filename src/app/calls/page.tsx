@@ -1,5 +1,5 @@
 import { and, asc, eq, gt, gte, inArray, ne, sql, type SQL } from "drizzle-orm";
-import { AlertTriangle, BellRing, Building2, ChevronRight, Clock, MessageCircle, Phone, Sparkles } from "lucide-react";
+import { AlertTriangle, BarChart3, BellRing, Building2, ChevronRight, Clock, MessageCircle, Phone, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { Avatar } from "@/components/Avatar";
 import { RefreshButton } from "@/components/RefreshButton";
@@ -107,6 +107,7 @@ export default async function CallsPage({ searchParams }: { searchParams: Promis
           <p className="subtitle">{t.queueSubtitle}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {!isManager && <Link href={`/agents/${me.id}`} className="btn-secondary"><BarChart3 className="h-4 w-4" />{t.mySummary}</Link>}
           {(open.length > 1 || isManager) && (
             <form className="flex flex-wrap gap-2">
               <input type="hidden" name="tab" value={tab} />
