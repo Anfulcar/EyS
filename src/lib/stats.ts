@@ -60,7 +60,8 @@ function predicates(visitsByEst: Map<number, string[]>) {
 }
 
 // Everything the dashboard numbers need, read in one go (one database round trip).
-async function loadStatsData(campaignIds: number[]) {
+// With agentId: only that person's portfolio (tasks assigned to them now), and the calls and visits on it.
+async function loadStatsData(campaignIds: number[], agentId?: number) {
   const ids = campaignIds.length ? campaignIds : [-1];
   const [ests, results, attempts, comps, vis, people] = await Promise.all([
     db.select().from(establishments).where(inArray(establishments.campaignId, ids)),
@@ -73,6 +74,19 @@ async function loadStatsData(campaignIds: number[]) {
     db.select({ campaignId: visits.campaignId, establishmentId: visits.establishmentId, code: visits.code }).from(visits).where(inArray(visits.campaignId, ids)),
     db.select({ id: users.id, name: users.name }).from(users),
   ]);
+  if (agentId) {
+    const own = new Set(comps.filter((c) => c.assignedUserId === agentId).map((c) => c.id));
+    const ownEsts = ests.filter((e) => own.has(e.companyId));
+    const estIds = new Set(ownEsts.map((e) => e.id));
+    return {
+      ests: ownEsts,
+      results: results.filter((r) => estIds.has(r.establishmentId)),
+      attempts: attempts.filter((a) => own.has(a.companyId)),
+      comps: comps.filter((c) => own.has(c.id)),
+      vis: vis.filter((v) => estIds.has(v.establishmentId)),
+      people,
+    };
+  }
   return { ests, results, attempts, comps, vis, people };
 }
 type StatsData = Awaited<ReturnType<typeof loadStatsData>>;
@@ -82,8 +96,8 @@ export async function computeStats(campaignIds: number[]): Promise<Stats> {
 }
 
 // Totals for several campaigns plus each campaign on its own, from a single read.
-export async function computeStatsByCampaign(campaignIds: number[], totalIds: number[]) {
-  const data = await loadStatsData(campaignIds);
+export async function computeStatsByCampaign(campaignIds: number[], totalIds: number[], agentId?: number) {
+  const data = await loadStatsData(campaignIds, agentId);
   const only = (ids: Set<number>): StatsData => ({
     ests: data.ests.filter((x) => ids.has(x.campaignId)),
     results: data.results.filter((x) => ids.has(x.campaignId)),

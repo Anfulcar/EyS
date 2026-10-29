@@ -1,20 +1,26 @@
-import { eq } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
+import { FileDown } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Avatar } from "@/components/Avatar";
 import { BackLink } from "@/components/BackLink";
 import { CallsTable } from "@/components/CallsTable";
 import { DayChart } from "@/components/DayChart";
+import { Overlay } from "@/components/Overlay";
+import { ReportBuilder } from "@/components/ReportBuilder";
 import { HBars, TONE_COLOR } from "@/components/StatsView";
 import { Empty } from "@/components/ui";
 import { db } from "@/db";
-import { campaigns, users } from "@/db/schema";
+import { campaigns, reportTemplates, users } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { agentSummary } from "@/lib/agent-summary";
 import { CALL_CODES, codeLabel, codeTone, ROLES, label } from "@/lib/catalog";
 import { toIsoDate } from "@/lib/dates";
 import { getDict } from "@/lib/i18n-server";
+import { cleanOptions, type Frequency } from "@/lib/report-options";
+import { reportPeople } from "@/lib/report-run";
 import { callRows } from "@/lib/reviews";
+import { saveReportTemplateAction } from "../../actions";
 import { absentOn } from "@/lib/team";
 
 const PAGE = 100;
@@ -46,6 +52,15 @@ export default async function AgentSummaryPage({ params, searchParams }: {
   const qs = (o: Record<string, string | undefined>) => "?" + new URLSearchParams(Object.entries({ ...clean, ...o }).filter(([, v]) => v) as [string, string][]).toString();
   const pct = (n: number, d: number) => (d ? `${Math.round((n / d) * 100)} %` : "—");
   const off = absent.get(id);
+  // «Generar informe» (supervisors and administrators): the report panel with this agent, campaign and period chosen.
+  const manager = me.role !== "agent";
+  const [allCampaigns, templates, chooseable] = manager
+    ? await Promise.all([
+        db.select({ id: campaigns.id, name: campaigns.name, status: campaigns.status }).from(campaigns).orderBy(desc(campaigns.startDate)),
+        db.select().from(reportTemplates).orderBy(asc(reportTemplates.name)),
+        reportPeople(),
+      ])
+    : [[], [], []];
   const hasMore = rows.length > PAGE;
   const Kpi = ({ n, l, sub, tone }: { n: number; l: string; sub?: string; tone?: string }) => (
     <div className="card p-4">
@@ -68,12 +83,34 @@ export default async function AgentSummaryPage({ params, searchParams }: {
             </p>
           </div>
         </div>
-        <form className="flex flex-wrap items-end gap-2">
-          {campaignId && <input type="hidden" name="campaign" value={campaignId} />}
-          <div><label className="label" htmlFor="ag-from">{t.from}</label><input id="ag-from" type="date" name="from" defaultValue={from} className="input" /></div>
-          <div><label className="label" htmlFor="ag-to">{t.to}</label><input id="ag-to" type="date" name="to" defaultValue={to} className="input" /></div>
-          <button className="btn-secondary">{t.filter}</button>
-        </form>
+        <div className="flex flex-wrap items-end gap-2">
+          {manager && (
+            <Overlay variant="drawer" width="max-w-3xl" triggerClassName="btn-secondary" trigger={<><FileDown className="h-4 w-4" />{t.agentReport}</>} title={t.reportGenerate}>
+              <ReportBuilder
+                campaigns={allCampaigns}
+                people={chooseable.some((p) => p.id === id) ? chooseable : [...chooseable, { id, name: person.name }]}
+                templates={templates.map((x) => ({ id: x.id, name: x.name, options: cleanOptions(JSON.parse(x.options)), frequency: x.frequency as Frequency, runDay: x.runDay }))}
+                t={t}
+                lang={lang}
+                saveAction={saveReportTemplateAction}
+                initialOptions={{
+                  agents: [id],
+                  campaigns: campaignId ? "pick" : "all",
+                  campaignIds: campaignId ? [campaignId] : [],
+                  period: from || to ? "custom" : "all",
+                  from,
+                  to,
+                }}
+              />
+            </Overlay>
+          )}
+          <form className="flex flex-wrap items-end gap-2">
+            {campaignId && <input type="hidden" name="campaign" value={campaignId} />}
+            <div><label className="label" htmlFor="ag-from">{t.from}</label><input id="ag-from" type="date" name="from" defaultValue={from} className="input" /></div>
+            <div><label className="label" htmlFor="ag-to">{t.to}</label><input id="ag-to" type="date" name="to" defaultValue={to} className="input" /></div>
+            <button className="btn-secondary">{t.filter}</button>
+          </form>
+        </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6" data-testid="agent-kpis">

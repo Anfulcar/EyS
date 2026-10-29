@@ -44,9 +44,13 @@ export const PERIOD_LABELS: Record<PeriodKind, L> = {
 
 export type ReportFormat = "pdf" | "pptx";
 
+export const MAX_REPORT_AGENTS = 30;
+
 export type ReportOptions = {
   campaigns: "all" | "active" | "pick";
   campaignIds: number[];
+  // Empty = the whole team; otherwise one report per agent (their tasks and their calls).
+  agents: number[];
   period: PeriodKind;
   from?: string;
   to?: string;
@@ -60,6 +64,7 @@ export type ReportOptions = {
 export const DEFAULT_OPTIONS: ReportOptions = {
   campaigns: "active",
   campaignIds: [],
+  agents: [],
   period: "all",
   title: "Informe – Plan de Formalización Región Este",
   comments: "",
@@ -77,6 +82,7 @@ export function cleanOptions(o: Partial<ReportOptions> | null | undefined): Repo
   return {
     campaigns: v.campaigns === "all" || v.campaigns === "pick" ? v.campaigns : "active",
     campaignIds: Array.isArray(v.campaignIds) ? v.campaignIds.map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(0, 200) : [],
+    agents: Array.isArray(v.agents) ? [...new Set(v.agents.map(Number).filter((n) => Number.isInteger(n) && n > 0))].slice(0, MAX_REPORT_AGENTS) : [],
     period: (PERIOD_KINDS as readonly string[]).includes(v.period as string) ? (v.period as PeriodKind) : "all",
     from: isDate(v.from) ? v.from : undefined,
     to: isDate(v.to) ? v.to : undefined,

@@ -1,8 +1,8 @@
 import "server-only";
-import { desc, inArray, ne } from "drizzle-orm";
+import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import { db } from "@/db";
-import { callAttempts, callResults, campaigns, establishments, statusChanges, users, visits } from "@/db/schema";
-import { CALL_CODES, CHANNELS, codeLabel, COMPANY_STATUSES, label, OPERATION_LABELS, SIGTUR_STATUSES, VISIT_CODES, type Lang } from "./catalog";
+import { callAttempts, callResults, campaigns, companies, establishments, statusChanges, users, visits } from "@/db/schema";
+import { CALL_CODES, CHANNELS, codeLabel, COMPANY_STATUSES, label, OPERATION_LABELS, ROLES, SIGTUR_STATUSES, VISIT_CODES, type Lang } from "./catalog";
 import { fmtDate, fmtDateTime, localDayEnd, localDayStart, nowIso, todayLocal } from "./dates";
 import { CALL_HELP, CHANNEL_HELP, PRIORITY_HELP, SIGTUR_HELP, STATUS_HELP, VISIT_HELP } from "./legend";
 import { DETAIL_LABELS, PERIOD_LABELS, resolvePeriod, type ReportOptions } from "./report-options";
@@ -15,6 +15,8 @@ export type ReportData = {
   title: string;
   comments: string;
   campaignNames: string[];
+  // Agent report: "Name · Role" (empty for the whole team)
+  agentText: string;
   periodText: string;
   periodShort: string;
   generatedText: string;
@@ -75,7 +77,10 @@ export async function campaignIdsFor(o: ReportOptions) {
   return rows.map((r) => r.id);
 }
 
-export async function buildReport(o: ReportOptions, who: { name: string; scheduled?: boolean }, lang: Lang = "es", today = todayLocal()): Promise<ReportData> {
+export type ReportAgent = { id: number; name: string; role: string };
+
+// With an agent: their portfolio (tasks assigned to them now) and the calls they made.
+export async function buildReport(o: ReportOptions, who: { name: string; scheduled?: boolean }, lang: Lang = "es", today = todayLocal(), agent?: ReportAgent): Promise<ReportData> {
   const t = T[lang];
   const ids = await campaignIdsFor(o);
   const list = ids.length ? await db.select().from(campaigns).where(inArray(campaigns.id, ids)).orderBy(desc(campaigns.startDate)) : [];
@@ -88,15 +93,28 @@ export async function buildReport(o: ReportOptions, who: { name: string; schedul
   const inDay = (v: string | null | undefined) => !!v && (!range.from || v.slice(0, 10) >= range.from) && (!range.to || v.slice(0, 10) <= range.to);
 
   const ids2 = realIds.length ? realIds : [-1];
-  const [{ all: s, per }, attempts, results, vis, changes, ests, people] = await Promise.all([
-    computeStatsByCampaign(realIds, realIds),
-    db.select({ id: callAttempts.id, userId: callAttempts.userId, calledAt: callAttempts.calledAt, contacted: callAttempts.contacted, attended: callAttempts.attended, isResponsible: callAttempts.isResponsible }).from(callAttempts).where(inArray(callAttempts.campaignId, ids2)),
+  const [{ all: s, per }, attempts, allResults, allVis, allChanges, ests, people] = await Promise.all([
+    computeStatsByCampaign(realIds, realIds, agent?.id),
+    db
+      .select({ id: callAttempts.id, userId: callAttempts.userId, calledAt: callAttempts.calledAt, contacted: callAttempts.contacted, attended: callAttempts.attended, isResponsible: callAttempts.isResponsible })
+      .from(callAttempts)
+      .where(and(inArray(callAttempts.campaignId, ids2), agent ? eq(callAttempts.userId, agent.id) : undefined)),
     db.select({ attemptId: callResults.attemptId, establishmentId: callResults.establishmentId, code: callResults.code }).from(callResults).where(inArray(callResults.campaignId, ids2)),
-    db.select({ visitDate: visits.visitDate }).from(visits).where(inArray(visits.campaignId, ids2)),
+    db.select({ establishmentId: visits.establishmentId, visitDate: visits.visitDate }).from(visits).where(inArray(visits.campaignId, ids2)),
     db.select({ establishmentId: statusChanges.establishmentId, newStatus: statusChanges.newStatus, changedAt: statusChanges.changedAt }).from(statusChanges).where(inArray(statusChanges.campaignId, ids2)),
-    db.select({ id: establishments.id, estatusRnt: establishments.estatusRnt }).from(establishments).where(inArray(establishments.campaignId, ids2)),
+    db
+      .select({ id: establishments.id, estatusRnt: establishments.estatusRnt })
+      .from(establishments)
+      .innerJoin(companies, eq(companies.id, establishments.companyId))
+      .where(and(inArray(establishments.campaignId, ids2), agent ? eq(companies.assignedUserId, agent.id) : undefined)),
     db.select({ id: users.id, name: users.name }).from(users),
   ]);
+  // Agent report: only the results of their own calls, and visits / status changes on their portfolio.
+  const ownAttempts = new Set(attempts.map((a) => a.id));
+  const portfolio = new Set(ests.map((e) => e.id));
+  const results = agent ? allResults.filter((r) => ownAttempts.has(r.attemptId)) : allResults;
+  const vis = agent ? allVis.filter((v) => portfolio.has(v.establishmentId)) : allVis;
+  const changes = agent ? allChanges.filter((c) => portfolio.has(c.establishmentId)) : allChanges;
   const names = new Map(people.map((p) => [p.id, p.name]));
   const attemptById = new Map(attempts.map((a) => [a.id, a]));
   const periodAttempts = hasPeriod ? attempts.filter((a) => inIso(a.calledAt)) : attempts;
@@ -142,7 +160,11 @@ export async function buildReport(o: ReportOptions, who: { name: string; schedul
   const campRow = (name: string, x: Stats): Row => [name, x.universe, pct(x.called, x.universe), pct(x.contactedEffective, x.called), x.commitments, x.expiredInProcess + x.noLicenseApplied];
   const campaignTable = {
     head: [t.campaign, t.universe, t.called, t.effective, t.commitments, t.inProcess],
-    rows: [...list.map((c) => campRow(c.name, per.get(c.id)!)), ...(list.length > 1 ? [campRow(t.total, s)] : [])],
+    // An agent's report only lists the campaigns where they have tasks.
+    rows: (() => {
+      const shown = agent ? list.filter((c) => per.get(c.id)!.universe > 0) : list;
+      return [...shown.map((c) => campRow(c.name, per.get(c.id)!)), ...(shown.length > 1 ? [campRow(t.total, s)] : [])];
+    })(),
   };
 
   const codeCount = new Map<string, number>();
@@ -165,7 +187,7 @@ export async function buildReport(o: ReportOptions, who: { name: string; schedul
     const a = attemptById.get(r.attemptId);
     if (a) agentRows.get(a.userId)?.commitments.add(r.establishmentId);
   }
-  const agentIds = [...new Set([...s.byAgent.map((a) => a.id), ...agentRows.keys()])];
+  const agentIds = agent ? [agent.id] : [...new Set([...s.byAgent.map((a) => a.id), ...agentRows.keys()])];
   const agents = {
     head: [t.agent, t.assigned, t.calls, t.contacts, t.commitments, t.done],
     rows: agentIds
@@ -220,7 +242,7 @@ export async function buildReport(o: ReportOptions, who: { name: string; schedul
 
   let detail = { title: t.detail, head: [] as string[], rows: [] as Row[] };
   if (o.sections.includes("detail")) {
-    const rows = await drillDown(realIds, { metric: o.detail });
+    const rows = await drillDown(realIds, agent ? { metric: o.detail, dim: "agent", value: String(agent.id) } : { metric: o.detail });
     detail = {
       title: `${t.detail} · ${DETAIL_LABELS[o.detail][lang].replace(/^Solo (los )?(que )?/i, "").replace(/^Only (those )?/i, "")} (${rows.length})`,
       head: [t.establishment, t.zone, t.priority, t.status, t.lastResult],
@@ -233,7 +255,8 @@ export async function buildReport(o: ReportOptions, who: { name: string; schedul
     : t.everything;
   return {
     lang,
-    title: o.title,
+    title: agent ? `${o.title} – ${agent.name}` : o.title,
+    agentText: agent ? `${agent.name} · ${label(ROLES, agent.role, lang)}` : "",
     comments: o.comments,
     campaignNames: list.map((c) => c.name),
     periodText,

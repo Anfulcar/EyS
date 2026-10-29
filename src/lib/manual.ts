@@ -6,6 +6,7 @@ type Section = { id: string; roles: string[]; title: string; intro?: string; ste
 type L<T> = Record<Lang, T>;
 
 export const WHATS_NEW: { date: string; es: string; en: string }[] = [
+  { date: "2026-10-29", es: "Informes por agente: en «Generar informe», «Elegir agentes» crea un informe por persona (sus tareas y sus llamadas), también programado. Botón «Generar informe» en «Resumen del agente».", en: "Reports per agent: in “Generate report”, “Choose agents” makes one report per person (their tasks and their calls), also scheduled. “Generate report” button in “Agent summary”." },
   { date: "2026-10-29", es: "Nuevo «Resumen del agente»: al pulsar el nombre de una persona en «Estadísticas», «Tablero» o «Seguimiento» se ven sus números, resultados, llamadas por día y todas sus llamadas, cada una con su detalle. Los agentes ven el suyo con «Mi resumen».", en: "New “Agent summary”: pressing a person's name in “Statistics”, “Dashboard” or “Follow-up” shows their numbers, results, calls per day and all their calls, each with its detail. Agents see their own with “My summary”." },
   { date: "2026-10-26", es: "Los administradores pueden eliminar RUT de una campaña en curso, desde un archivo («Actualización de estatus») o con los filtros de «Tareas y asignación» (nuevos filtros: estatus RNT, subsector / tipo, prioridad y último resultado). Antes de borrar se ven los conteos; queda el motivo en «Eliminadas».", en: "Administrators can remove RUTs from a running campaign, from a file (“Status update”) or with the “Tasks and assignment” filters (new filters: RNT status, subsector / type, priority and last result). Counts are shown before deleting; the reason stays in “Removed”." },
   { date: "2026-10-26", es: "Avisos de otras campañas (compromiso anterior o encontrado cerrado), estatus RNT en «Misma empresa», «Actualizar datos» en llamadas y visitas, plazos en las solicitudes SIGTUR, «Estado de operación» en Resumen, Estadísticas, informes y filtros, «Registro» con las decisiones de la aplicación y «Envío automático a SIGTUR» listo (apagado hasta completar la conexión).", en: "Warnings from other campaigns (earlier commitment or found closed), RNT status in “Same company”, “Update details” in calls and visits, deadlines on SIGTUR requests, “Operating status” in Summary, Statistics, reports and filters, “Log” with the app's own decisions and “Automatic sending to SIGTUR” ready (off until the connection is complete)." },
@@ -144,6 +145,7 @@ const ES: Section[] = [
       "Menú «Informes»: los informes generados (se guardan 12 meses) con un contador rojo de nuevos, y las plantillas para «Editar» (abre el panel con la plantilla cargada), «Generar ahora», pausar o eliminar.",
       "Solo los administradores ven «Eliminar» junto a cada informe generado (pide confirmación y queda en el «Registro»).",
       "«Descargar interacciones»: elija las fechas y descargue un Excel con cada llamada, visita y correo del período, con los campos de interacción de SIGTUR.",
+      "«Agentes»: «Todo el equipo» (como siempre) o «Elegir agentes»: un informe por persona, con las tareas asignadas hoy a esa persona y las llamadas que hizo en el período. Con 2 o más se descarga un .zip; cada informe queda en «Informes» con el nombre del agente. Las plantillas y la programación recuerdan los agentes elegidos. En «Resumen del agente», «Generar informe» abre el panel con esa persona, la campaña y el período ya elegidos.",
     ],
   },
   {
@@ -387,6 +389,7 @@ const EN: Section[] = [
       "“Reports” menu: the generated reports (kept 12 months) with a red counter for new ones, and the templates to “Edit” (opens the panel with the template loaded), “Generate now”, pause or delete.",
       "Only administrators see “Delete” next to each generated report (it asks for confirmation and is recorded in the “Log”).",
       "“Download interactions”: choose the dates and download an Excel with every call, visit and email of the period, with SIGTUR's interaction fields.",
+      "“Agents”: “Whole team” (as always) or “Choose agents”: one report per person, with the tasks assigned to them now and the calls they made in the period. With 2 or more a .zip is downloaded; each report is kept in “Reports” with the agent's name. Templates and schedules remember the chosen agents. In “Agent summary”, “Generate report” opens the panel with that person, campaign and period already chosen.",
     ],
   },
   {
