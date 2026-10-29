@@ -10,14 +10,14 @@ import { requireUser } from "@/lib/auth";
 import { fmtDate, fmtDateTime, nowIso, todayLocal } from "@/lib/dates";
 import { getDict } from "@/lib/i18n-server";
 import { cleanOptions, scheduleLabel, type Frequency } from "@/lib/report-options";
-import { runDueReports } from "@/lib/report-run";
+import { reportPeople, runDueReports } from "@/lib/report-run";
 import { deleteGeneratedReportAction, deleteReportTemplateAction, generateReportNowAction, pauseReportTemplateAction, saveReportTemplateAction } from "../actions";
 
 export default async function ReportsPage() {
   const me = await requireUser(["admin", "supervisor"]);
   const { t, lang } = await getDict();
   await runDueReports().catch((e) => console.error("[reports]", e));
-  const [files, templates, people, campaignList] = await Promise.all([
+  const [files, templates, people, campaignList, chooseable] = await Promise.all([
     db
       .select({ id: generatedReports.id, name: generatedReports.name, periodLabel: generatedReports.periodLabel, format: generatedReports.format, source: generatedReports.source, createdBy: generatedReports.createdBy, createdAt: generatedReports.createdAt })
       .from(generatedReports)
@@ -26,11 +26,12 @@ export default async function ReportsPage() {
     db.select().from(reportTemplates).orderBy(asc(reportTemplates.name)),
     db.select({ id: users.id, name: users.name }).from(users),
     db.select({ id: campaigns.id, name: campaigns.name, status: campaigns.status }).from(campaigns).orderBy(desc(campaigns.startDate)),
+    reportPeople(),
   ]);
   const builderTemplates = templates.map((x) => ({ id: x.id, name: x.name, options: cleanOptions(JSON.parse(x.options)), frequency: x.frequency as Frequency, runDay: x.runDay }));
   // Same panel as in «Estadísticas globales»; «Editar» opens it with the template loaded.
   const builder = (initialTemplateId?: number) => (
-    <ReportBuilder campaigns={campaignList} templates={builderTemplates} t={t} lang={lang} saveAction={saveReportTemplateAction} initialTemplateId={initialTemplateId} />
+    <ReportBuilder campaigns={campaignList} people={chooseable} templates={builderTemplates} t={t} lang={lang} saveAction={saveReportTemplateAction} initialTemplateId={initialTemplateId} />
   );
   const names = new Map(people.map((p) => [p.id, p.name]));
   const seenBefore = me.reportsSeenAt ?? me.createdAt;

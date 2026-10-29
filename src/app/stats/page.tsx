@@ -12,18 +12,19 @@ import { fmtDate } from "@/lib/dates";
 import type { Dict } from "@/lib/i18n";
 import { getDict } from "@/lib/i18n-server";
 import { cleanOptions, type Frequency } from "@/lib/report-options";
-import { runDueReports } from "@/lib/report-run";
+import { reportPeople, runDueReports } from "@/lib/report-run";
 import { computeStatsByCampaign } from "@/lib/stats";
 import { saveReportTemplateAction } from "../actions";
 
 export default async function GlobalStatsPage({ searchParams }: { searchParams: Promise<{ include?: string }> }) {
-  const [, { t, lang }, sp, list, templates] = await Promise.all([
+  const [, { t, lang }, sp, list, templates, , chooseable] = await Promise.all([
     requireUser(["admin", "supervisor"]),
     getDict(),
     searchParams,
     db.select().from(campaigns).orderBy(desc(campaigns.startDate)),
     db.select().from(reportTemplates).orderBy(asc(reportTemplates.name)),
     runDueReports().catch((e) => console.error("[reports]", e)),
+    reportPeople(),
   ]);
   const includeClosed = sp.include !== "open";
   const ids = list.filter((c) => includeClosed || c.status !== "closed").map((c) => c.id);
@@ -38,6 +39,7 @@ export default async function GlobalStatsPage({ searchParams }: { searchParams: 
           <Overlay variant="drawer" width="max-w-3xl" triggerClassName="btn btn-sm" trigger={<><FileDown className="h-4 w-4" />{t.reportGenerate}</>} title={t.reportGenerate}>
             <ReportBuilder
               campaigns={list.map((c) => ({ id: c.id, name: c.name, status: c.status }))}
+              people={chooseable}
               templates={templates.map((x) => ({ id: x.id, name: x.name, options: cleanOptions(JSON.parse(x.options)), frequency: x.frequency as Frequency, runDay: x.runDay }))}
               t={t}
               lang={lang}

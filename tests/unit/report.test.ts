@@ -6,7 +6,7 @@ import { buildReport } from "@/lib/report-data";
 import { cleanOptions, DEFAULT_OPTIONS, firstRun, nextRun, REPORT_SECTIONS, resolvePeriod } from "@/lib/report-options";
 import { renderPdf } from "@/lib/report-pdf";
 import { renderPptx } from "@/lib/report-pptx";
-import { runDueReports } from "@/lib/report-run";
+import { generateAndStore, generateReports, runDueReports } from "@/lib/report-run";
 import { computeStats } from "@/lib/stats";
 
 let campaignId: number, adminId: number;
@@ -83,5 +83,40 @@ describe("report content and files", () => {
     const files = await db.select().from(generatedReports).where(eq(generatedReports.templateId, tpl.id));
     expect(files).toHaveLength(1);
     expect(files[0]).toMatchObject({ format: "pptx", source: "scheduled" });
+  });
+});
+
+describe("reports per agent", () => {
+  it("counts only the agent's tasks and calls, and makes one report per agent (also when scheduled)", async () => {
+    const [bruno] = await db.insert(users).values({ username: "inf.bruno", name: "Bruno Informe", role: "agent", passwordHash: "x" }).returning();
+    const [co] = await db.insert(companies).values({ campaignId, key: "inf-b", status: "retry", assignedUserId: bruno.id }).returning();
+    const [e] = await db.insert(establishments).values({ campaignId, companyId: co.id, sigturId: "inf-b", nombreComercial: "Hotel Bruno", estatusRnt: "Vencida", finalCode: "08", requiereVisita: "Sí" }).returning();
+    const [a] = await db.insert(callAttempts).values({ campaignId, companyId: co.id, userId: bruno.id, calledAt: "2026-10-15T15:00:00.000Z", attemptNo: 1, contacted: false }).returning();
+    await db.insert(callResults).values({ attemptId: a.id, campaignId, establishmentId: e.id, code: "08" });
+
+    const o = cleanOptions({ ...DEFAULT_OPTIONS, campaigns: "pick", campaignIds: [campaignId], sections: [...REPORT_SECTIONS], period: "custom", from: "2026-10-12", to: "2026-10-18", agents: [bruno.id] });
+    const d = await buildReport(o, { name: "Adriana" }, "es", "2026-10-21", { id: bruno.id, name: bruno.name, role: "agent" });
+    expect(d.title).toBe(`${o.title} – Bruno Informe`);
+    expect(d.agentText).toBe("Bruno Informe · Agente de llamadas");
+    expect(d.goals[0]).toMatchObject({ n: 1, d: 1 }); // his one task, called
+    expect(d.counts.find(([k]) => k === "Llamadas en el período")?.[1]).toBe(1);
+    expect(d.agents.rows).toEqual([["Bruno Informe", 1, 1, 0, 0, 0]]);
+    expect(d.detail.rows.map((r) => r[0])).toEqual(["Hotel Bruno"]);
+    // The whole-team report still has everyone.
+    const team = await buildReport({ ...o, agents: [] }, { name: "Adriana" }, "es", "2026-10-21");
+    expect(team.goals[0].d).toBe(4);
+    expect(team.agentText).toBe("");
+
+    const files = await generateReports({ ...o, agents: [adminId, bruno.id] }, { name: "Adriana" });
+    expect(files.map((f) => f.name)).toEqual([`${o.title} – Adriana`, `${o.title} – Bruno Informe`]);
+    expect(files.every((f) => f.content.subarray(0, 5).toString() === "%PDF-")).toBe(true);
+
+    const [tpl] = await db
+      .insert(reportTemplates)
+      .values({ name: "Semanal por agente", options: JSON.stringify({ ...o, agents: [adminId, bruno.id] }), frequency: "weekly", runDay: 1, nextRunOn: "2026-10-19", createdBy: adminId })
+      .returning();
+    expect((await generateAndStore(tpl.id, "manual", adminId))).toHaveLength(2);
+    const stored = await db.select().from(generatedReports).where(eq(generatedReports.templateId, tpl.id));
+    expect(stored.map((x) => x.name).sort()).toEqual(["Semanal por agente – Adriana", "Semanal por agente – Bruno Informe"]);
   });
 });

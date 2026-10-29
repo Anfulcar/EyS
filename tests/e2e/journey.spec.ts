@@ -561,6 +561,29 @@ test("agent summary from statistics and follow-up; agents only see their own", a
   await expect(page.getByText("Todas las campañas")).toBeVisible();
   const anaUrl = page.url();
 
+  // «Generar informe» from the summary: the panel opens with Ana chosen; one agent = one PDF
+  await page.getByRole("button", { name: "Generar informe" }).click();
+  const panel = page.getByRole("dialog");
+  await expect(panel.getByTestId("report-agents").getByLabel("Ana Agente")).toBeChecked();
+  const pdfHref = await panel.getByRole("link", { name: "Descargar PDF" }).getAttribute("href");
+  const pdf = await page.request.get(pdfHref!);
+  expect((await pdf.body()).subarray(0, 5).toString()).toBe("%PDF-");
+  await page.keyboard.press("Escape");
+
+  // «Informes»: two agents → one .zip with a report each, and each one kept in the list
+  await page.goto("/reports");
+  await page.getByRole("button", { name: "Generar informe" }).click();
+  const builder = page.getByRole("dialog");
+  await builder.getByRole("button", { name: "Elegir agentes (un informe por agente)" }).click();
+  await builder.getByTestId("report-agents").getByLabel("Ana Agente").check();
+  await builder.getByTestId("report-agents").getByLabel("Bruno Agente").check();
+  const zipHref = await builder.getByRole("link", { name: "Descargar 2 informes (.zip)" }).getAttribute("href");
+  const zip = await page.request.get(zipHref!);
+  expect(zip.headers()["content-type"]).toBe("application/zip");
+  expect((await zip.body()).subarray(0, 2).toString()).toBe("PK");
+  await page.goto("/reports");
+  await expect(page.getByText("– Bruno Agente").first()).toBeVisible();
+
   // An agent: «Mi resumen» opens their own; anyone else's answers "not found"
   await signIn(page, "agente2", "agente2123");
   await changeFirstPassword(page, "agente2123", "Bruno-Clave-1");

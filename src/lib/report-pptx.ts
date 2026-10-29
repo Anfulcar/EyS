@@ -9,8 +9,8 @@ const C = { blue: "0B4A92", blue50: "EEF4FB", yellow: "F5C400", orange: "F39019"
 const TONES = { good: C.green, info: C.blue, warn: C.orange, bad: C.red, none: C.gray };
 const FONT = "Arial";
 const TXT = {
-  es: { period: "Período", campaigns: "Campañas", generated: "Generado", comments: "Comentarios", target: "Meta", orMore: "o más", inPeriod: "en el período", calls: "Llamadas", contacts: "Contactos", none: "Sin datos en este período.", goals: "Resumen ejecutivo: metas del plan", counts: "Conteos generales", campaignsT: "Comparación por campaña", agents: "Avance por agente", zones: "Por zona", priorities: "Por prioridad", subsectors: "Por subsector", sigtur: "Estatus SIGTUR", operation: "Estado de operación", channels: "Canal que logró la gestión", legend: "Leyenda", noRows: "No hay establecimientos con este filtro.", cont: "(cont.)", of: "de" },
-  en: { period: "Period", campaigns: "Campaigns", generated: "Generated", comments: "Comments", target: "Target", orMore: "or more", inPeriod: "in the period", calls: "Calls", contacts: "Contacts", none: "No data in this period.", goals: "Executive summary: plan goals", counts: "General counts", campaignsT: "Comparison by campaign", agents: "Progress by agent", zones: "By zone", priorities: "By priority", subsectors: "By subsector", sigtur: "SIGTUR status", operation: "Operating status", channels: "Channel that achieved it", legend: "Legend", noRows: "No establishments match this filter.", cont: "(cont.)", of: "of" },
+  es: { period: "Período", agent: "Agente", campaigns: "Campañas", generated: "Generado", comments: "Comentarios", target: "Meta", orMore: "o más", inPeriod: "en el período", calls: "Llamadas", contacts: "Contactos", none: "Sin datos en este período.", goals: "Resumen ejecutivo: metas del plan", counts: "Conteos generales", campaignsT: "Comparación por campaña", agents: "Avance por agente", zones: "Por zona", priorities: "Por prioridad", subsectors: "Por subsector", sigtur: "Estatus SIGTUR", operation: "Estado de operación", channels: "Canal que logró la gestión", legend: "Leyenda", noRows: "No hay establecimientos con este filtro.", cont: "(cont.)", of: "de" },
+  en: { period: "Period", agent: "Agent", campaigns: "Campaigns", generated: "Generated", comments: "Comments", target: "Target", orMore: "or more", inPeriod: "in the period", calls: "Calls", contacts: "Contacts", none: "No data in this period.", goals: "Executive summary: plan goals", counts: "General counts", campaignsT: "Comparison by campaign", agents: "Progress by agent", zones: "By zone", priorities: "By priority", subsectors: "By subsector", sigtur: "SIGTUR status", operation: "Operating status", channels: "Channel that achieved it", legend: "Legend", noRows: "No establishments match this filter.", cont: "(cont.)", of: "of" },
 };
 
 export async function renderPptx(d: ReportData, sections: ReportSection[]): Promise<Buffer> {
@@ -82,6 +82,7 @@ export async function renderPptx(d: ReportData, sections: ReportSection[]): Prom
   first.addText(d.title, { x: 0.7, y: 2.3, w: 11.9, h: 1.1, fontFace: FONT, fontSize: 32, bold: true, color: C.blue, valign: "top" });
   first.addText(
     [
+      ...(d.agentText ? [{ text: `${t.agent}: `, options: { color: C.muted } }, { text: d.agentText, options: { breakLine: true } }] : []),
       { text: `${t.period}: `, options: { color: C.muted } }, { text: d.periodText, options: { breakLine: true } },
       { text: `${t.campaigns}: `, options: { color: C.muted } }, { text: d.campaignNames.join(" · ") || "—", options: { breakLine: true } },
       { text: `${t.generated}: `, options: { color: C.muted } }, { text: d.generatedText },

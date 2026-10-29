@@ -15,8 +15,8 @@ const TOP = 96; // content starts below the page header
 const BOTTOM = H - 46; // content ends above the footer
 
 const TXT = {
-  es: { period: "Período", campaigns: "Campañas", generated: "Generado", comments: "Comentarios:", target: "Meta", orMore: "o más", inPeriod: "en el período", page: "Página", of: "de", calls: "Llamadas", contacts: "Contactos", none: "Sin datos en este período.", goals: "Resumen ejecutivo: metas del plan", counts: "Conteos generales", campaignsT: "Comparación por campaña", agents: "Avance por agente", zones: "Por zona", priorities: "Por prioridad", subsectors: "Por subsector", sigtur: "Estatus SIGTUR", operation: "Estado de operación", channels: "Canal que logró la gestión", legend: "Leyenda", noRows: "No hay establecimientos con este filtro." },
-  en: { period: "Period", campaigns: "Campaigns", generated: "Generated", comments: "Comments:", target: "Target", orMore: "or more", inPeriod: "in the period", page: "Page", of: "of", calls: "Calls", contacts: "Contacts", none: "No data in this period.", goals: "Executive summary: plan goals", counts: "General counts", campaignsT: "Comparison by campaign", agents: "Progress by agent", zones: "By zone", priorities: "By priority", subsectors: "By subsector", sigtur: "SIGTUR status", operation: "Operating status", channels: "Channel that achieved it", legend: "Legend", noRows: "No establishments match this filter." },
+  es: { period: "Período", agent: "Agente", campaigns: "Campañas", generated: "Generado", comments: "Comentarios:", target: "Meta", orMore: "o más", inPeriod: "en el período", page: "Página", of: "de", calls: "Llamadas", contacts: "Contactos", none: "Sin datos en este período.", goals: "Resumen ejecutivo: metas del plan", counts: "Conteos generales", campaignsT: "Comparación por campaña", agents: "Avance por agente", zones: "Por zona", priorities: "Por prioridad", subsectors: "Por subsector", sigtur: "Estatus SIGTUR", operation: "Estado de operación", channels: "Canal que logró la gestión", legend: "Leyenda", noRows: "No hay establecimientos con este filtro." },
+  en: { period: "Period", agent: "Agent", campaigns: "Campaigns", generated: "Generated", comments: "Comments:", target: "Target", orMore: "or more", inPeriod: "in the period", page: "Page", of: "of", calls: "Calls", contacts: "Contacts", none: "No data in this period.", goals: "Executive summary: plan goals", counts: "General counts", campaignsT: "Comparison by campaign", agents: "Progress by agent", zones: "By zone", priorities: "By priority", subsectors: "By subsector", sigtur: "SIGTUR status", operation: "Operating status", channels: "Channel that achieved it", legend: "Legend", noRows: "No establishments match this filter." },
 };
 
 export async function renderPdf(d: ReportData, sections: ReportSection[]): Promise<Buffer> {
@@ -120,7 +120,7 @@ export async function renderPdf(d: ReportData, sections: ReportSection[]): Promi
   y += 10;
   doc.font("B").fontSize(20).fillColor(C.blue).text(d.title, M, y, { width: inner });
   y = doc.y + 10;
-  const meta: [string, string][] = [[t.period, d.periodText], [t.campaigns, d.campaignNames.join(" · ") || "—"], [t.generated, d.generatedText]];
+  const meta: [string, string][] = [...(d.agentText ? [[t.agent, d.agentText] as [string, string]] : []), [t.period, d.periodText], [t.campaigns, d.campaignNames.join(" · ") || "—"], [t.generated, d.generatedText]];
   for (const [k, v] of meta) {
     doc.font("R").fontSize(9.5).fillColor(C.muted).text(k, M, y, { width: 70 });
     doc.font("R").fontSize(9.5).fillColor(C.text).text(v, M + 74, y, { width: inner - 74 });

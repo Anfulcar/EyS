@@ -7,7 +7,7 @@ import type { ActionState } from "@/app/actions";
 import type { Lang } from "@/lib/catalog";
 import type { Dict } from "@/lib/i18n";
 import {
-  cleanOptions, DEFAULT_OPTIONS, DETAIL_FILTERS, DETAIL_LABELS, FREQUENCIES, FREQUENCY_LABELS, optionsToQuery, PERIOD_KINDS, PERIOD_LABELS,
+  cleanOptions, DEFAULT_OPTIONS, DETAIL_FILTERS, MAX_REPORT_AGENTS, DETAIL_LABELS, FREQUENCIES, FREQUENCY_LABELS, optionsToQuery, PERIOD_KINDS, PERIOD_LABELS,
   REPORT_SECTIONS, SECTION_LABELS, WEEKDAY_LABELS, type Frequency, type ReportOptions, type ReportSection,
 } from "@/lib/report-options";
 import { ActionForm, SubmitButton } from "./ActionForm";
@@ -17,17 +17,21 @@ type Template = { id: number; name: string; options: ReportOptions; frequency: F
 
 const STORE = "eys.report.v1";
 
-export function ReportBuilder({ campaigns, templates, t, lang, saveAction, initialTemplateId }: {
+export function ReportBuilder({ campaigns, people = [], templates, t, lang, saveAction, initialTemplateId, initialOptions }: {
   campaigns: Campaign[];
+  // People who can be chosen in «Agentes» (one report per agent).
+  people?: { id: number; name: string }[];
   templates: Template[];
   t: Dict;
   lang: Lang;
   saveAction: (s: ActionState, f: FormData) => Promise<ActionState>;
   // Opens with this template loaded («Editar» in «Informes»).
   initialTemplateId?: number;
+  // Opens with these choices («Generar informe» in «Resumen del agente»).
+  initialOptions?: Partial<ReportOptions>;
 }) {
   const start = templates.find((x) => x.id === initialTemplateId);
-  const [o, setO] = useState<ReportOptions>(start ? cleanOptions(start.options) : DEFAULT_OPTIONS);
+  const [o, setO] = useState<ReportOptions>(start ? cleanOptions(start.options) : initialOptions ? cleanOptions({ ...DEFAULT_OPTIONS, ...initialOptions }) : DEFAULT_OPTIONS);
   const [templateId, setTemplateId] = useState(start?.id ?? 0);
   const [name, setName] = useState(start?.name ?? "");
   const [frequency, setFrequency] = useState<Frequency>(start?.frequency ?? "none");
@@ -37,23 +41,26 @@ export function ReportBuilder({ campaigns, templates, t, lang, saveAction, initi
 
   // Comes back with the last choice made in this browser (unless a template was opened).
   useEffect(() => {
-    if (!initialTemplateId) {
+    if (!initialTemplateId && !initialOptions) {
       try {
         const raw = localStorage.getItem(STORE);
         if (raw) setO(cleanOptions(JSON.parse(raw)));
       } catch {}
     }
     loaded.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialTemplateId]);
   // The downloaded report is also kept in «Informes»: refresh the screen so it shows up in the list.
   const afterDownload = () => {
     for (const ms of [2500, 7000]) setTimeout(() => router.refresh(), ms);
   };
   useEffect(() => {
-    if (!loaded.current) return;
+    // A panel opened for one agent doesn't replace the last choice remembered for the normal panel.
+    if (!loaded.current || initialOptions) return;
     try {
       localStorage.setItem(STORE, JSON.stringify(o));
     } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [o]);
 
   const set = (p: Partial<ReportOptions>) => setO((x) => ({ ...x, ...p }));
@@ -72,7 +79,12 @@ export function ReportBuilder({ campaigns, templates, t, lang, saveAction, initi
   };
   const toggleSection = (s: ReportSection, on: boolean) => set({ sections: REPORT_SECTIONS.filter((x) => (x === s ? on : o.sections.includes(x))) });
   const toggleCampaign = (id: number, on: boolean) => set({ campaignIds: on ? [...new Set([...o.campaignIds, id])] : o.campaignIds.filter((x) => x !== id) });
+  const toggleAgent = (id: number, on: boolean) => set({ agents: on ? [...new Set([...o.agents, id])].slice(0, MAX_REPORT_AGENTS) : o.agents.filter((x) => x !== id) });
+  const [pickAgentsOpen, setPickAgents] = useState(false);
+  // Open when someone chose «Elegir agentes», or the options (template, last choice) already have agents.
+  const pickAgents = pickAgentsOpen || o.agents.length > 0;
   const noCampaign = o.campaigns === "pick" && o.campaignIds.length === 0;
+  const noAgent = pickAgents && o.agents.length === 0;
   const href = `/api/report?${optionsToQuery(o)}`;
   const chip = (on: boolean) => `rounded-full border px-3 py-1 text-sm transition ${on ? "border-brand-600 bg-brand-50 font-semibold text-brand-700" : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"}`;
 
@@ -126,6 +138,29 @@ export function ReportBuilder({ campaigns, templates, t, lang, saveAction, initi
         </fieldset>
       </div>
 
+      {people.length > 0 && (
+        <fieldset className="space-y-2 rounded-xl border border-slate-200 p-3" data-testid="report-agents">
+          <legend className="px-1 text-sm font-semibold text-slate-800">{t.reportAgents}</legend>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className={chip(!pickAgents)} onClick={() => { setPickAgents(false); set({ agents: [] }); }} aria-pressed={!pickAgents}>{t.reportWholeTeam}</button>
+            <button type="button" className={chip(pickAgents)} onClick={() => setPickAgents(true)} aria-pressed={pickAgents}>{t.reportPickAgents}</button>
+          </div>
+          {pickAgents && (
+            <>
+              <div className="grid max-h-44 gap-1 overflow-y-auto pt-1 sm:grid-cols-2">
+                {people.map((p) => (
+                  <label key={p.id} className="flex items-center gap-2 text-sm text-slate-700">
+                    <input type="checkbox" checked={o.agents.includes(p.id)} onChange={(e) => toggleAgent(p.id, e.target.checked)} className="h-4 w-4 accent-brand-600" />
+                    {p.name}
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs text-slate-500">{t.reportAgentsHelp.replace("{n}", String(MAX_REPORT_AGENTS))}</p>
+            </>
+          )}
+        </fieldset>
+      )}
+
       <div className="grid gap-4 md:grid-cols-2">
         <div>
           <label className="label" htmlFor="rb-title">{t.reportTitle}</label>
@@ -166,10 +201,13 @@ export function ReportBuilder({ campaigns, templates, t, lang, saveAction, initi
           </div>
         </div>
         <span className="flex-1" />
-        {noCampaign || o.sections.length === 0 ? (
-          <span className="text-sm text-mitur-red">{noCampaign ? t.reportNoCampaign : t.reportNoSection}</span>
+        {noCampaign || noAgent || o.sections.length === 0 ? (
+          <span className="text-sm text-mitur-red">{noCampaign ? t.reportNoCampaign : noAgent ? t.reportNoAgent : t.reportNoSection}</span>
         ) : (
-          <a className="btn" href={href} download onClick={afterDownload}><Download className="h-4 w-4" />{o.format === "pptx" ? t.reportDownloadPptx : t.reportDownloadPdf}</a>
+          <a className="btn" href={href} download onClick={afterDownload}>
+            <Download className="h-4 w-4" />
+            {o.agents.length > 1 ? t.reportDownloadZip.replace("{n}", String(o.agents.length)) : o.format === "pptx" ? t.reportDownloadPptx : t.reportDownloadPdf}
+          </a>
         )}
       </div>
 
