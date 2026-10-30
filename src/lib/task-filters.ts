@@ -1,8 +1,9 @@
 import "server-only";
-import { and, eq, isNotNull, isNull, like, lt, notInArray, or, sql, type SQL } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, like, lt, notInArray, or, sql, type SQL } from "drizzle-orm";
 import { companies } from "@/db/schema";
 import { CLOSED_STATUSES } from "./catalog";
 import { nowIso } from "./dates";
+import { many } from "./multi";
 import { dueCondition } from "./queue";
 
 // The filters of «Tareas y asignación» (also used to remove "all filtered" tasks, so both always match).
@@ -20,30 +21,44 @@ const anyEst = (cond: SQL) => sql`exists (select 1 from establishments e where e
 
 export function cleanTaskFilters(v: unknown): TaskFilters {
   const o = (v ?? {}) as Record<string, unknown>;
-  return Object.fromEntries(TASK_FILTER_KEYS.map((k) => [k, typeof o[k] === "string" && o[k] ? String(o[k]).slice(0, 200) : undefined]));
+  return Object.fromEntries(TASK_FILTER_KEYS.map((k) => [k, typeof o[k] === "string" && o[k] ? String(o[k]).slice(0, 2000) : undefined]));
 }
 
+// Each filter can hold several choices ("a|b"): a task matches when it meets any of them; different filters all apply.
 export function taskWhere(campaignId: number, sp: TaskFilters): SQL[] {
   const where: SQL[] = [eq(companies.campaignId, campaignId)];
-  if (sp.status) where.push(eq(companies.status, sp.status));
-  if (sp.agent === "none") where.push(isNull(companies.assignedUserId));
-  else if (sp.agent) where.push(eq(companies.assignedUserId, Number(sp.agent)));
-  if (sp.zone) where.push(eq(companies.zone, sp.zone));
-  if (sp.prio) where.push(eq(companies.priority, sp.prio));
-  if (sp.code) where.push(eq(companies.lastCode, sp.code));
-  if (sp.rnt) where.push(anyEst(sql`e.estatus_rnt = ${sp.rnt}`));
-  if (sp.sub) where.push(anyEst(sql`e.subsector = ${sp.sub}`));
-  // Follow-up filters (also opened from the "Seguimiento" tab)
+  const status = many(sp.status);
+  if (status.length) where.push(inArray(companies.status, status));
+  const agents = many(sp.agent);
+  if (agents.length) {
+    const ids = agents.map(Number).filter((n) => Number.isInteger(n) && n > 0);
+    const any = [...(agents.includes("none") ? [isNull(companies.assignedUserId)] : []), ...(ids.length ? [inArray(companies.assignedUserId, ids)] : [])];
+    where.push(any.length ? or(...any)! : sql`0`);
+  }
+  const zones = many(sp.zone);
+  if (zones.length) where.push(inArray(companies.zone, zones));
+  const prios = many(sp.prio);
+  if (prios.length) where.push(inArray(companies.priority, prios));
+  const codes = many(sp.code);
+  if (codes.length) where.push(inArray(companies.lastCode, codes));
+  const rnts = many(sp.rnt);
+  if (rnts.length) where.push(anyEst(sql`e.estatus_rnt in (${sql.join(rnts.map((v) => sql`${v}`), sql`, `)})`));
+  const subs = many(sp.sub);
+  if (subs.length) where.push(anyEst(sql`e.subsector in (${sql.join(subs.map((v) => sql`${v}`), sql`, `)})`));
+  // Follow-up filters (also opened from the "Seguimiento" tab) and operating status of any establishment.
   const now = nowIso();
   const idleDays = Math.max(1, Number(sp.days) || 3);
-  if (sp.f === "due") where.push(dueCondition(now));
-  if (sp.f === "overdue") where.push(and(eq(companies.status, "followup"), lt(companies.nextActionAt, now))!);
-  if (sp.f === "idle") where.push(and(notInArray(companies.status, CLOSED_STATUSES), lt(sql`coalesce(${companies.lastCalledAt}, ${companies.assignedAt}, '')`, new Date(Date.now() - idleDays * 86400000).toISOString()))!);
-  if (sp.f === "open") where.push(notInArray(companies.status, CLOSED_STATUSES));
-  if (sp.f === "covered") where.push(isNotNull(companies.coverAbsenceId));
-  if (sp.f === "sigturOverdue") where.push(and(eq(companies.sigturRequest, true), isNull(companies.requestResolvedAt), isNotNull(companies.requestOverdueAt))!);
-  // Operating status of any of the task's establishments (same rule as the dashboards).
-  if (sp.f && OP[sp.f]) where.push(anyEst(OP[sp.f]));
+  const follow: Record<string, () => SQL> = {
+    due: () => dueCondition(now),
+    overdue: () => and(eq(companies.status, "followup"), lt(companies.nextActionAt, now))!,
+    idle: () => and(notInArray(companies.status, CLOSED_STATUSES), lt(sql`coalesce(${companies.lastCalledAt}, ${companies.assignedAt}, '')`, new Date(Date.now() - idleDays * 86400000).toISOString()))!,
+    open: () => notInArray(companies.status, CLOSED_STATUSES),
+    covered: () => isNotNull(companies.coverAbsenceId),
+    sigturOverdue: () => and(eq(companies.sigturRequest, true), isNull(companies.requestResolvedAt), isNotNull(companies.requestOverdueAt))!,
+    ...Object.fromEntries(Object.entries(OP).map(([k, cond]) => [k, () => anyEst(cond)])),
+  };
+  const fs = many(sp.f).filter((k) => follow[k]);
+  if (fs.length) where.push(or(...fs.map((k) => follow[k]()))!);
   if (sp.q) {
     const q = `%${sp.q}%`;
     where.push(or(like(companies.razonSocial, q), like(companies.rnc, q), anyEst(sql`(e.nombre_comercial like ${q} or e.sigtur_id like ${q} or e.rut like ${q})`))!);

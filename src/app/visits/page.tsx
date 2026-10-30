@@ -1,4 +1,6 @@
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
+import { FilterChips } from "@/components/FilterChips";
+import { MultiSelect } from "@/components/MultiSelect";
 import { Empty, PriorityBadge } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
 import { codeLabel, VISIT_CODES } from "@/lib/catalog";
@@ -11,7 +13,11 @@ export default async function VisitsPage({ searchParams }: { searchParams: Promi
   await requireUser(["admin", "supervisor", "inspector"]);
   const sp = await searchParams;
   const { t, lang } = await getDict();
-  const { rows, active, zones } = await pendingVisits({ campaignId: sp.campaign ? Number(sp.campaign) : undefined, zone: sp.zone, showAll: sp.all === "1" });
+  const { rows, active, zones } = await pendingVisits({ campaign: sp.campaign, zone: sp.zone, showAll: sp.all === "1" });
+  const groups = [
+    { key: "campaign" as const, label: t.campaign, options: active.map((c) => ({ value: String(c.id), label: c.name })) },
+    { key: "zone" as const, label: t.zone, options: zones.map((z) => ({ value: z, label: z })) },
+  ];
   const qs = new URLSearchParams(Object.entries(sp).filter(([, v]) => v) as [string, string][]).toString();
   return (
     <div className="space-y-5">
@@ -20,23 +26,16 @@ export default async function VisitsPage({ searchParams }: { searchParams: Promi
         <a href={`/api/visits?${qs}`} className="btn-secondary">⬇ {t.downloadRoute}</a>
       </div>
       <form className="card grid items-end gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto]">
-        <div>
-          <label className="label">{t.campaign}</label>
-          <select name="campaign" defaultValue={sp.campaign ?? ""} className="input">
-            <option value="">{t.all}</option>
-            {active.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="label">{t.zone}</label>
-          <select name="zone" defaultValue={sp.zone ?? ""} className="input">
-            <option value="">{t.all}</option>
-            {zones.map((z) => <option key={z} value={z}>{z}</option>)}
-          </select>
-        </div>
+        {groups.map((g) => (
+          <div key={g.key}>
+            <label className="label" htmlFor={`f-${g.key}`}>{g.label}</label>
+            <MultiSelect key={sp[g.key] ?? ""} id={`f-${g.key}`} name={g.key} value={sp[g.key]} options={g.options} t={t} />
+          </div>
+        ))}
         <label className="flex items-center gap-2 pb-2 text-sm"><input type="checkbox" name="all" value="1" defaultChecked={sp.all === "1"} /> {t.visitsDone}</label>
         <button className="btn-secondary">{t.filter}</button>
       </form>
+      <FilterChips path="/visits" sp={sp} groups={groups} keep={["all"]} t={t} />
       {rows.length === 0 ? (
         <Empty>{t.noVisits}</Empty>
       ) : (

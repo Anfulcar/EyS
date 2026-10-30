@@ -4,6 +4,7 @@ import { alias } from "drizzle-orm/sqlite-core";
 import { db } from "@/db";
 import { callAttempts, callResults, campaigns, companies, establishments, users, type User } from "@/db/schema";
 import { localDayEnd, localDayStart } from "./dates";
+import { many, manyIds } from "./multi";
 
 export type CallFilters = { campaign?: string; agent?: string; code?: string; from?: string; to?: string; review?: string };
 
@@ -20,17 +21,23 @@ function where(me: User, f: CallFilters): SQL | undefined {
   const w: SQL[] = [];
   const s = scope(me);
   if (s) w.push(s);
-  if (f.campaign) w.push(eq(callAttempts.campaignId, Number(f.campaign)));
-  if (f.agent && canSeeAllCalls(me)) w.push(eq(callAttempts.userId, Number(f.agent)));
+  // Campaign, agent, result and review state accept several choices ("a|b").
+  const camps = manyIds(f.campaign);
+  if (camps.length) w.push(inArray(callAttempts.campaignId, camps));
+  const agents = manyIds(f.agent);
+  if (agents.length && canSeeAllCalls(me)) w.push(inArray(callAttempts.userId, agents));
   if (f.from) w.push(gte(callAttempts.calledAt, localDayStart(f.from)));
   if (f.to) w.push(lte(callAttempts.calledAt, localDayEnd(f.to)));
-  if (f.review === "yes") w.push(isNotNull(callAttempts.reviewedAt));
-  if (f.review === "no") w.push(isNull(callAttempts.reviewedAt));
-  if (f.code) {
+  const review = many(f.review);
+  if (review.length === 1 && review[0] === "yes") w.push(isNotNull(callAttempts.reviewedAt));
+  if (review.length === 1 && review[0] === "no") w.push(isNull(callAttempts.reviewedAt));
+  const codes = many(f.code);
+  if (codes.length) {
+    const list = sql.join(codes.map((c) => sql`${c}`), sql`, `);
     w.push(
       or(
-        eq(callAttempts.noContactCode, f.code),
-        sql`exists (select 1 from call_results r where r.attempt_id = ${callAttempts.id} and r.code = ${f.code})`,
+        inArray(callAttempts.noContactCode, codes),
+        sql`exists (select 1 from call_results r where r.attempt_id = ${callAttempts.id} and r.code in (${list}))`,
       )!,
     );
   }

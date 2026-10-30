@@ -5,6 +5,7 @@ import type { Dict } from "@/lib/i18n";
 import type { Breakdown, Stats } from "@/lib/stats";
 import { DashTabs } from "./DashTabs";
 import { DayChart } from "./DayChart";
+import { Hint } from "./Hint";
 import { fmtPct, pct } from "./ui";
 
 // Ministerio de Turismo palette (from the logo).
@@ -28,14 +29,14 @@ function Maybe({ href, className, children, title }: { href: string | null; clas
   return href ? <Link href={href} className={className} title={title}>{children}</Link> : <div className={className} title={title}>{children}</div>;
 }
 
-function GoalCard({ title, help, n, d, target, t, href }: { title: string; help: string; n: number; d: number; target: number; t: Dict; href: string | null }) {
+function GoalCard({ title, help, info, n, d, target, t, href }: { title: string; help: string; info: string; n: number; d: number; target: number; t: Dict; href: string | null }) {
   const value = pct(n, d);
   const met = d > 0 && value >= target;
   const color = d === 0 ? C.grey : met ? C.green : C.orange;
   return (
     <Maybe href={href} className="card flex flex-col gap-3 p-5 transition hover:border-brand-200 hover:shadow-md">
       <div className="flex items-start justify-between gap-2">
-        <div className="text-sm font-semibold text-slate-700">{title}</div>
+        <div className="text-sm font-semibold text-slate-700">{title}<Hint text={info} /></div>
         {d > 0 && (met ? <CheckCircle2 className="h-5 w-5 shrink-0" style={{ color }} aria-label={t.goalMet} /> : <CircleAlert className="h-5 w-5 shrink-0" style={{ color }} aria-label={t.goalPending} />)}
       </div>
       <div className="flex items-baseline gap-2">
@@ -55,13 +56,13 @@ function GoalCard({ title, help, n, d, target, t, href }: { title: string; help:
   );
 }
 
-function MiniGoal({ title, n, d, target, t, href }: { title: string; n: number; d: number; target?: number; t: Dict; href: string | null }) {
+function MiniGoal({ title, info, n, d, target, t, href }: { title: string; info: string; n: number; d: number; target?: number; t: Dict; href: string | null }) {
   const value = pct(n, d);
   const color = target == null || d === 0 ? C.blue : value >= target ? C.green : C.orange;
   return (
     <Maybe href={href} className="-mx-2 block space-y-1.5 rounded-xl px-2 py-1 transition hover:bg-slate-50">
       <div className="flex items-baseline justify-between gap-2 text-sm">
-        <span className="text-slate-600">{title}</span>
+        <span className="text-slate-600">{title}<Hint text={info} /></span>
         <span className="font-semibold tabular-nums text-slate-900">{fmtPct(n, d)}</span>
       </div>
       <div className="h-1.5 rounded-full bg-slate-100"><div className="h-1.5 rounded-full" style={{ width: `${Math.min(100, value)}%`, background: color }} /></div>
@@ -173,10 +174,10 @@ export function StatsView({ s, t, lang, period, listHref, agentHref }: { s: Stat
           {listHref && <span className="flex items-center gap-1.5 text-xs text-slate-500"><MousePointerClick className="h-3.5 w-3.5" />{t.clickToSee}</span>}
         </div>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <GoalCard title={t.kpiCalled} help={t.kpiCalledHelp} n={s.called} d={s.universe} target={100} t={t} href={href({ m: "called" })} />
-          <GoalCard title={t.kpiContact} help={t.kpiContactHelp} n={s.contactedEffective} d={s.called} target={65} t={t} href={href({ m: "effective" })} />
-          <GoalCard title={t.kpiCommitments} help={t.kpiCommitmentsHelp} n={s.commitments} d={s.operatingContacted} target={70} t={t} href={href({ m: "commitments" })} />
-          <GoalCard title={t.kpiAdvanceExpired} help={t.kpiAdvanceExpiredHelp} n={s.expiredInProcess} d={s.expiredOperating} target={80} t={t} href={href({ m: "expiredInProcess" })} />
+          <GoalCard title={t.kpiCalled} help={t.kpiCalledHelp} info={t.helpCalled} n={s.called} d={s.universe} target={100} t={t} href={href({ m: "called" })} />
+          <GoalCard title={t.kpiContact} help={t.kpiContactHelp} info={t.helpContact} n={s.contactedEffective} d={s.called} target={65} t={t} href={href({ m: "effective" })} />
+          <GoalCard title={t.kpiCommitments} help={t.kpiCommitmentsHelp} info={t.helpCommitments} n={s.commitments} d={s.operatingContacted} target={70} t={t} href={href({ m: "commitments" })} />
+          <GoalCard title={t.kpiAdvanceExpired} help={t.kpiAdvanceExpiredHelp} info={t.helpAdvanceExpired} n={s.expiredInProcess} d={s.expiredOperating} target={80} t={t} href={href({ m: "expiredInProcess" })} />
         </div>
       </section>
 
@@ -204,10 +205,10 @@ export function StatsView({ s, t, lang, period, listHref, agentHref }: { s: Stat
         </div>
         <div className="card space-y-4">
           <h3>{t.otherGoals}</h3>
-          <MiniGoal title={t.kpiCompliance} n={s.commitmentsKept} d={s.commitmentsDue} target={60} t={t} href={href({ m: "commitmentsKept" })} />
-          <MiniGoal title={t.kpiTypified} n={s.typified} d={s.universe} target={100} t={t} href={href({ m: "typified" })} />
-          <MiniGoal title={t.kpiAdvanceNoLicense} n={s.noLicenseApplied} d={s.noLicenseOperating} target={50} t={t} href={href({ m: "noLicenseApplied" })} />
-          <MiniGoal title={t.kpiCoverage} n={s.notified} d={s.universe} t={t} href={href({ m: "notified" })} />
+          <MiniGoal title={t.kpiCompliance} info={t.helpCompliance} n={s.commitmentsKept} d={s.commitmentsDue} target={60} t={t} href={href({ m: "commitmentsKept" })} />
+          <MiniGoal title={t.kpiTypified} info={t.helpTypified} n={s.typified} d={s.universe} target={100} t={t} href={href({ m: "typified" })} />
+          <MiniGoal title={t.kpiAdvanceNoLicense} info={t.helpNoLicense} n={s.noLicenseApplied} d={s.noLicenseOperating} target={50} t={t} href={href({ m: "noLicenseApplied" })} />
+          <MiniGoal title={t.kpiCoverage} info={t.helpCoverage} n={s.notified} d={s.universe} t={t} href={href({ m: "notified" })} />
         </div>
       </div>
 

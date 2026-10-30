@@ -2,6 +2,8 @@ import { and, asc, eq, gt, gte, inArray, ne, sql, type SQL } from "drizzle-orm";
 import { AlertTriangle, BarChart3, BellRing, Building2, ChevronRight, Clock, MessageCircle, Phone, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { Avatar } from "@/components/Avatar";
+import { FilterChips } from "@/components/FilterChips";
+import { MultiSelect } from "@/components/MultiSelect";
 import { RefreshButton } from "@/components/RefreshButton";
 import { Empty, PriorityBadge, SigturTag, StatusBadge } from "@/components/ui";
 import { db } from "@/db";
@@ -10,6 +12,7 @@ import { requireUser } from "@/lib/auth";
 import { CLOSED_STATUSES, codeLabel, COMPANY_STATUSES, label } from "@/lib/catalog";
 import { fmtDateTime, nowIso, todayLocal } from "@/lib/dates";
 import { getDict } from "@/lib/i18n-server";
+import { manyIds } from "@/lib/multi";
 import { requestDeadline } from "@/lib/sigtur";
 import { attentionSummary, daysSince, dueCondition } from "@/lib/queue";
 
@@ -35,7 +38,9 @@ export default async function CallsPage({ searchParams }: { searchParams: Promis
 
   // Every campaign that is not closed: draft or out-of-dates campaigns are shown with a warning instead of hidden.
   const warnings = open.filter((c) => c.status !== "active" || today < c.startDate || today > c.endDate);
-  const campaignIds = open.map((c) => c.id).filter((id) => !sp.campaign || id === Number(sp.campaign));
+  // Several campaigns can be chosen ("a|b").
+  const wanted = manyIds(sp.campaign);
+  const campaignIds = open.map((c) => c.id).filter((id) => !wanted.length || wanted.includes(id));
 
   const base: SQL[] = [
     inArray(companies.campaignId, campaignIds.length ? campaignIds : [-1]),
@@ -98,6 +103,7 @@ export default async function CallsPage({ searchParams }: { searchParams: Promis
   const qs = (o: Record<string, string>) => "?" + new URLSearchParams({ ...(sp as Record<string, string>), ...o }).toString();
   const tabLabels: Record<string, string> = { due: t.dueNow, scheduled: t.scheduled, visit: t.sentToVisit, done: t.finished };
   const viewing = agents.find((a) => a.id === agentId);
+  const campaignOptions = open.map((c) => ({ value: String(c.id), label: c.name }));
 
   return (
     <div className="space-y-6">
@@ -112,10 +118,7 @@ export default async function CallsPage({ searchParams }: { searchParams: Promis
             <form className="flex flex-wrap gap-2">
               <input type="hidden" name="tab" value={tab} />
               {open.length > 1 && (
-                <select name="campaign" defaultValue={sp.campaign ?? ""} className="input w-56">
-                  <option value="">{t.navCampaigns}: {t.all}</option>
-                  {open.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+                <MultiSelect key={sp.campaign ?? ""} name="campaign" value={sp.campaign} options={campaignOptions} allLabel={`${t.navCampaigns}: ${t.all}`} t={t} className="w-56" />
               )}
               {isManager && (
                 <select name="agent" defaultValue={String(agentId)} className="input w-48">
@@ -128,6 +131,8 @@ export default async function CallsPage({ searchParams }: { searchParams: Promis
           <RefreshButton label={t.refresh} />
         </div>
       </div>
+
+      <FilterChips path="/calls" sp={sp} groups={[{ key: "campaign", label: t.campaign, options: campaignOptions }]} keep={["tab", "agent"]} t={t} />
 
       {warnings.map((c) => (
         <p key={c.id} className="flex items-center gap-2 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">

@@ -44,6 +44,14 @@ describe("calls made and their review", () => {
     expect((await callRows(sup, { campaign: String(campaignId), agent: String(beto.id) }, 50)).map((r) => r.name).sort()).toEqual(["rev-b", "rev-c"]);
     expect((await callRows(sup, { campaign: String(campaignId), code: "05" }, 50)).map((r) => r.name)).toEqual(["rev-c"]);
   });
+  it("filters accept several choices: any of them within a filter, all filters together", async () => {
+    const names = async (f: Record<string, string>) => (await callRows(sup, { campaign: String(campaignId), ...f }, 50)).map((r) => r.name).sort();
+    expect(await names({ code: "01|05" })).toEqual(["rev-a", "rev-c"]);
+    expect(await names({ agent: `${ana.id}|${beto.id}` })).toEqual(["rev-a", "rev-b", "rev-c"]);
+    expect(await names({ agent: String(beto.id), code: "01|05" })).toEqual(["rev-c"]);
+    // Both review states ticked = no filter.
+    expect(await names({ review: "yes|no" })).toHaveLength(3);
+  });
   it("only supervisors and administrators can mark a call as reviewed", async () => {
     await expect(reviewCall(ana, callIds["rev-a"], "hola")).rejects.toThrow("Not found");
     await reviewCall(sup, callIds["rev-a"], "  Buen trabajo  ");

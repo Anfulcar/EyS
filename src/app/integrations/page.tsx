@@ -68,7 +68,7 @@ export default async function IntegrationsPage() {
                   {!k.revokedAt && (
                     <ActionForm action={revokeApiKeyAction}>
                       <input type="hidden" name="keyId" value={k.id} />
-                      <ConfirmButton message={t.integrationRevokeConfirm} className="btn-secondary btn-sm">{t.integrationRevoke}</ConfirmButton>
+                      <ConfirmButton message={t.integrationRevokeConfirm} danger className="btn-secondary btn-sm">{t.integrationRevoke}</ConfirmButton>
                     </ActionForm>
                   )}
                 </li>
@@ -139,7 +139,7 @@ export default async function IntegrationsPage() {
           <ActionForm action={setSigturPushAction}>
             <input type="hidden" name="on" value={push.enabled ? "0" : "1"} />
             {push.enabled ? (
-              <ConfirmButton message={t.pushOffConfirm} className="flex items-center gap-2 text-sm font-medium text-slate-700">{track(true)}{t.pushOn}</ConfirmButton>
+              <ConfirmButton message={t.pushOffConfirm} confirmLabel={t.switchOff} danger className="flex items-center gap-2 text-sm font-medium text-slate-700">{track(true)}{t.pushOn}</ConfirmButton>
             ) : (
               <button className="flex items-center gap-2 text-sm font-medium text-slate-700">{track(false)}{t.pushOff}</button>
             )}

@@ -10,7 +10,7 @@ export async function GET(req: Request) {
   if (!user) return notFoundResponse();
   await logActivity(user, "export.downloaded", { entity: "visits", summary: "Ruta de visitas (Excel)" });
   const sp = new URL(req.url).searchParams;
-  const { rows } = await pendingVisits({ campaignId: sp.get("campaign") ? Number(sp.get("campaign")) : undefined, zone: sp.get("zone") ?? undefined, showAll: sp.get("all") === "1" });
+  const { rows } = await pendingVisits({ campaign: sp.get("campaign"), zone: sp.get("zone"), showAll: sp.get("all") === "1" });
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("Ruta");
   ws.columns = ["Zona operativa", "Municipio", "Dirección", "Nombre comercial", "Razón social", "ID SIGTUR", "RUT", "Estatus RNT", "Prioridad", "Teléfonos", "Última tipificación", "Visitas previas", "Resultado", "Observaciones"].map((h) => ({ header: h, key: h, width: 22 }));

@@ -6,6 +6,9 @@ import { Avatar } from "@/components/Avatar";
 import { BackLink } from "@/components/BackLink";
 import { CallsTable } from "@/components/CallsTable";
 import { DayChart } from "@/components/DayChart";
+import { FilterChips } from "@/components/FilterChips";
+import { Hint } from "@/components/Hint";
+import { MultiSelect } from "@/components/MultiSelect";
 import { Overlay } from "@/components/Overlay";
 import { ReportBuilder } from "@/components/ReportBuilder";
 import { HBars, TONE_COLOR } from "@/components/StatsView";
@@ -62,12 +65,18 @@ export default async function AgentSummaryPage({ params, searchParams }: {
       ])
     : [[], [], []];
   const hasMore = rows.length > PAGE;
-  const Kpi = ({ n, l, sub, tone }: { n: number; l: string; sub?: string; tone?: string }) => (
+  const Kpi = ({ n, l, sub, tone, help }: { n: number; l: string; sub?: string; tone?: string; help?: string }) => (
     <div className="card p-4">
       <div className={`text-2xl font-bold tabular-nums ${tone ?? "text-slate-900"}`}>{n}{sub && <span className="ml-1 text-sm font-medium text-slate-400">{sub}</span>}</div>
-      <div className="text-xs text-slate-500">{l}</div>
+      <div className="text-xs text-slate-500">{l}{help && <Hint text={help} />}</div>
     </div>
   );
+
+  // Result and review state accept several choices.
+  const callGroups = [
+    { key: "code" as const, label: t.result, options: Object.entries(CALL_CODES).map(([k, v]) => ({ value: k, label: v[lang] })) },
+    { key: "review" as const, label: t.reviewState, options: [{ value: "no", label: t.notReviewed }, { value: "yes", label: t.reviewed }] },
+  ];
 
   return (
     <div className="space-y-6">
@@ -117,9 +126,9 @@ export default async function AgentSummaryPage({ params, searchParams }: {
         <Kpi n={s.tasks} l={t.agentTasks} />
         <Kpi n={s.open} l={t.agentOpenDue.replace("{n}", String(s.dueToday))} />
         <Kpi n={s.calls} l={t.agentCallsToday.replace("{n}", String(s.callsToday))} />
-        <Kpi n={s.contacts} sub={pct(s.contacts, s.calls)} l={t.contacts} />
-        <Kpi n={s.commitments} l={t.commitments} />
-        <Kpi n={s.notReviewed} l={t.notReviewed} tone={s.notReviewed ? "text-amber-700" : undefined} />
+        <Kpi n={s.contacts} sub={pct(s.contacts, s.calls)} l={t.contacts} help={t.helpAgentContacts} />
+        <Kpi n={s.commitments} l={t.commitments} help={t.helpAgentCommitments} />
+        <Kpi n={s.notReviewed} l={t.notReviewed} tone={s.notReviewed ? "text-amber-700" : undefined} help={t.helpAgentNotReviewed} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -144,24 +153,16 @@ export default async function AgentSummaryPage({ params, searchParams }: {
             {campaignId && <input type="hidden" name="campaign" value={campaignId} />}
             {from && <input type="hidden" name="from" value={from} />}
             {to && <input type="hidden" name="to" value={to} />}
-            <div>
-              <label className="label" htmlFor="ag-code">{t.result}</label>
-              <select id="ag-code" name="code" defaultValue={sp.code ?? ""} className="input">
-                <option value="">{t.all}</option>
-                {Object.entries(CALL_CODES).map(([k, v]) => <option key={k} value={k}>{v[lang]}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="label" htmlFor="ag-review">{t.reviewState}</label>
-              <select id="ag-review" name="review" defaultValue={sp.review ?? ""} className="input">
-                <option value="">{t.all}</option>
-                <option value="no">{t.notReviewed}</option>
-                <option value="yes">{t.reviewed}</option>
-              </select>
-            </div>
+            {callGroups.map((g) => (
+              <div key={g.key}>
+                <label className="label" htmlFor={`ag-${g.key}`}>{g.label}</label>
+                <MultiSelect key={sp[g.key] ?? ""} id={`ag-${g.key}`} name={g.key} value={sp[g.key]} options={g.options} t={t} className="w-56" />
+              </div>
+            ))}
             <button className="btn-secondary">{t.filter}</button>
           </form>
         </div>
+        <FilterChips path={`/agents/${id}`} sp={sp} groups={callGroups} keep={["campaign", "from", "to"]} t={t} />
         {rows.length === 0 ? (
           <Empty>{t.noCallsFound}</Empty>
         ) : (

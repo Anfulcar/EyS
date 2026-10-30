@@ -9,6 +9,7 @@ export function SelectAll({ form, label }: { form: string; label: string }) {
     <input
       ref={ref}
       type="checkbox"
+      data-select-all
       aria-label={label}
       title={label}
       className="h-4 w-4 accent-brand-600"

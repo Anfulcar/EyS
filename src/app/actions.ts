@@ -29,7 +29,8 @@ import { ABSENCE_KINDS, coverTasks, distribute, moveTasks, syncCoverage, workloa
 import { formatPhone, normalizePhone, readTable, str } from "@/lib/sheets";
 import { applyStatusUpdates, canWorkCompany, logCall, logVisit, relatedTasks, type CallInput, type CallOutcome } from "@/lib/workflow";
 
-export type ActionState = { ok?: boolean; error?: string; message?: string; data?: unknown; needsReauth?: boolean } | null;
+// keep: the message stays in the form (a password, a key, an import summary) instead of the passing notice.
+export type ActionState = { ok?: boolean; error?: string; message?: string; keep?: boolean; data?: unknown; needsReauth?: boolean } | null;
 
 // ---------- Session ----------
 
@@ -159,7 +160,7 @@ export async function createUserAction(_: ActionState, form: FormData): Promise<
   }).returning({ id: users.id });
   await logActivity(me, "user.created", { entity: "user", entityId: created.id, summary: `${parsed.data.username} (${parsed.data.role})` });
   revalidatePath("/users");
-  return { ok: true, message: `${t.saved}: ${parsed.data.username} / ${password}` };
+  return { ok: true, keep: true, message: `${t.saved}: ${parsed.data.username} / ${password}` };
 }
 
 export async function editUserAction(_: ActionState, form: FormData): Promise<ActionState> {
@@ -213,7 +214,7 @@ export async function editUserAction(_: ActionState, form: FormData): Promise<Ac
   if (newPassword) await logActivity(me, "user.password_reset", { ...who, summary: `${d.username}${d.resetDefault ? " (contraseña predeterminada)" : ""}` });
   if (d.username !== target.username || d.name !== target.name) await logActivity(me, "user.updated", { ...who, summary: `${target.username} → ${d.username}, ${d.name}` });
   revalidatePath("/users");
-  return { ok: true, message: newPassword ? `${t.saved}. ${t.password}: ${newPassword}` : t.saved };
+  return { ok: true, keep: !!newPassword, message: newPassword ? `${t.saved}. ${t.password}: ${newPassword}` : t.saved };
 }
 
 // ---------- Campaigns ----------
@@ -334,7 +335,7 @@ export async function commitUploadAction(_: ActionState, form: FormData): Promis
   await db.insert(importLogs).values({ campaignId, kind: "establishments", fileName: file.name, rows: rows.length, inserted: r.inserted, updated: r.updated, skipped: b.errors.length, userId: u.id });
   await logActivity(u, "upload.establishments", { campaignId, entity: "file", summary: `${file.name}: ${r.inserted} nuevos, ${r.updated} actualizados, ${b.errors.length} omitidos` });
   revalidatePath(`/campaigns/${campaignId}`, "layout");
-  return { ok: true, message: `${t.importDone}: ${r.inserted} ${t.inserted}, ${r.updated} ${t.updated}, ${b.errors.length} ${t.skipped}. ${r.companies} ${t.companies.toLowerCase()}.` };
+  return { ok: true, keep: true, message: `${t.importDone}: ${r.inserted} ${t.inserted}, ${r.updated} ${t.updated}, ${b.errors.length} ${t.skipped}. ${r.companies} ${t.companies.toLowerCase()}.` };
 }
 
 // ---------- Assignment ----------
@@ -651,7 +652,7 @@ export async function uploadStatusAction(_: ActionState, form: FormData): Promis
   await db.insert(importLogs).values({ campaignId: target === "all" ? null : Number(target), kind: "status", fileName: file.name, rows: rows.length, updated: r.updated, skipped: r.notFound, userId: u.id });
   await logActivity(u, "upload.status", { campaignId: target === "all" ? null : Number(target), entity: "file", summary: `${file.name}: ${r.updated} estatus actualizados, ${r.notFound} no encontrados` });
   revalidatePath("/campaigns", "layout");
-  return { ok: true, message: `${r.updated} ${t.statusUpdated}, ${r.notFound} ${t.skipped}` };
+  return { ok: true, keep: true, message: `${r.updated} ${t.statusUpdated}, ${r.notFound} ${t.skipped}` };
 }
 
 // ---------- Follow-up: moving and covering tasks ----------
@@ -888,7 +889,7 @@ export async function createApiKeyAction(_: ActionState, form: FormData): Promis
   await logActivity(me, "integration.key_created", { entity: "integration", summary: name });
   revalidatePath("/integrations");
   // Shown once on screen; only its fingerprint is stored.
-  return { ok: true, message: `${t.integrationKeyCreated} ${key}` };
+  return { ok: true, keep: true, message: `${t.integrationKeyCreated} ${key}` };
 }
 
 export async function revokeApiKeyAction(_: ActionState, form: FormData): Promise<ActionState> {
