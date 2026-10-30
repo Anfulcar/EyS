@@ -5,6 +5,7 @@ import { appMeta, companies, establishments, sigturOutbox } from "@/db/schema";
 import { logActivity } from "./audit";
 import { codeLabel } from "./catalog";
 import { addHours, nowIso } from "./dates";
+import { recordChanges } from "./changes";
 import { buildInteractions, markOverdueRequests, type Interaction } from "./sigtur";
 
 // «Envío automático a SIGTUR»: everything is queued from the moment it happens; it only leaves when an
@@ -67,6 +68,8 @@ export type DataChange = { establishmentId: number; field: string; label: string
 export async function queueChanges(changes: DataChange[], by: { id: number; name: string }, source: string) {
   const real = changes.filter((c) => (c.to ?? "") !== (c.from ?? ""));
   if (!real.length) return;
+  // Also kept for «Reporte de cambios» (SIGTUR updated by hand).
+  await recordChanges(real, by, source);
   const ests = await db
     .select({ id: establishments.id, sigturId: establishments.sigturId, rut: establishments.rut, nombre: establishments.nombreComercial })
     .from(establishments)

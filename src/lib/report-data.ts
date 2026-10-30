@@ -73,7 +73,7 @@ const T = {
 
 export async function campaignIdsFor(o: ReportOptions) {
   if (o.campaigns === "pick") return o.campaignIds;
-  const rows = await db.select({ id: campaigns.id }).from(campaigns).where(o.campaigns === "active" ? ne(campaigns.status, "closed") : undefined);
+  const rows = await db.select({ id: campaigns.id }).from(campaigns).where(and(ne(campaigns.kind, "email"), o.campaigns === "active" ? ne(campaigns.status, "closed") : undefined));
   return rows.map((r) => r.id);
 }
 

@@ -1,5 +1,6 @@
-import { asc, desc, eq } from "drizzle-orm";
-import { Download, FileDown, FileText, Pause, Pencil, Play, Presentation, RefreshCw, Send, Trash2 } from "lucide-react";
+import { asc, desc, eq, ne } from "drizzle-orm";
+import { Download, FileDown, FileText, History, Pause, Pencil, Play, Presentation, RefreshCw, Send, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { ActionForm, ConfirmButton, SubmitButton } from "@/components/ActionForm";
 import { Overlay } from "@/components/Overlay";
 import { ReportBuilder } from "@/components/ReportBuilder";
@@ -25,7 +26,7 @@ export default async function ReportsPage() {
       .limit(200),
     db.select().from(reportTemplates).orderBy(asc(reportTemplates.name)),
     db.select({ id: users.id, name: users.name }).from(users),
-    db.select({ id: campaigns.id, name: campaigns.name, status: campaigns.status }).from(campaigns).orderBy(desc(campaigns.startDate)),
+    db.select({ id: campaigns.id, name: campaigns.name, status: campaigns.status }).from(campaigns).where(ne(campaigns.kind, "email")).orderBy(desc(campaigns.startDate)),
     reportPeople(),
   ]);
   const builderTemplates = templates.map((x) => ({ id: x.id, name: x.name, options: cleanOptions(JSON.parse(x.options)), frequency: x.frequency as Frequency, runDay: x.runDay }));
@@ -45,9 +46,12 @@ export default async function ReportsPage() {
           <h1>{t.reportsTitle}</h1>
           <p className="subtitle">{t.reportsSubtitle}</p>
         </div>
-        <Overlay variant="drawer" width="max-w-3xl" trigger={<><FileDown className="h-4 w-4" />{t.reportGenerate}</>} title={t.reportGenerate}>
-          {builder()}
-        </Overlay>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/reports/changes" className="btn-secondary"><History className="h-4 w-4" />{t.changesTitle}</Link>
+          <Overlay variant="drawer" width="max-w-3xl" trigger={<><FileDown className="h-4 w-4" />{t.reportGenerate}</>} title={t.reportGenerate}>
+            {builder()}
+          </Overlay>
+        </div>
       </div>
 
       <div className="card overflow-hidden p-0">

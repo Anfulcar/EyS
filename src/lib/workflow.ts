@@ -38,6 +38,8 @@ export type CallInput = {
   isResponsible: boolean | null;
   whatsappSent: boolean;
   updatedEmail: string | null;
+  // «¿Recibió el correo?» (only when someone was reached)
+  emailReceived?: string | null;
   notes: string | null;
   results: EstResultInput[];
 };
@@ -69,6 +71,8 @@ export async function logCall(user: User, input: CallInput, checked?: typeof com
     db.select().from(phones).where(eq(phones.companyId, company.id)),
   ]);
   const campaign = campaignRow!;
+  // «Campaña de correo» tasks are not called.
+  if (campaign.kind === "email") throw new Error("Not found");
   const phone = input.phoneId ? allPhones.find((p) => p.id === input.phoneId) ?? null : null;
 
   const failed = !input.contacted || input.attended === false;
@@ -76,6 +80,7 @@ export async function logCall(user: User, input: CallInput, checked?: typeof com
   const now = nowIso();
   const today = todayLocal();
   const attemptNo = company.attempts + 1;
+  const emailAnswer = !failed && (input.emailReceived === "Sí" || input.emailReceived === "No") ? input.emailReceived : null;
 
   const [attempt] = await db
     .insert(callAttempts)
@@ -94,6 +99,7 @@ export async function logCall(user: User, input: CallInput, checked?: typeof com
       spokeRole: input.spokeRole,
       isResponsible: input.isResponsible,
       whatsappSent: input.whatsappSent,
+      emailReceived: emailAnswer,
       notes: input.notes,
     })
     .returning();
@@ -202,7 +208,10 @@ export async function logCall(user: User, input: CallInput, checked?: typeof com
             requiereVisita: visit ? "Sí" : "No",
             contactoNombre: input.spokeWith || e.contactoNombre,
             contactoCargo: input.spokeRole || e.contactoCargo,
-            correoActualizado: input.updatedEmail || e.correoActualizado,
+            correoActualizado: email ?? e.correoActualizado,
+            correoRecibido: emailAnswer ?? e.correoRecibido,
+            // A corrected address is a new one: the old bounce no longer applies.
+            ...(email && email !== (e.correoActualizado ?? e.correo) ? { correoRebotado: null } : {}),
             nombreComercial: newName ?? e.nombreComercial,
             direccion: newAddress ?? e.direccion,
             propietario: newOwner ?? e.propietario,
@@ -259,7 +268,7 @@ export async function logVisit(
   user: User,
   input: {
     establishmentId: number; visitDate: string; code: string; commitmentDate: string | null; notes: string | null;
-    newName?: string | null; newAddress?: string | null; newOwner?: string | null;
+    newName?: string | null; newAddress?: string | null; newOwner?: string | null; newEmail?: string | null;
   },
 ) {
   const e = await db.query.establishments.findFirst({ where: eq(establishments.id, input.establishmentId) });
@@ -276,6 +285,9 @@ export async function logVisit(
     commitmentDate: input.commitmentDate,
     notes: input.notes,
   }).returning({ id: visits.id });
+  const oldEmail = e.correoActualizado ?? e.correo;
+  const typed = (input.newEmail ?? "").trim().slice(0, 200);
+  const newEmail = typed && typed.toLowerCase() !== (oldEmail ?? "").toLowerCase() ? typed : null;
   const enOperacion = input.code === "V4" ? "No" : ["V1", "V2", "V3", "V7"].includes(input.code) ? "Sí" : e.enOperacion;
   await db
     .update(establishments)
@@ -286,6 +298,7 @@ export async function logVisit(
       nombreComercial: input.newName || e.nombreComercial,
       direccion: input.newAddress || e.direccion,
       propietario: input.newOwner || e.propietario,
+      ...(newEmail ? { correoActualizado: newEmail, correoRebotado: null } : {}),
     })
     .where(eq(establishments.id, e.id));
   // What the inspector found and decided, for SIGTUR's change requests.
@@ -294,6 +307,7 @@ export async function logVisit(
   if (input.newName && input.newName !== e.nombreComercial) changes.push({ establishmentId: e.id, field: "nombreComercial", label: "Nombre comercial", from: e.nombreComercial, to: input.newName });
   if (input.newAddress && input.newAddress !== e.direccion) changes.push({ establishmentId: e.id, field: "direccion", label: "Dirección", from: e.direccion, to: input.newAddress });
   if (input.newOwner && input.newOwner !== e.propietario) changes.push({ establishmentId: e.id, field: "propietario", label: "Dueño / responsable", from: e.propietario, to: input.newOwner });
+  if (newEmail) changes.push({ establishmentId: e.id, field: "correo", label: "Correo", from: oldEmail, to: newEmail });
   let followupAt: string | null = null;
   // Plan §6.5: phone follow-up 5 business days after the visit when the establishment is operating.
   if (["V1", "V2", "V7"].includes(input.code)) {

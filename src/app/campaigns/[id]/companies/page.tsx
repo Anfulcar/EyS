@@ -1,5 +1,5 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
-import { CopyPlus, Download, Search, Trash2, Users2 } from "lucide-react";
+import { CopyPlus, Download, Mail, Search, Trash2, Users2 } from "lucide-react";
 import Link from "next/link";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
 import { Avatar } from "@/components/Avatar";
@@ -41,6 +41,7 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
     db.select({ status: companies.status, n: sql<number>`count(*)` }).from(companies).where(eq(companies.campaignId, id)).groupBy(companies.status),
     db.query.campaigns.findFirst({ where: eq(campaigns.id, id) }),
   ]);
+  const isEmail = campaign?.kind === "email";
   const statusCount = new Map(byStatus.map((s) => [s.status, Number(s.n)]));
   const zones = (await db.selectDistinct({ zone: companies.zone }).from(companies).where(eq(companies.campaignId, id))).map((z) => z.zone).filter(Boolean).sort() as string[];
 
@@ -77,6 +78,7 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
     { key: "sub", label: t.filterSubsector, options: opts(values(subs)) },
     { key: "prio", label: t.priority, options: opts(["P1", "P2", "P3"]) },
     { key: "code", label: t.filterLastResult, options: values(codes).map((v) => ({ value: v, label: codeLabel(v, lang) })) },
+    { key: "mail", label: t.qEmailReceived, options: [{ value: "no", label: t.no }, { value: "yes", label: t.yes }, { value: "none", label: t.mailNoAnswer }] },
   ];
   const followGroup = {
     key: "f",
@@ -111,7 +113,7 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
             </div>
           </div>
           <button className="btn-secondary">{t.filter}</button>
-          <div className="grid gap-3 md:col-span-full md:grid-cols-4">
+          <div className="grid gap-3 md:col-span-full md:grid-cols-5">
             {filterGroups.slice(3).map((g) => (
               <div key={g.key}>
                 <label className="label" htmlFor={`f-${g.key}`}>{g.label}</label>
@@ -129,7 +131,8 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <Overlay variant="drawer" trigger={<><Users2 className="h-4 w-4" />{t.assignTasks}</>} title={t.assignTitle}>
+        {isEmail && <p className="rounded-xl bg-violet-50 px-3 py-2 text-sm text-violet-800">{t.emailCampaignNoCalls}</p>}
+        {!isEmail && <Overlay variant="drawer" trigger={<><Users2 className="h-4 w-4" />{t.assignTasks}</>} title={t.assignTitle}>
           <ActionForm action={assignAction} className="space-y-5">
             <input type="hidden" name="campaignId" value={id} />
             <div>
@@ -186,7 +189,7 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
             </div>
             <div className="flex justify-end"><SubmitButton>{t.assign}</SubmitButton></div>
           </ActionForm>
-        </Overlay>
+        </Overlay>}
 
         <span className="ml-auto" />
         {nRemoved > 0 && (
@@ -199,20 +202,23 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
             <RemoveFromList campaignId={id} filters={activeFilters} total={Number(total)} t={t} preview={previewRemovalAction} action={removeTasksAction} />
           </Overlay>
         )}
-        <Overlay variant="drawer" width="max-w-2xl" triggerClassName="btn-secondary" trigger={<><CopyPlus className="h-4 w-4" />{t.transferButton}</>} title={t.transferButton}>
-          <TransferForm
-            campaignId={id}
-            t={t}
-            statuses={TRANSFERABLE.map((s) => ({ value: s, label: label(COMPANY_STATUSES, s, lang), n: statusCount.get(s) ?? 0 }))}
-            codes={Object.keys(CALL_CODES).sort().map((k) => ({ value: k, label: codeLabel(k, lang) }))}
-            zones={zones.map((z) => ({ value: z, label: z }))}
-            priorities={["P1", "P2", "P3"].map((p) => ({ value: p, label: p }))}
-            agents={agents.map((a) => ({ value: String(a.id), label: a.name }))}
-            fields={<CampaignFields t={t} values={{ name: `${campaign?.name ?? ""} – seguimiento`, followupDays: campaign?.followupDays, maxAttempts: campaign?.maxAttempts }} />}
-            action={transferCampaignAction}
-            countAction={countTransferAction}
-          />
-        </Overlay>
+        {!isEmail && ([["standard", t.transferButton, CopyPlus], ["email", t.emailCampaignButton, Mail]] as const).map(([kind, title, Icon]) => (
+          <Overlay key={kind} variant="drawer" width="max-w-2xl" triggerClassName="btn-secondary" trigger={<><Icon className="h-4 w-4" />{title}</>} title={title}>
+            <TransferForm
+              kind={kind}
+              campaignId={id}
+              t={t}
+              statuses={TRANSFERABLE.map((s) => ({ value: s, label: label(COMPANY_STATUSES, s, lang), n: statusCount.get(s) ?? 0 }))}
+              codes={Object.keys(CALL_CODES).sort().map((k) => ({ value: k, label: codeLabel(k, lang) }))}
+              zones={zones.map((z) => ({ value: z, label: z }))}
+              priorities={["P1", "P2", "P3"].map((p) => ({ value: p, label: p }))}
+              agents={agents.map((a) => ({ value: String(a.id), label: a.name }))}
+              fields={<CampaignFields t={t} values={{ name: `${campaign?.name ?? ""} – ${kind === "email" ? (lang === "es" ? "correo" : "email") : (lang === "es" ? "seguimiento" : "follow-up")}`, followupDays: campaign?.followupDays, maxAttempts: campaign?.maxAttempts }} />}
+              action={transferCampaignAction}
+              countAction={countTransferAction}
+            />
+          </Overlay>
+        ))}
         <RefreshButton label={t.refresh} />
       </div>
 
@@ -301,7 +307,7 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
                       </td>
                       <td className="whitespace-nowrap text-xs text-slate-600">{c.nextActionAt ? fmtDate(c.nextActionAt, lang) : "—"}</td>
                       <td>
-                        <ReassignSelect key={c.assignedUserId ?? "none"} action={reassignCompanyAction} companyId={c.id} value={c.assignedUserId} options={agentOptions} unassignedLabel={t.unassigned} />
+                        {isEmail ? <span className="text-xs text-slate-400">—</span> : <ReassignSelect key={c.assignedUserId ?? "none"} action={reassignCompanyAction} companyId={c.id} value={c.assignedUserId} options={agentOptions} unassignedLabel={t.unassigned} />}
                       </td>
                     </tr>
                   );
@@ -318,7 +324,7 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
           )}
         </div>
       )}
-      {!showRemoved && (
+      {!showRemoved && !isEmail && (
         <BulkBar campaignId={id} agents={agentOptions} action={bulkAssignAction} removeTriggerId={me.role === "admin" && campaign?.status !== "closed" ? "remove-trigger" : undefined} t={t} />
       )}
     </div>

@@ -16,7 +16,13 @@ export default async function CampaignLayout({ children, params }: { children: R
   const c = await db.query.campaigns.findFirst({ where: eq(campaigns.id, Number(id)) });
   if (!c) notFound();
   const { t, lang } = await getDict();
-  const tabs = [
+  // «Campaña de correo»: only the mailing work.
+  const tabs = c.kind === "email" ? [
+    { href: "/email", label: t.tabEmail },
+    { href: "/companies", label: t.tabCompanies },
+    { href: "/export", label: t.tabExport },
+    { href: "/settings", label: t.tabSettings },
+  ] : [
     { href: "", label: t.tabDashboard },
     { href: "/summary", label: t.tabSummary },
     { href: "/followup", label: t.tabFollowup },
@@ -34,6 +40,7 @@ export default async function CampaignLayout({ children, params }: { children: R
         <div className="mt-1 flex flex-wrap items-center gap-3">
           <h1>{c.name}</h1>
           <StatusBadge status={c.status} label={t[`campaignStatus_${c.status}` as keyof Dict]} />
+          {c.kind === "email" && <span className="badge bg-violet-50 text-violet-700">{t.emailCampaignTag}</span>}
           <span className="text-sm text-slate-500">{fmtDate(c.startDate, lang)} – {fmtDate(c.endDate, lang)}</span>
         </div>
         {c.description && <p className="mt-1 max-w-3xl text-sm text-slate-600">{c.description}</p>}

@@ -27,7 +27,7 @@ export default async function CallsPage({ searchParams }: { searchParams: Promis
     requireUser(["agent", "admin", "supervisor"]),
     searchParams,
     getDict(),
-    db.select().from(campaigns).where(ne(campaigns.status, "closed")),
+    db.select().from(campaigns).where(and(ne(campaigns.status, "closed"), ne(campaigns.kind, "email"))),
   ]);
   const tab = (TABS as readonly string[]).includes(sp.tab ?? "") ? sp.tab! : "due";
   const isManager = me.role !== "agent";

@@ -71,6 +71,7 @@ export default async function CallSummaryPage({ params }: { params: Promise<{ id
                 </>
               )}
               <Row k="WhatsApp" v={yn(a.whatsappSent)} />
+              {a.emailReceived && <Row k={t.qEmailReceived} v={a.emailReceived === "Sí" ? t.yes : t.no} />}
               <Row k={t.callNotesLabel} v={a.notes} />
             </dl>
           </div>

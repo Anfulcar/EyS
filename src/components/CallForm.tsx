@@ -66,9 +66,11 @@ function Section({ icon: Icon, title, children }: { icon: LucideIcon; title: str
 }
 
 export function CallForm({
-  companyId, establishments, phones, related, t, lang, whatsappSuggested, action,
+  companyId, establishments, phones, related, t, lang, whatsappSuggested, action, currentEmail,
 }: {
   companyId: number; establishments: Est[]; phones: PhoneOpt[]; related: RelatedTask[]; t: Dict; lang: Lang; whatsappSuggested: boolean;
+  // The email on file (corrected one if any), shown filled in so the agent can fix it.
+  currentEmail?: string | null;
   action: (s: ActionState, f: FormData) => Promise<ActionState>;
 }) {
   const [state, formAction] = useActionState(withConnectionCheck(action), null);
@@ -89,7 +91,8 @@ export function CallForm({
   const [spokeWith, setSpokeWith] = useState("");
   const [spokeRole, setSpokeRole] = useState("");
   const [isResponsible, setIsResponsible] = useState("");
-  const [updatedEmail, setUpdatedEmail] = useState("");
+  const [updatedEmail, setUpdatedEmail] = useState(currentEmail ?? "");
+  const [emailReceived, setEmailReceived] = useState("");
   const [whatsappSent, setWhatsappSent] = useState(false);
   const [notes, setNotes] = useState("");
   const [results, setResults] = useState<Record<number, EstResult>>({});
@@ -98,9 +101,9 @@ export function CallForm({
   useEffect(() => {
     if (state?.ok) {
       setContacted(""); setNoContactCode(""); setAttended(""); setSpokeWith(""); setSpokeRole(""); setIsResponsible("");
-      setUpdatedEmail(""); setWhatsappSent(false); setNotes(""); setResults({}); setTogether([]);
+      setUpdatedEmail(currentEmail ?? ""); setEmailReceived(""); setWhatsappSent(false); setNotes(""); setResults({}); setTogether([]);
     }
-  }, [state]);
+  }, [state, currentEmail]);
 
   const setR = (id: number, patch: Partial<EstResult>) => setResults((r) => ({ ...r, [id]: { ...(r[id] ?? emptyResult), ...patch } }));
   const applyToAll = () => {
@@ -122,7 +125,9 @@ export function CallForm({
     spokeRole: talked ? spokeRole || null : null,
     isResponsible: talked ? isResponsible === "Sí" : null,
     whatsappSent,
-    updatedEmail: talked ? updatedEmail || null : null,
+    // Only a different address counts as a correction.
+    updatedEmail: talked && updatedEmail.trim() && updatedEmail.trim().toLowerCase() !== (currentEmail ?? "").trim().toLowerCase() ? updatedEmail.trim() : null,
+    emailReceived: talked && emailReceived ? emailReceived : null,
     notes: notes || null,
     results: talked
       ? allEsts.map((e) => {
@@ -220,7 +225,8 @@ export function CallForm({
               <div><label className="label">{t.qSpokeWith}</label><input className="input" value={spokeWith} onChange={(e) => setSpokeWith(e.target.value)} /></div>
               <div><label className="label">{t.qSpokeRole}</label><input className="input" value={spokeRole} onChange={(e) => setSpokeRole(e.target.value)} /></div>
               <div><div className="label">{t.qIsResponsible}</div><YesNo name="resp" value={isResponsible} onChange={setIsResponsible} t={t} /></div>
-              <div><label className="label">{t.qUpdatedEmail}</label><input type="email" className="input" value={updatedEmail} onChange={(e) => setUpdatedEmail(e.target.value)} /></div>
+              <div><label className="label" htmlFor="call-email">{t.qUpdatedEmail}</label><input id="call-email" type="email" className="input" value={updatedEmail} onChange={(e) => setUpdatedEmail(e.target.value)} /></div>
+              <div><div className="label">{t.qEmailReceived}</div><YesNo name="email-received" value={emailReceived} onChange={setEmailReceived} t={t} /></div>
             </div>
           </Section>
         )}

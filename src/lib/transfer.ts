@@ -3,9 +3,11 @@ import { and, eq, inArray, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { campaigns, companies, establishments, phones, type Campaign } from "@/db/schema";
 import { codeLabel, COMPANY_STATUSES } from "./catalog";
+import { MAIL_COND } from "./task-filters";
 
 // «Nueva campaña con estas tareas»: which tasks of a running campaign move to a new one.
-export type TransferFilter = { statuses: string[]; code?: string; zone?: string; priority?: string; agent?: string };
+// mail = «¿Recibió el correo?» (yes | no | none).
+export type TransferFilter = { statuses: string[]; code?: string; zone?: string; priority?: string; agent?: string; mail?: string };
 export const TRANSFERABLE = ["pending", "retry", "followup", "visit", "done"];
 
 function where(campaignId: number, f: TransferFilter): SQL {
@@ -15,6 +17,7 @@ function where(campaignId: number, f: TransferFilter): SQL {
   if (f.zone) w.push(eq(companies.zone, f.zone));
   if (f.priority) w.push(eq(companies.priority, f.priority));
   if (f.agent) w.push(eq(companies.assignedUserId, Number(f.agent)));
+  if (f.mail && MAIL_COND[f.mail]) w.push(MAIL_COND[f.mail]);
   return and(...w)!;
 }
 
@@ -32,17 +35,21 @@ function withoutId<T extends { id: number }>(row: T): Omit<T, "id"> {
 // Results of the previous campaign are cleared in the copy; the rest of the establishment's data stays.
 const RESET = { finalCode: null, enOperacion: null, fechaCompromiso: null, requiereVisita: null, responsable: null, cerradoDesde: null, obstaculo: null };
 
+// kind "email" = «Campaña de correo»: a fresh mailing (sent and bounce marks cleared, corrected emails kept),
+// and the original tasks keep going.
 export async function transferToNewCampaign(
   from: Campaign,
   f: TransferFilter,
   data: Pick<Campaign, "name" | "description" | "startDate" | "endDate" | "maxAttempts" | "followupDays">,
   createdBy: number,
+  kind: "standard" | "email" = "standard",
 ) {
+  const email = kind === "email";
   const tasks = await db.select().from(companies).where(where(from.id, f));
   if (!tasks.length) return null;
   const [c] = await db
     .insert(campaigns)
-    .values({ ...data, status: "draft", source: "transfer", sourceRef: String(from.id), scriptEs: from.scriptEs, scriptEn: from.scriptEn, createdBy })
+    .values({ ...data, kind, status: "draft", source: "transfer", sourceRef: String(from.id), scriptEs: from.scriptEs, scriptEn: from.scriptEn, createdBy })
     .returning();
   const ids = tasks.map((t) => t.id);
   const [ests, phs] = await Promise.all([
@@ -60,13 +67,14 @@ export async function transferToNewCampaign(
       .returning({ id: companies.id });
     const own = ests.filter((e) => e.companyId === t.id);
     if (own.length) {
-      await db.insert(establishments).values(own.map((e) => ({ ...withoutId(e), ...RESET, campaignId: c.id, companyId: nc.id })));
+      await db.insert(establishments).values(own.map((e) => ({ ...withoutId(e), ...RESET, ...(email ? { correoEnviadoFecha: null, correoRebotado: null } : {}), campaignId: c.id, companyId: nc.id })));
     }
     const ownPhones = phs.filter((p) => p.companyId === t.id);
     if (ownPhones.length) {
       await db.insert(phones).values(ownPhones.map((p) => ({ ...withoutId(p), replacesPhoneId: null, campaignId: c.id, companyId: nc.id })));
     }
   }
+  if (email) return { campaign: c, count: tasks.length };
   // In the original campaign those tasks are closed as «Transferida», so nobody works them twice.
   for (let i = 0; i < ids.length; i += 500) {
     await db

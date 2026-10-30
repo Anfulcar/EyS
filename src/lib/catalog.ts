@@ -249,6 +249,7 @@ export const ACTIVITY_LABELS: Record<string, L> = {
   "sigtur.assignees_saved": { es: "Personas que reciben solicitudes SIGTUR", en: "People receiving SIGTUR requests" },
   "report.template_paused": { es: "Programación de informe pausada / reanudada", en: "Report schedule paused / resumed" },
   "establishment.updated": { es: "Datos del establecimiento actualizados", en: "Establishment details updated" },
+  "changes.sigtur_done": { es: "Cambios marcados como actualizados en SIGTUR", en: "Changes marked as updated in SIGTUR" },
   "phone.marked": { es: "Número marcado", en: "Number marked" },
   "export.downloaded": { es: "Descarga de datos", en: "Data downloaded" },
 };

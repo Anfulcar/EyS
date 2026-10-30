@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { logActivity } from "@/lib/audit";
 import { establishments } from "@/db/schema";
 import { MANAGERS, notFoundResponse, routeUser } from "@/lib/auth";
+import { emailInUse, HAS_EMAIL } from "@/lib/email";
 import { styleHeader, workbookResponse } from "@/lib/sheets";
 
 // Same columns as the "Base correo vencidas" / "Base correo sin licencia" sheets (they match the Annex A/B templates).
@@ -15,8 +16,10 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   const ests = await db
     .select()
     .from(establishments)
-    .where(and(eq(establishments.campaignId, id), eq(establishments.correoValido, "Sí")))
-    .orderBy(asc(establishments.correo));
+    .where(and(eq(establishments.campaignId, id), HAS_EMAIL))
+    .orderBy(asc(emailInUse));
+  // The address in use: the corrected one (call or visit) when there is one.
+  for (const e of ests) e.correo = e.correoActualizado ?? e.correo;
   const perEmail = new Map<string, number>();
   for (const e of ests) if (e.correo) perEmail.set(e.correo.toLowerCase(), (perEmail.get(e.correo.toLowerCase()) ?? 0) + 1);
   const fmtLong = (v: string | null) => (v ? new Date(`${v}T12:00:00Z`).toLocaleDateString("es-DO", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }) : "");
