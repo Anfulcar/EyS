@@ -17,6 +17,9 @@ describe("activity and error log", () => {
     await logActivity(null, "login.failed", { summary: "Usuario: nadie" });
     expect((await activityRows({ action: "login.failed" }, 10)).every((r) => r.action === "login.failed")).toBe(true);
     expect(await activityRows({ q: "TA-1" }, 10)).toHaveLength(1);
+    // Several actions at once.
+    const both = await activityRows({ action: "login.failed|call.logged" }, 10);
+    expect(new Set(both.map((r) => r.action))).toEqual(new Set(["login.failed", "call.logged"]));
   });
 
   it("records errors", async () => {

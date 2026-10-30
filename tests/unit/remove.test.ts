@@ -27,6 +27,11 @@ describe("removing RUTs from a campaign", () => {
   it("picks tasks by filters or by a file of RUTs / ID SIGTUR", async () => {
     expect(await idsByFilters(campaignId, { rnt: "Sin licencia", sub: "Gift shops" })).toHaveLength(2);
     expect(await idsByFilters(campaignId, { rnt: "Vencida" })).toHaveLength(1);
+    // Several choices in one filter: any of them; different filters: all of them.
+    expect(await idsByFilters(campaignId, { rnt: "Vencida|Sin licencia" })).toHaveLength(3);
+    expect(await idsByFilters(campaignId, { rnt: "Vencida|Sin licencia", sub: "Alojamiento" })).toHaveLength(1);
+    expect(await idsByFilters(campaignId, { agent: `none|${admin.id}` })).toHaveLength(3);
+    expect(await idsByFilters(campaignId, { status: "pending|done", f: "open|opNo" })).toHaveLength(3);
     const r = await idsByKeys(campaignId, ["rm-r1", "RM-2", "NO-EXISTE"]);
     expect(r.ids).toHaveLength(2);
     expect(r.notFound).toEqual(["NO-EXISTE"]);

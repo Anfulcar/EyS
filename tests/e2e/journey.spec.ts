@@ -66,7 +66,7 @@ test("main journey: campaign → upload → assign → calls → visit → dashb
   await page.getByRole("button", { name: "Asignar tareas" }).click();
   const panel = page.getByRole("dialog", { name: "Asignar tareas a los agentes" });
   await panel.getByRole("button", { name: "Asignar", exact: true }).click();
-  await expect(panel.getByText("4 tareas asignadas")).toBeVisible();
+  await expect(page.getByTestId("notices").getByText("4 tareas asignadas")).toBeVisible();
   await page.keyboard.press("Escape");
 
   // Ticked rows can be assigned together (here: back to the same agent)
@@ -74,7 +74,7 @@ test("main journey: campaign → upload → assign → calls → visit → dashb
   await page.locator("tbody input[name=ids]").nth(1).check();
   await page.locator("#bulk-assign select[name=userId]").selectOption({ label: "Ana Agente" });
   await page.locator("#bulk-assign").getByRole("button", { name: "Aplicar" }).click();
-  await expect(page.getByText("2 tareas asignadas")).toBeVisible();
+  await expect(page.getByTestId("notices").getByText("2 tareas asignadas")).toBeVisible();
 
   // Agent: sees the assigned calls
   await signIn(page, "agente1", "agente1123");
@@ -206,7 +206,7 @@ test("main journey: campaign → upload → assign → calls → visit → dashb
   await builder.locator("#rb-name").fill("Semanal Dirección");
   await builder.locator("#rb-frequency").selectOption("weekly");
   await builder.getByRole("button", { name: "Guardar como plantilla" }).click();
-  await expect(builder.getByText("Plantilla guardada.")).toBeVisible();
+  await expect(page.getByTestId("notices").getByText("Plantilla guardada.")).toBeVisible();
   await page.goto("/reports");
   // The PDF downloaded from the panel is also kept in «Informes»
   await expect(page.locator("tr", { hasText: "Informe de prueba" }).getByRole("link", { name: "PDF" })).toBeVisible();
@@ -241,7 +241,7 @@ test("main journey: campaign → upload → assign → calls → visit → dashb
   await page.goto(campaignUrl + "/settings");
   await page.fill("#script-es", "Buenos días, le llamamos del Ministerio de Turismo (guion de prueba).");
   await page.locator("form", { has: page.locator("#script-es") }).getByRole("button", { name: "Guardar" }).click();
-  await expect(page.locator("form", { has: page.locator("#script-es") }).getByText("Guardado")).toBeVisible();
+  await expect(page.getByTestId("notices").getByText("Guardado")).toBeVisible();
 
   // Administrator: Ana is absent from today; "Seguimiento" warns and her open tasks are covered by the administrator
   await page.goto("/users");
@@ -257,7 +257,7 @@ test("main journey: campaign → upload → assign → calls → visit → dashb
   await cover.locator("input[name=mode][value=one]").check();
   await cover.locator("select[name=toUserId]").selectOption({ label: "Admin Prueba" });
   await cover.getByRole("button", { name: "Cubrir durante la ausencia" }).click();
-  await expect(cover.getByText(/tareas cubiertas/)).toBeVisible();
+  await expect(page.getByTestId("notices").getByText(/tareas cubiertas/)).toBeVisible();
   await page.goto(campaignUrl + "/companies?f=covered");
   await expect(page.getByText(/Cubriendo a Ana Agente/).first()).toBeVisible();
   // Deleting the absence gives the tasks back to Ana
@@ -341,7 +341,6 @@ test("sensitive actions ask for the password again after 10 minutes", async ({ p
 
 test("delete a report, new campaign from results, and the SIGTUR connection", async ({ page, request }) => {
   await signIn(page, "admin", NEW_PW);
-  page.on("dialog", (d) => d.accept());
 
   // Administrators can delete a generated report
   await page.goto("/reports");
@@ -349,6 +348,10 @@ test("delete a report, new campaign from results, and the SIGTUR connection", as
   const before = await generated.count();
   expect(before).toBeGreaterThan(0);
   await generated.first().getByRole("button", { name: "Eliminar" }).click();
+  // The app's own window asks first
+  const ask = page.getByRole("alertdialog");
+  await expect(ask).toContainText("No se puede recuperar");
+  await ask.getByRole("button", { name: "Eliminar" }).click();
   await expect(generated).toHaveCount(before - 1);
 
   // New campaign with the tasks of another one: the copies arrive as a draft and the originals are closed as transferred
@@ -378,7 +381,7 @@ test("delete a report, new campaign from results, and the SIGTUR connection", as
   const key = (await created.textContent())!.match(/eys_[A-Za-z0-9_-]+/)![0];
   await page.locator("label.choice", { hasText: "Admin Prueba" }).locator("input").check();
   await page.locator("form", { has: page.locator("input[name=people]") }).getByRole("button", { name: "Guardar" }).click();
-  await expect(page.locator("form", { has: page.locator("input[name=people]") }).getByText("Guardado")).toBeVisible();
+  await expect(page.getByTestId("notices").getByText("Guardado")).toBeVisible();
 
   // Without the key SIGTUR's addresses answer "not found"
   expect((await request.get("/api/integrations/sigtur/interactions")).status()).toBe(404);
@@ -417,6 +420,7 @@ test("delete a report, new campaign from results, and the SIGTUR connection", as
   await expect(page.getByText("Campañas temporales")).toBeVisible();
   await expect(page.locator("a.card", { hasText: "Solicitudes SIGTUR" })).toHaveCount(0);
   await permanent.getByRole("button", { name: "Encendida" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Apagar" }).click();
   await expect(permanent).toContainText("En pausa");
   await expect(permanent).toContainText("Apagada por Admin Prueba");
   const paused = await request.post("/api/integrations/sigtur/call-requests", {
@@ -490,7 +494,7 @@ test("administrators remove RUTs from a running campaign (filters and file); sup
   await dialog.getByLabel(/Motivo/).fill("Fuera de alcance (prueba)");
   await dialog.getByLabel("Escriba ELIMINAR para confirmar").fill("ELIMINAR");
   await dialog.getByRole("button", { name: "Eliminar 1 RUT" }).click();
-  await expect(dialog.getByText("1 RUT eliminados de la campaña.")).toBeVisible();
+  await expect(page.getByTestId("notices").getByText("1 RUT eliminados de la campaña.")).toBeVisible();
 
   // By file, from «Actualizar estatus»: one RUT of the campaign and one that isn't
   await page.goto(`${campaignUrl}/status`);
@@ -506,7 +510,7 @@ test("administrators remove RUTs from a running campaign (filters and file); sup
   await card.getByLabel(/Motivo/).fill("Ya formalizado");
   await card.getByLabel("Escriba ELIMINAR para confirmar").fill("ELIMINAR");
   await card.getByRole("button", { name: "Eliminar 1 RUT" }).click();
-  await expect(card.getByText("1 RUT eliminados de la campaña.")).toBeVisible();
+  await expect(page.getByTestId("notices").getByText("1 RUT eliminados de la campaña.")).toBeVisible();
 
   // What stays: the «Eliminadas» list with the reason, and the log
   await page.goto(`${campaignUrl}/companies`);
@@ -592,4 +596,63 @@ test("agent summary from statistics and follow-up; agents only see their own", a
   await expect(page.getByRole("heading", { name: "Bruno Agente", exact: true })).toBeVisible();
   await page.goto(anaUrl);
   await expect(page.getByRole("heading", { name: "No encontrado" })).toBeVisible();
+});
+
+test("easier screens: folding menu, multi-choice filters, bar for ticked rows, phone menu", async ({ page }) => {
+  await signIn(page, "admin", NEW_PW);
+
+  // The side menu folds to icons and stays folded on the next page
+  await page.goto("/campaigns");
+  const aside = page.locator("aside");
+  await page.getByRole("button", { name: "Plegar menú" }).click();
+  await expect(aside).toHaveAttribute("data-folded", "1");
+  await page.reload();
+  await expect(aside).toHaveAttribute("data-folded", "1");
+  await expect(aside.getByRole("link", { name: "Campañas", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Desplegar menú" }).click();
+  await expect(aside).toHaveAttribute("data-folded", "0");
+
+  // «Tareas y asignación»: several choices in one filter, each shown as a removable label
+  await page.locator("a.card", { has: page.getByRole("heading", { name: "Campaña de prueba", exact: true }) }).click();
+  await expect(page).toHaveURL(/\/campaigns\/\d+$/);
+  const tasksUrl = page.url() + "/companies";
+  await page.goto(tasksUrl);
+  const all = await page.locator("tbody input[name=ids]").count();
+  await page.locator("#f-agent").click();
+  await page.getByRole("checkbox", { name: "Sin asignar" }).check();
+  await page.getByRole("checkbox", { name: "Ana Agente" }).check();
+  await page.getByRole("button", { name: "Listo" }).click();
+  await expect(page.locator("#f-agent")).toHaveText("Sin asignar, Ana Agente");
+  await page.getByRole("button", { name: "Filtrar" }).click();
+  await expect(page).toHaveURL(/agent=none%7C\d+/);
+  const chips = page.getByTestId("filter-chips");
+  await expect(chips).toContainText("Asignado a: Sin asignar");
+  await expect(chips).toContainText("Asignado a: Ana Agente");
+  await expect(page.locator("tbody input[name=ids]")).toHaveCount(all);
+  await chips.getByRole("link", { name: "Quitar Ana Agente" }).click();
+  await expect(page).toHaveURL(/agent=none(&|$)/);
+  await chips.getByRole("link", { name: "Quitar todos" }).click();
+  await expect(page.getByTestId("filter-chips")).toHaveCount(0);
+
+  // The bar appears only while rows are ticked
+  await expect(page.getByTestId("bulk-count")).toBeHidden();
+  await page.locator("tbody input[name=ids]").nth(0).check();
+  await expect(page.getByTestId("bulk-count")).toHaveText("1 marcadas");
+  await page.getByRole("button", { name: "Desmarcar todas" }).click();
+  await expect(page.getByTestId("bulk-count")).toBeHidden();
+
+  // «?» explains an indicator without leaving the page
+  await page.goto("/stats");
+  await page.getByTestId("hint").first().click();
+  await expect(page.getByRole("tooltip")).toContainText("Meta");
+  await expect(page).toHaveURL(/\/stats/);
+
+  // Phones: the menu opens from ☰ and closes after choosing a page
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/stats");
+  await page.getByRole("button", { name: "Abrir menú" }).click();
+  const drawer = page.getByRole("dialog", { name: "Abrir menú" });
+  await drawer.getByRole("link", { name: "Informes" }).click();
+  await expect(page).toHaveURL(/\/reports$/);
+  await expect(drawer).toHaveCount(0);
 });

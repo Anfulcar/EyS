@@ -77,7 +77,7 @@ export default async function ReportsPage() {
                         {me.role === "admin" && (
                           <ActionForm action={deleteGeneratedReportAction}>
                             <input type="hidden" name="reportId" value={f.id} />
-                            <ConfirmButton message={t.reportsDeleteFileConfirm} className="btn-secondary btn-sm"><Trash2 className="h-3.5 w-3.5" />{t.delete}</ConfirmButton>
+                            <ConfirmButton message={t.reportsDeleteFileConfirm} danger className="btn-secondary btn-sm"><Trash2 className="h-3.5 w-3.5" />{t.delete}</ConfirmButton>
                           </ActionForm>
                         )}
                       </div>
@@ -141,7 +141,7 @@ export default async function ReportsPage() {
                           )}
                           <ActionForm action={deleteReportTemplateAction}>
                             <input type="hidden" name="templateId" value={x.id} />
-                            <ConfirmButton message={t.reportsDeleteConfirm} className="btn-secondary btn-sm"><Trash2 className="h-3.5 w-3.5" />{t.delete}</ConfirmButton>
+                            <ConfirmButton message={t.reportsDeleteConfirm} danger className="btn-secondary btn-sm"><Trash2 className="h-3.5 w-3.5" />{t.delete}</ConfirmButton>
                           </ActionForm>
                         </div>
                       </td>

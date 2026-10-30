@@ -4,7 +4,9 @@ import { startTransition, useActionState, useCallback, useEffect, useRef, useSta
 import { useFormStatus } from "react-dom";
 import type { ActionState } from "@/app/actions";
 import { withConnectionCheck } from "@/lib/connection";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { ReauthPrompt } from "./ReauthPrompt";
+import { toast } from "./Toasts";
 
 type Props = {
   action: (s: ActionState, f: FormData) => Promise<ActionState>;
@@ -30,6 +32,8 @@ export function ActionForm({ action, children, className, resetOnSuccess, id }: 
   useEffect(() => {
     setAskPassword(!!state?.needsReauth);
     if (!state?.ok) return;
+    // Plain confirmations become a notice at the top right; messages to keep (a password, a key, an import summary) stay in the form.
+    if (state.message && !state.keep) toast(state.message);
     // The server action already sends back the refreshed screen (revalidatePath), so no second refresh is needed.
     if (resetOnSuccess) ref.current?.reset();
   }, [state, resetOnSuccess]);
@@ -42,7 +46,7 @@ export function ActionForm({ action, children, className, resetOnSuccess, id }: 
     <>
       <form ref={ref} id={id} action={formAction} className={className}>
         {children}
-        {!askPassword && <Message state={state} />}
+        {!askPassword && <Message state={state?.ok && !state.keep ? null : state} />}
       </form>
       {askPassword && <ReauthPrompt onConfirmed={continueAction} />}
     </>
@@ -65,10 +69,37 @@ export function SubmitButton({ children, className = "btn" }: { children: React.
   );
 }
 
-export function ConfirmButton({ children, message, className = "btn-danger" }: { children: React.ReactNode; message: string; className?: string }) {
+// Submit button that asks first, in the app's own window. After «yes» it submits its form as a normal click would.
+// confirmLabel: text of the «yes» button when the button itself is not a plain word (e.g. a switch).
+export function ConfirmButton({ children, message, className = "btn-danger", confirmLabel, danger }: {
+  children: React.ReactNode; message: string; className?: string; confirmLabel?: string; danger?: boolean;
+}) {
+  const [asking, setAsking] = useState(false);
+  const button = useRef<HTMLButtonElement>(null);
+  const confirmed = useRef(false);
+  const cancel = useCallback(() => setAsking(false), []);
   return (
-    <button className={className} onClick={(e) => { if (!confirm(message)) e.preventDefault(); }}>
-      {children}
-    </button>
+    <>
+      <button
+        ref={button}
+        className={className}
+        onClick={(e) => {
+          if (confirmed.current) { confirmed.current = false; return; }
+          e.preventDefault();
+          setAsking(true);
+        }}
+      >
+        {children}
+      </button>
+      {asking && (
+        <ConfirmDialog
+          message={message}
+          confirmLabel={confirmLabel ?? children}
+          danger={danger ?? className.includes("danger")}
+          onCancel={cancel}
+          onConfirm={() => { setAsking(false); confirmed.current = true; button.current?.click(); }}
+        />
+      )}
+    </>
   );
 }

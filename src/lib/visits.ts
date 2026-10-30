@@ -2,13 +2,17 @@ import "server-only";
 import { and, asc, eq, inArray, ne, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { campaigns, establishments, phones, visits } from "@/db/schema";
+import { many, manyIds } from "./multi";
 import { visitPending } from "./workflow";
 
-export async function pendingVisits(filters: { campaignId?: number; zone?: string; showAll?: boolean }) {
+// Campaign and zone accept several choices ("a|b").
+export async function pendingVisits(filters: { campaign?: string | null; zone?: string | null; showAll?: boolean }) {
   const active = await db.select().from(campaigns).where(ne(campaigns.status, "closed"));
-  const ids = active.map((c) => c.id).filter((id) => !filters.campaignId || id === filters.campaignId);
+  const wanted = manyIds(filters.campaign);
+  const zoneList = many(filters.zone);
+  const ids = active.map((c) => c.id).filter((id) => !wanted.length || wanted.includes(id));
   const where: SQL[] = [inArray(establishments.campaignId, ids.length ? ids : [-1]), eq(establishments.requiereVisita, "Sí")];
-  if (filters.zone) where.push(eq(establishments.zonaOperativa, filters.zone));
+  if (zoneList.length) where.push(inArray(establishments.zonaOperativa, zoneList));
   const ests = await db.select().from(establishments).where(and(...where)).orderBy(asc(establishments.zonaOperativa), asc(establishments.municipio), asc(establishments.direccion));
   const estIds = ests.map((e) => e.id);
   const [vis, phs] = estIds.length
@@ -24,6 +28,8 @@ export async function pendingVisits(filters: { campaignId?: number; zone?: strin
   const rows = ests
     .map((e) => ({ e, visits: visBy.get(e.id) ?? [], phones: phBy.get(e.companyId) ?? [] }))
     .filter((r) => filters.showAll || visitPending(r.visits.map((v) => v.code)));
-  const zones = [...new Set((await db.selectDistinct({ z: establishments.zonaOperativa }).from(establishments).where(inArray(establishments.campaignId, ids.length ? ids : [-1]))).map((x) => x.z).filter(Boolean))] as string[];
+  // Zones of every open campaign, so the list of choices doesn't shrink while filtering.
+  const allIds = active.map((c) => c.id);
+  const zones = [...new Set((await db.selectDistinct({ z: establishments.zonaOperativa }).from(establishments).where(inArray(establishments.campaignId, allIds.length ? allIds : [-1]))).map((x) => x.z).filter(Boolean))] as string[];
   return { rows, active, zones: zones.sort() };
 }

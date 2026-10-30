@@ -24,7 +24,7 @@ export function SigturSwitch({ paused, t }: { paused: boolean; t: Dict }) {
           {track(false)}{t.sigturOff}
         </button>
       ) : (
-        <ConfirmButton message={t.sigturSwitchOffConfirm} className="flex items-center gap-2 text-sm font-medium text-slate-700">
+        <ConfirmButton message={t.sigturSwitchOffConfirm} confirmLabel={t.switchOff} danger className="flex items-center gap-2 text-sm font-medium text-slate-700">
           {track(true)}{t.sigturOn}
         </ConfirmButton>
       )}

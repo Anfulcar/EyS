@@ -11,10 +11,12 @@ type Props = {
   variant?: "modal" | "drawer";
   triggerClassName?: string;
   width?: string;
+  // Lets another button open it (e.g. «Eliminar…» in the bar of ticked rows).
+  triggerId?: string;
 };
 
 // Button that opens its content in a pop-up window or a side panel. Closes with ✕, Escape or a click outside.
-export function Overlay({ trigger, title, children, variant = "modal", triggerClassName = "btn", width }: Props) {
+export function Overlay({ trigger, title, children, variant = "modal", triggerClassName = "btn", width, triggerId }: Props) {
   const [open, setOpen] = useState(false);
   useEffect(() => {
     if (!open) return;
@@ -32,7 +34,7 @@ export function Overlay({ trigger, title, children, variant = "modal", triggerCl
       : `relative mx-auto my-8 flex max-h-[calc(100vh-4rem)] w-[calc(100%-2rem)] flex-col rounded-2xl bg-white shadow-2xl ${width ?? "max-w-2xl"}`;
   return (
     <>
-      <button type="button" className={triggerClassName} onClick={() => setOpen(true)}>
+      <button type="button" id={triggerId} className={triggerClassName} onClick={() => setOpen(true)}>
         {trigger}
       </button>
       {open && (

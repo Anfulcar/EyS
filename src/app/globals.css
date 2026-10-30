@@ -8,6 +8,8 @@
   h2 { @apply text-lg font-semibold text-slate-900; }
   h3 { @apply text-base font-semibold text-slate-900; }
   summary::-webkit-details-marker { display: none; }
+  /* Phones and tablets: a field that gets focus scrolls above the «Guardar» bar instead of behind it. */
+  @media (max-width: 1023px) { html { scroll-padding-bottom: 6rem; } }
 }
 
 @layer components {

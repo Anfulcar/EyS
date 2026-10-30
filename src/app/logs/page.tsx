@@ -1,6 +1,8 @@
 import { asc } from "drizzle-orm";
 import { Download } from "lucide-react";
 import Link from "next/link";
+import { FilterChips } from "@/components/FilterChips";
+import { MultiSelect } from "@/components/MultiSelect";
 import { Empty } from "@/components/ui";
 import { db } from "@/db";
 import { users } from "@/db/schema";
@@ -26,6 +28,14 @@ export default async function LogsPage({ searchParams }: { searchParams: Promise
     tab === "activity" ? activityRows(filters, PAGE + 1, page * PAGE) : errorRows(filters, PAGE + 1, page * PAGE),
     locationReport(lang),
   ]);
+  // "What", "who" and "source" accept several choices.
+  const groups =
+    tab === "activity"
+      ? [
+          { key: "action" as const, label: t.what, options: Object.entries(ACTIVITY_LABELS).map(([k, v]) => ({ value: k, label: v[lang] })) },
+          { key: "user" as const, label: t.who, options: people.map((p) => ({ value: String(p.id), label: p.name })) },
+        ]
+      : [{ key: "source" as const, label: t.source, options: Object.entries(ERROR_SOURCES).map(([k, v]) => ({ value: k, label: v[lang] })) }];
   const hasMore = rows.length > PAGE;
   const clean = Object.fromEntries(Object.entries({ ...sp }).filter(([, v]) => v)) as Record<string, string>;
   const qs = (o: Record<string, string>) => "?" + new URLSearchParams({ ...clean, ...o }).toString();
@@ -52,37 +62,18 @@ export default async function LogsPage({ searchParams }: { searchParams: Promise
       </nav>
       <form className="card grid items-end gap-3 p-4 sm:grid-cols-2 lg:grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))]">
         <input type="hidden" name="tab" value={tab} />
-        {tab === "activity" ? (
-          <>
-            <div>
-              <label className="label">{t.what}</label>
-              <select name="action" defaultValue={sp.action ?? ""} className="input">
-                <option value="">{t.all}</option>
-                {Object.entries(ACTIVITY_LABELS).map(([k, v]) => <option key={k} value={k}>{v[lang]}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="label">{t.who}</label>
-              <select name="user" defaultValue={sp.user ?? ""} className="input">
-                <option value="">{t.all}</option>
-                {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </div>
-          </>
-        ) : (
-          <div>
-            <label className="label">{t.source}</label>
-            <select name="source" defaultValue={sp.source ?? ""} className="input">
-              <option value="">{t.all}</option>
-              {Object.entries(ERROR_SOURCES).map(([k, v]) => <option key={k} value={k}>{v[lang]}</option>)}
-            </select>
+        {groups.map((g) => (
+          <div key={g.key}>
+            <label className="label" htmlFor={`f-${g.key}`}>{g.label}</label>
+            <MultiSelect key={sp[g.key] ?? ""} id={`f-${g.key}`} name={g.key} value={sp[g.key]} options={g.options} t={t} />
           </div>
-        )}
+        ))}
         <div><label className="label">{t.from}</label><input type="date" name="from" defaultValue={sp.from} className="input" /></div>
         <div><label className="label">{t.to}</label><input type="date" name="to" defaultValue={sp.to} className="input" /></div>
         <div><label className="label">{t.search}</label><input name="q" defaultValue={sp.q} className="input" /></div>
         <button className="btn-secondary">{t.filter}</button>
       </form>
+      <FilterChips path="/logs" sp={sp} groups={groups} keep={["tab"]} t={t} />
       {rows.length === 0 ? (
         <Empty>{t.noLogs}</Empty>
       ) : (

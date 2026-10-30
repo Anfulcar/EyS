@@ -1,6 +1,8 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 import Link from "next/link";
 import { CallsTable } from "@/components/CallsTable";
+import { FilterChips } from "@/components/FilterChips";
+import { MultiSelect } from "@/components/MultiSelect";
 import { Empty } from "@/components/ui";
 import { db } from "@/db";
 import { users } from "@/db/schema";
@@ -23,6 +25,13 @@ export default async function ReviewsPage({ searchParams }: { searchParams: Prom
     callCampaigns(me),
     all ? db.select({ id: users.id, name: users.name }).from(users).where(and(inArray(users.role, ["agent", "supervisor", "admin"]), eq(users.active, true))).orderBy(asc(users.name)) : [],
   ]);
+  // Campaign, agent and result accept several choices.
+  const groups = [
+    { key: "campaign" as const, label: t.campaign, options: camps.map((c) => ({ value: String(c.id), label: c.name })) },
+    ...(all ? [{ key: "agent" as const, label: t.agent, options: agents.map((a) => ({ value: String(a.id), label: a.name })) }] : []),
+    { key: "code" as const, label: t.result, options: Object.entries(CALL_CODES).map(([k, v]) => ({ value: k, label: v[lang] })) },
+  ];
+  const reviewGroup = { key: "review" as const, label: t.reviewState, options: [{ value: "no", label: t.notReviewed }, { value: "yes", label: t.reviewed }] };
   const hasMore = rows.length > PAGE;
   const clean = Object.fromEntries(Object.entries({ ...sp }).filter(([, v]) => v)) as Record<string, string>;
   const qs = (o: Record<string, string>) => "?" + new URLSearchParams({ ...clean, ...o }).toString();
@@ -36,41 +45,21 @@ export default async function ReviewsPage({ searchParams }: { searchParams: Prom
         </div>
       </div>
       <form className="card grid items-end gap-3 p-4 sm:grid-cols-2 lg:grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))]">
-        <div>
-          <label className="label">{t.campaign}</label>
-          <select name="campaign" defaultValue={sp.campaign ?? ""} className="input">
-            <option value="">{t.all}</option>
-            {camps.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-        </div>
-        {all && (
-          <div>
-            <label className="label">{t.agent}</label>
-            <select name="agent" defaultValue={sp.agent ?? ""} className="input">
-              <option value="">{t.all}</option>
-              {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
+        {groups.slice(0, 3).map((g) => (
+          <div key={g.key}>
+            <label className="label" htmlFor={`f-${g.key}`}>{g.label}</label>
+            <MultiSelect key={sp[g.key] ?? ""} id={`f-${g.key}`} name={g.key} value={sp[g.key]} options={g.options} t={t} />
           </div>
-        )}
-        <div>
-          <label className="label">{t.result}</label>
-          <select name="code" defaultValue={sp.code ?? ""} className="input">
-            <option value="">{t.all}</option>
-            {Object.entries(CALL_CODES).map(([k, v]) => <option key={k} value={k}>{v[lang]}</option>)}
-          </select>
-        </div>
+        ))}
         <div><label className="label">{t.from}</label><input type="date" name="from" defaultValue={sp.from} className="input" /></div>
         <div><label className="label">{t.to}</label><input type="date" name="to" defaultValue={sp.to} className="input" /></div>
         <div>
-          <label className="label">{t.reviewState}</label>
-          <select name="review" defaultValue={sp.review ?? ""} className="input">
-            <option value="">{t.all}</option>
-            <option value="no">{t.notReviewed}</option>
-            <option value="yes">{t.reviewed}</option>
-          </select>
+          <label className="label" htmlFor="f-review">{t.reviewState}</label>
+          <MultiSelect key={sp.review ?? ""} id="f-review" name="review" value={sp.review} options={reviewGroup.options} t={t} />
         </div>
         <button className="btn-secondary">{t.filter}</button>
       </form>
+      <FilterChips path="/reviews" sp={sp} groups={[...groups, reviewGroup]} t={t} />
 
       {rows.length === 0 ? (
         <Empty>{t.noCallsFound}</Empty>

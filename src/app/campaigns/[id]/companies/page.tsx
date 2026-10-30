@@ -3,6 +3,9 @@ import { CopyPlus, Download, Search, Trash2, Users2 } from "lucide-react";
 import Link from "next/link";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
 import { Avatar } from "@/components/Avatar";
+import { BulkBar } from "@/components/BulkBar";
+import { FilterChips } from "@/components/FilterChips";
+import { MultiSelect } from "@/components/MultiSelect";
 import { CampaignFields } from "@/components/CampaignFields";
 import { Overlay } from "@/components/Overlay";
 import { RefreshButton } from "@/components/RefreshButton";
@@ -64,93 +67,65 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
   const qs = (o: Record<string, string | number | undefined>) => "?" + new URLSearchParams(Object.entries({ ...sp, ...o }).filter(([, v]) => v !== undefined && v !== "") as [string, string][]).toString();
   const agentOptions = agents.map((a) => ({ id: a.id, name: a.name }));
   const nameById = new Map(agents.map((a) => [a.id, a.name]));
+  const opts = (list: string[]) => list.map((v) => ({ value: v, label: v }));
+  // The filters, in the same order and with the same names as before; each one accepts several choices.
+  const filterGroups = [
+    { key: "status", label: t.status, options: Object.entries(COMPANY_STATUSES).map(([k, v]) => ({ value: k, label: v[lang] })) },
+    { key: "agent", label: t.assignedTo, options: [{ value: "none", label: t.unassigned }, ...agents.map((a) => ({ value: String(a.id), label: a.name }))] },
+    { key: "zone", label: t.zone, options: opts(zones) },
+    { key: "rnt", label: t.filterRnt, options: opts(values(rnts)) },
+    { key: "sub", label: t.filterSubsector, options: opts(values(subs)) },
+    { key: "prio", label: t.priority, options: opts(["P1", "P2", "P3"]) },
+    { key: "code", label: t.filterLastResult, options: values(codes).map((v) => ({ value: v, label: codeLabel(v, lang) })) },
+  ];
+  const followGroup = {
+    key: "f",
+    label: t.followupFilter,
+    options: ([["open", t.fOpen], ["due", t.dueNow], ["overdue", t.fOverdue], ["idle", t.fIdle], ["covered", t.fCovered], ["sigturOverdue", t.fSigturOverdue], ["opYes", t.opYes], ["opNo", t.opNo], ["opUnknown", t.opUnknown], ["opNone", t.opNone]] as const).map(([value, label]) => ({ value, label })),
+  };
   const zoneCode = (z: string | null) => (z ? z.split(".")[0] : "—");
 
   return (
     <div className="space-y-4">
       {/* Toolbar: filters on one line + actions */}
       <div className="card p-4">
-        <form className="grid gap-3 md:grid-cols-[minmax(0,2fr)_repeat(4,minmax(0,1fr))_auto] md:items-end">
+        <form className="grid gap-3 md:grid-cols-[minmax(0,1.6fr)_repeat(3,minmax(0,1fr))_minmax(0,1.6fr)_auto] md:items-end">
           <div>
-            <label className="label">{t.search}</label>
+            <label className="label" htmlFor="f-q">{t.search}</label>
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input name="q" defaultValue={sp.q} className="input pl-9" placeholder="RUT, RNC, ID, nombre…" />
+              <input id="f-q" name="q" defaultValue={sp.q} className="input pl-9" placeholder="RUT, RNC, ID, nombre…" />
             </div>
           </div>
+          {filterGroups.slice(0, 3).map((g) => (
+            <div key={g.key}>
+              <label className="label" htmlFor={`f-${g.key}`}>{g.label}</label>
+              <MultiSelect key={sp[g.key] ?? ""} id={`f-${g.key}`} name={g.key} value={sp[g.key]} options={g.options} t={t} />
+            </div>
+          ))}
           <div>
-            <label className="label">{t.status}</label>
-            <select name="status" defaultValue={sp.status ?? ""} className="input">
-              <option value="">{t.all}</option>
-              {Object.entries(COMPANY_STATUSES).map(([k, v]) => <option key={k} value={k}>{v[lang]}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="label">{t.assignedTo}</label>
-            <select name="agent" defaultValue={sp.agent ?? ""} className="input">
-              <option value="">{t.all}</option>
-              <option value="none">{t.unassigned}</option>
-              {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="label">{t.zone}</label>
-            <select name="zone" defaultValue={sp.zone ?? ""} className="input">
-              <option value="">{t.all}</option>
-              {zones.map((z) => <option key={z} value={z}>{z}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="label">{t.followupFilter}</label>
+            <label className="label" htmlFor="f-f">{t.followupFilter}</label>
             <div className="flex gap-2">
-              <select name="f" defaultValue={sp.f ?? ""} className="input">
-                <option value="">{t.all}</option>
-                <option value="open">{t.fOpen}</option>
-                <option value="due">{t.dueNow}</option>
-                <option value="overdue">{t.fOverdue}</option>
-                <option value="idle">{t.fIdle}</option>
-                <option value="covered">{t.fCovered}</option>
-                <option value="sigturOverdue">{t.fSigturOverdue}</option>
-                <option value="opYes">{t.opYes}</option>
-                <option value="opNo">{t.opNo}</option>
-                <option value="opUnknown">{t.opUnknown}</option>
-                <option value="opNone">{t.opNone}</option>
-              </select>
+              <MultiSelect key={sp.f ?? ""} id="f-f" name="f" value={sp.f} options={followGroup.options} t={t} className="min-w-0 flex-1" />
               <input name="days" type="number" min={1} defaultValue={idleDays} className="input w-16 px-2" aria-label={t.fIdleDays} title={t.fIdleDays} />
             </div>
           </div>
           <button className="btn-secondary">{t.filter}</button>
           <div className="grid gap-3 md:col-span-full md:grid-cols-4">
-            <div>
-              <label className="label">{t.filterRnt}</label>
-              <select name="rnt" defaultValue={sp.rnt ?? ""} className="input">
-                <option value="">{t.all}</option>
-                {values(rnts).map((v) => <option key={v} value={v}>{v}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="label">{t.filterSubsector}</label>
-              <select name="sub" defaultValue={sp.sub ?? ""} className="input">
-                <option value="">{t.all}</option>
-                {values(subs).map((v) => <option key={v} value={v}>{v}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="label">{t.priority}</label>
-              <select name="prio" defaultValue={sp.prio ?? ""} className="input">
-                <option value="">{t.all}</option>
-                {["P1", "P2", "P3"].map((v) => <option key={v} value={v}>{v}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="label">{t.filterLastResult}</label>
-              <select name="code" defaultValue={sp.code ?? ""} className="input">
-                <option value="">{t.all}</option>
-                {values(codes).map((v) => <option key={v} value={v}>{codeLabel(v, lang)}</option>)}
-              </select>
-            </div>
+            {filterGroups.slice(3).map((g) => (
+              <div key={g.key}>
+                <label className="label" htmlFor={`f-${g.key}`}>{g.label}</label>
+                <MultiSelect key={sp[g.key] ?? ""} id={`f-${g.key}`} name={g.key} value={sp[g.key]} options={g.options} t={t} />
+              </div>
+            ))}
           </div>
+          <p className="text-xs text-slate-500 md:col-span-full">{t.msHint}</p>
         </form>
+        {!showRemoved && (
+          <div className="mt-3">
+            <FilterChips path={`/campaigns/${id}/companies`} sp={sp} groups={[...filterGroups, followGroup]} keep={["days"]} t={t} />
+          </div>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -213,16 +188,6 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
           </ActionForm>
         </Overlay>
 
-        {/* Assign ticked rows */}
-        <ActionForm id="bulk-assign" action={bulkAssignAction} className="flex flex-wrap items-center gap-2">
-          <input type="hidden" name="campaignId" value={id} />
-          <span className="text-sm text-slate-600">{t.assignSelected}</span>
-          <select name="userId" className="input w-44 py-2" aria-label={t.assignSelected}>
-            <option value="">{t.unassigned}</option>
-            {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-          </select>
-          <SubmitButton className="btn-secondary">{t.apply}</SubmitButton>
-        </ActionForm>
         <span className="ml-auto" />
         {nRemoved > 0 && (
           <Link href={showRemoved ? `/campaigns/${id}/companies` : `/campaigns/${id}/companies?view=removed`} className="text-sm font-medium text-slate-600 hover:underline">
@@ -230,7 +195,7 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
           </Link>
         )}
         {me.role === "admin" && campaign?.status !== "closed" && (
-          <Overlay variant="drawer" triggerClassName="btn-secondary text-rose-700" trigger={<><Trash2 className="h-4 w-4" />{t.removeButton}</>} title={t.removeTitle.replace("{name}", campaign?.name ?? "")}>
+          <Overlay variant="drawer" triggerId="remove-trigger" triggerClassName="btn-secondary text-rose-700" trigger={<><Trash2 className="h-4 w-4" />{t.removeButton}</>} title={t.removeTitle.replace("{name}", campaign?.name ?? "")}>
             <RemoveFromList campaignId={id} filters={activeFilters} total={Number(total)} t={t} preview={previewRemovalAction} action={removeTasksAction} />
           </Overlay>
         )}
@@ -352,6 +317,9 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
             </div>
           )}
         </div>
+      )}
+      {!showRemoved && (
+        <BulkBar campaignId={id} agents={agentOptions} action={bulkAssignAction} removeTriggerId={me.role === "admin" && campaign?.status !== "closed" ? "remove-trigger" : undefined} t={t} />
       )}
     </div>
   );
