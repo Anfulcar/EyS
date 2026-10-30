@@ -33,6 +33,7 @@ export const campaigns = sqliteTable("campaigns", {
   scriptEs: text("script_es"),
   scriptEn: text("script_en"),
   // standard | sigtur_requests (the always-open campaign that receives SIGTUR call requests)
+  // | email («Campaña de correo»: no calls, only the «Correos» work)
   kind: text("kind").notNull().default("standard"),
   // manual | transfer (made from another campaign's results) | sigtur
   source: text("source").notNull().default("manual"),
@@ -144,6 +145,8 @@ export const establishments = sqliteTable(
     contactoNombre: text("contacto_nombre"),
     contactoCargo: text("contacto_cargo"),
     correoActualizado: text("correo_actualizado"),
+    // Last answer to «¿Recibió el correo?» (Sí | No)
+    correoRecibido: text("correo_recibido"),
     // Owner / person in charge reported in a call or visit («Actualizar datos»)
     propietario: text("propietario"),
     cerradoDesde: text("cerrado_desde"),
@@ -199,6 +202,8 @@ export const callAttempts = sqliteTable(
     spokeRole: text("spoke_role"),
     isResponsible: integer("is_responsible", { mode: "boolean" }),
     whatsappSent: integer("whatsapp_sent", { mode: "boolean" }).notNull().default(false),
+    // «¿Recibió el correo?» Sí | No (asked when the agent spoke with someone; empty = not asked)
+    emailReceived: text("email_received"),
     notes: text("notes"),
     // Review by a supervisor or administrator
     reviewedAt: text("reviewed_at"),
@@ -461,4 +466,35 @@ export const removedTasks = sqliteTable(
     removedAt: text("removed_at").notNull().default(now),
   },
   (t) => [index("removed_tasks_campaign").on(t.campaignId)],
+);
+
+// «Reporte de cambios»: every data change a person made to an establishment (call, visit, or the history before
+// this record existed), so it can be updated in SIGTUR by hand. Copies the names so it survives deletions.
+export const dataChanges = sqliteTable(
+  "data_changes",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    establishmentId: integer("establishment_id").references(() => establishments.id, { onDelete: "set null" }),
+    campaignId: integer("campaign_id").references(() => campaigns.id, { onDelete: "set null" }),
+    campaignName: text("campaign_name"),
+    rut: text("rut"),
+    sigturId: text("sigtur_id"),
+    establishment: text("establishment"),
+    field: text("field").notNull(),
+    label: text("label").notNull(),
+    fromValue: text("from_value"),
+    toValue: text("to_value"),
+    byUserId: integer("by_user_id").references(() => users.id, { onDelete: "set null" }),
+    byName: text("by_name"),
+    // Llamada | Visita | Histórico
+    source: text("source").notNull(),
+    at: text("at").notNull().default(now),
+    // true when the date is the establishment's last call (changes made before this record existed)
+    approximate: integer("approximate", { mode: "boolean" }).notNull().default(false),
+    // Marked «Actualizado en SIGTUR» by a manager after updating SIGTUR by hand
+    sigturDoneAt: text("sigtur_done_at"),
+    sigturDoneBy: integer("sigtur_done_by").references(() => users.id, { onDelete: "set null" }),
+    sigturDoneByName: text("sigtur_done_by_name"),
+  },
+  (t) => [index("data_changes_at").on(t.at), index("data_changes_campaign").on(t.campaignId), index("data_changes_est").on(t.establishmentId)],
 );

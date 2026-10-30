@@ -132,7 +132,7 @@ export async function receiveCallRequest(r: CallRequest) {
     .from(establishments)
     .innerJoin(companies, eq(companies.id, establishments.companyId))
     .innerJoin(campaigns, eq(campaigns.id, companies.campaignId))
-    .where(and(eq(establishments.sigturId, r.idSigtur), ne(campaigns.status, "closed"), notInArray(companies.status, CLOSED_STATUSES)))
+    .where(and(eq(establishments.sigturId, r.idSigtur), ne(campaigns.status, "closed"), ne(campaigns.kind, "email"), notInArray(companies.status, CLOSED_STATUSES)))
     .limit(1);
   if (open) {
     await db.update(companies).set(flag).where(eq(companies.id, open.id));

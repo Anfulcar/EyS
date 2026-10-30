@@ -113,6 +113,7 @@ export default async function TaskPage({ params }: { params: Promise<{ companyId
           <CallForm
             companyId={companyId}
             establishments={ests.map((e) => ({ id: e.id, name: e.nombreComercial ?? e.sigturId, status: e.estatusRnt }))}
+            currentEmail={ests.map((e) => e.correoActualizado ?? e.correo).find(Boolean) ?? null}
             phones={activePhones.map((p) => ({ id: p.id, number: p.number, quality: p.quality }))}
             related={relatedTasksData}
             t={t}

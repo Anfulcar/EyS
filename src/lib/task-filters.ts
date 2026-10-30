@@ -8,7 +8,7 @@ import { dueCondition } from "./queue";
 
 // The filters of «Tareas y asignación» (also used to remove "all filtered" tasks, so both always match).
 export type TaskFilters = Record<string, string | undefined>;
-export const TASK_FILTER_KEYS = ["q", "status", "agent", "zone", "f", "days", "rnt", "sub", "prio", "code"] as const;
+export const TASK_FILTER_KEYS = ["q", "status", "agent", "zone", "f", "days", "rnt", "sub", "prio", "code", "mail"] as const;
 
 const OP_CLOSED_SQL = sql`(case when e.en_operacion = 'No' or e.final_code = '05' or e.estatus_sigtur_actualizado = 'Inactivo (depurado)' then 1 else 0 end)`;
 const OP: Record<string, SQL> = {
@@ -18,6 +18,12 @@ const OP: Record<string, SQL> = {
   opNone: sql`e.en_operacion is null and ${OP_CLOSED_SQL} = 0`,
 };
 const anyEst = (cond: SQL) => sql`exists (select 1 from establishments e where e.company_id = ${companies.id} and ${cond})`;
+
+export const MAIL_COND: Record<string, SQL> = {
+  yes: anyEst(sql`e.correo_recibido = 'Sí'`),
+  no: anyEst(sql`e.correo_recibido = 'No'`),
+  none: sql`not exists (select 1 from establishments e where e.company_id = ${companies.id} and e.correo_recibido is not null)`,
+};
 
 export function cleanTaskFilters(v: unknown): TaskFilters {
   const o = (v ?? {}) as Record<string, unknown>;
@@ -45,6 +51,9 @@ export function taskWhere(campaignId: number, sp: TaskFilters): SQL[] {
   if (rnts.length) where.push(anyEst(sql`e.estatus_rnt in (${sql.join(rnts.map((v) => sql`${v}`), sql`, `)})`));
   const subs = many(sp.sub);
   if (subs.length) where.push(anyEst(sql`e.subsector in (${sql.join(subs.map((v) => sql`${v}`), sql`, `)})`));
+  // «¿Recibió el correo?» of any of the task's establishments: yes / no / none (never asked).
+  const mail = many(sp.mail).filter((v) => MAIL_COND[v]);
+  if (mail.length) where.push(or(...mail.map((v) => MAIL_COND[v]))!);
   // Follow-up filters (also opened from the "Seguimiento" tab) and operating status of any establishment.
   const now = nowIso();
   const idleDays = Math.max(1, Number(sp.days) || 3);

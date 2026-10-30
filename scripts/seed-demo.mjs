@@ -14,7 +14,7 @@ export const DEMO_USERS = [
 ];
 
 // Tables in delete order (children first).
-const TABLES = ["sigtur_outbox", "history_archive", "integration_log", "api_keys", "generated_reports", "report_templates", "absences", "activity_log", "error_log", "call_results", "call_attempts", "visits", "status_changes", "phones", "establishments", "companies", "import_logs", "campaigns", "users"];
+const TABLES = ["data_changes", "sigtur_outbox", "history_archive", "integration_log", "api_keys", "generated_reports", "report_templates", "absences", "activity_log", "error_log", "call_results", "call_attempts", "visits", "status_changes", "phones", "establishments", "companies", "import_logs", "campaigns", "users"];
 
 function rng(seed) {
   return () => {
@@ -189,6 +189,20 @@ export async function seedDemo(client, env = process.env) {
     // The first one's follow-up is already overdue (highlighted in the agent's list).
     await setTask(t, { status: "followup", attempts: 1, next: i === 0 ? shiftIso(-2) : shiftIso(10), code: "01" });
     await setEst(t, { code: "01", op: "Sí", commitment, visit: "No", contact: "Carmen Rosario" });
+  }
+  // Two of them said they didn't receive the email; one gave a new address (shows in «Reporte de cambios»).
+  for (const [i, t] of withPhone.slice(1, 3).entries()) {
+    await client.execute({ sql: "UPDATE call_attempts SET email_received = 'No' WHERE company_id = ?", args: [t.companyId] });
+    const fixed = i === 0 ? `nuevo.contacto${t.estId}@example.com` : null;
+    await client.execute({ sql: "UPDATE establishments SET correo_recibido = 'No', correo_actualizado = coalesce(?, correo_actualizado) WHERE id = ?", args: [fixed, t.estId] });
+    if (fixed) {
+      await client.execute({
+        sql: `INSERT INTO data_changes (establishment_id, campaign_id, campaign_name, rut, sigtur_id, establishment, field, label, from_value, to_value, by_user_id, by_name, source, at)
+              SELECT e.id, e.campaign_id, c.name, e.rut, e.sigtur_id, e.nombre_comercial, 'correo', 'Correo', e.correo, ?, ?, (SELECT name FROM users WHERE id = ?), 'Llamada', ?
+              FROM establishments e JOIN campaigns c ON c.id = e.campaign_id WHERE e.id = ?`,
+        args: [fixed, t.agent, t.agent, shiftIso(-2), t.estId],
+      });
+    }
   }
   // No answer once → due again today
   for (const t of withPhone.slice(4, 7)) {

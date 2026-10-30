@@ -6,10 +6,10 @@ import type { Dict } from "@/lib/i18n";
 import { ActionForm, SubmitButton } from "./ActionForm";
 
 type Opt = { value: string; label: string };
-type Filter = { statuses: string[]; code?: string; zone?: string; priority?: string; agent?: string };
+type Filter = { statuses: string[]; code?: string; zone?: string; priority?: string; agent?: string; mail?: string };
 
-// «Nueva campaña con estas tareas»: choose statuses and filters (with a live count), then the new campaign's data.
-export function TransferForm({ campaignId, t, statuses, codes, zones, priorities, agents, fields, action, countAction }: {
+// «Nueva campaña de llamadas / de correo con estas tareas»: choose statuses and filters (with a live count), then the new campaign's data.
+export function TransferForm({ campaignId, t, statuses, codes, zones, priorities, agents, fields, action, countAction, kind = "standard" }: {
   campaignId: number;
   t: Dict;
   statuses: (Opt & { n: number })[];
@@ -20,8 +20,11 @@ export function TransferForm({ campaignId, t, statuses, codes, zones, priorities
   fields: React.ReactNode;
   action: (s: ActionState, f: FormData) => Promise<ActionState>;
   countAction: (campaignId: number, f: Filter) => Promise<number>;
+  kind?: "standard" | "email";
 }) {
-  const [f, setF] = useState<Filter>({ statuses: ["followup", "retry", "visit"] });
+  const email = kind === "email";
+  // An email campaign usually starts from «¿Recibió el correo?: No», whatever the task's status.
+  const [f, setF] = useState<Filter>(email ? { statuses: statuses.map((s) => s.value), mail: "no" } : { statuses: ["followup", "retry", "visit"] });
   const [count, setCount] = useState<number | null>(null);
   const [, start] = useTransition();
   useEffect(() => {
@@ -41,6 +44,7 @@ export function TransferForm({ campaignId, t, statuses, codes, zones, priorities
   return (
     <ActionForm action={action} className="space-y-5">
       <input type="hidden" name="campaignId" value={campaignId} />
+      <input type="hidden" name="kind" value={kind} />
       <fieldset className="space-y-2">
         <legend className="label">{t.transferStatuses}</legend>
         <div className="grid gap-2 sm:grid-cols-2">
@@ -65,16 +69,17 @@ export function TransferForm({ campaignId, t, statuses, codes, zones, priorities
         {select("zone", t.zone, zones)}
         {select("priority", t.priority, priorities)}
         {select("agent", t.assignedTo, agents)}
+        {select("mail", t.qEmailReceived, [{ value: "no", label: t.no }, { value: "yes", label: t.yes }, { value: "none", label: t.mailNoAnswer }])}
       </div>
       <p className="rounded-xl bg-brand-50 px-4 py-3 text-sm font-medium text-brand-900" aria-live="polite">
-        {count == null ? "…" : t.transferCount.replace("{n}", String(count))}
+        {count == null ? "…" : (email ? t.emailCampaignCount : t.transferCount).replace("{n}", String(count))}
       </p>
       <div className="border-t border-slate-100 pt-4">
         <h3 className="mb-3 text-sm font-semibold text-slate-800">{t.transferNewCampaign}</h3>
         {fields}
       </div>
-      <p className="text-xs text-slate-500">{t.transferHelp}</p>
-      <div className="flex justify-end"><SubmitButton>{t.transferCreate}</SubmitButton></div>
+      <p className="text-xs text-slate-500">{email ? t.emailCampaignHelp : t.transferHelp}</p>
+      <div className="flex justify-end"><SubmitButton>{email ? t.emailCampaignCreate : t.transferCreate}</SubmitButton></div>
     </ActionForm>
   );
 }

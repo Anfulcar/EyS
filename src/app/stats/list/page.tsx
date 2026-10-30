@@ -1,4 +1,4 @@
-import { eq, ne } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { DrillList } from "@/components/DrillList";
 import { db } from "@/db";
 import { campaigns, users } from "@/db/schema";
@@ -12,7 +12,7 @@ export default async function GlobalListPage({ searchParams }: { searchParams: P
   const sp = await searchParams;
   const { t, lang } = await getDict();
   const f = parseDrill(sp);
-  const ids = (await db.select({ id: campaigns.id }).from(campaigns).where(sp.include === "open" ? ne(campaigns.status, "closed") : undefined)).map((c) => c.id);
+  const ids = (await db.select({ id: campaigns.id }).from(campaigns).where(and(ne(campaigns.kind, "email"), sp.include === "open" ? ne(campaigns.status, "closed") : undefined))).map((c) => c.id);
   const rows = await drillDown(ids, f);
   const agent = f.dim === "agent" && f.value ? (await db.query.users.findFirst({ where: eq(users.id, Number(f.value)) }))?.name : null;
   const qs = new URLSearchParams(Object.entries(sp).filter(([, v]) => v) as [string, string][]);

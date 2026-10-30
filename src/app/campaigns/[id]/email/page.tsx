@@ -4,6 +4,7 @@ import { FileField } from "@/components/FileField";
 import { db } from "@/db";
 import { establishments } from "@/db/schema";
 import { todayLocal } from "@/lib/dates";
+import { HAS_EMAIL } from "@/lib/email";
 import { getDict } from "@/lib/i18n-server";
 import { markEmailsSentAction, uploadBouncesAction } from "../../../actions";
 
@@ -12,7 +13,9 @@ export default async function EmailPage({ params }: { params: Promise<{ id: stri
   const { t } = await getDict();
   const [s] = await db
     .select({
-      valid: sql<number>`sum(case when ${establishments.correoValido} = 'Sí' then 1 else 0 end)`,
+      valid: sql<number>`sum(case when ${HAS_EMAIL} then 1 else 0 end)`,
+      total: sql<number>`count(*)`,
+      fixed: sql<number>`sum(case when ${establishments.correoActualizado} is not null then 1 else 0 end)`,
       sent: sql<number>`sum(case when ${establishments.correoEnviadoFecha} is not null then 1 else 0 end)`,
       bounced: sql<number>`sum(case when ${establishments.correoRebotado} = 'Sí' then 1 else 0 end)`,
     })
@@ -28,6 +31,7 @@ export default async function EmailPage({ params }: { params: Promise<{ id: stri
           <div><div className="text-2xl font-semibold">{s?.valid ?? 0}</div><div className="text-slate-500">{t.withValidEmail}</div></div>
           <div><div className="text-2xl font-semibold">{s?.sent ?? 0}</div><div className="text-slate-500">{t.emailsSent}</div></div>
           <div><div className="text-2xl font-semibold">{s?.bounced ?? 0}</div><div className="text-slate-500">{t.emailsBounced}</div></div>
+          <div><div className="text-2xl font-semibold">{s?.fixed ?? 0}</div><div className="text-slate-500">{t.emailsFixed}</div></div>
         </div>
         <a href={`/api/campaigns/${id}/mailmerge`} className="btn-secondary mt-4">⬇ {t.downloadMailMerge}</a>
       </div>

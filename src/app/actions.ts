@@ -20,6 +20,8 @@ import { cleanOptions, firstRun, FREQUENCIES, type Frequency } from "@/lib/repor
 import { generateAndStore } from "@/lib/report-run";
 import { reviewCall } from "@/lib/reviews";
 import { archiveCampaignHistory } from "@/lib/history";
+import { markSigturDone } from "@/lib/changes";
+import { emailInUse, HAS_EMAIL } from "@/lib/email";
 import { idsByFilters, idsByKeys, MAX_REMOVE, previewRemoval, removeTasks, type RemovalPreview } from "@/lib/remove";
 import { cleanTaskFilters } from "@/lib/task-filters";
 import { flushOutbox, queueCallInteractions, queueChanges, queueEmailInteractions, queueVisitInteraction, resolveRequest, retryFailed, setPushEnabled, setPushUrl, pushSettings, validPushUrl } from "@/lib/sigtur-push";
@@ -567,6 +569,7 @@ export async function logVisitAction(_: ActionState, form: FormData): Promise<Ac
     newName: field("newName"),
     newAddress: field("newAddress"),
     newOwner: field("newOwner"),
+    newEmail: field("newEmail"),
   });
   await logActivity(u, "visit.logged", { campaignId: v.campaignId, entity: "establishment", entityId: establishmentId, summary: `${v.sigturId} · ${visitDate} · resultado: ${code}` });
   after(async () => {
@@ -587,7 +590,7 @@ export async function markEmailsSentAction(_: ActionState, form: FormData): Prom
   const campaignId = Number(form.get("campaignId"));
   const date = toIsoDate(String(form.get("date"))) ?? todayLocal();
   const status = String(form.get("estatus") ?? "");
-  const where = [eq(establishments.campaignId, campaignId), eq(establishments.correoValido, "Sí")];
+  const where = [eq(establishments.campaignId, campaignId), HAS_EMAIL];
   if (status) where.push(eq(establishments.estatusRnt, status));
   if (form.get("onlyUnsent")) where.push(isNull(establishments.correoEnviadoFecha));
   const res = await db.update(establishments).set({ correoEnviadoFecha: date }).where(and(...where)).returning({ id: establishments.id });
@@ -610,8 +613,9 @@ export async function uploadBouncesAction(_: ActionState, form: FormData): Promi
   const col = headers.find((h) => ["correo", "email", "e-mail"].includes(h.toLowerCase()));
   if (!col) return { error: "Columna «Correo» / “Correo” column missing" };
   const emails = [...new Set(rows.map((r) => str(r[col])?.toLowerCase()).filter(Boolean) as string[])];
-  const ests = await db.select({ id: establishments.id, correo: establishments.correo }).from(establishments).where(eq(establishments.campaignId, campaignId));
+  const ests = await db.select({ id: establishments.id, correo: emailInUse }).from(establishments).where(eq(establishments.campaignId, campaignId));
   const set = new Set(emails);
+  // The address in use: the corrected one when there is one.
   const ids = ests.filter((e) => e.correo && set.has(e.correo.trim().toLowerCase())).map((e) => e.id);
   for (let i = 0; i < ids.length; i += 500) await db.update(establishments).set({ correoRebotado: "Sí" }).where(inArray(establishments.id, ids.slice(i, i + 500)));
   await db.insert(importLogs).values({ campaignId, kind: "bounces", fileName: file.name, rows: rows.length, updated: ids.length, skipped: emails.length - ids.length, userId: u.id });
@@ -853,13 +857,13 @@ export async function deleteGeneratedReportAction(_: ActionState, form: FormData
 
 function transferFilter(form: FormData): TransferFilter {
   const v = (k: string) => String(form.get(k) ?? "").trim() || undefined;
-  return { statuses: form.getAll("statuses").map(String), code: v("code"), zone: v("zone"), priority: v("priority"), agent: v("agent") };
+  return { statuses: form.getAll("statuses").map(String), code: v("code"), zone: v("zone"), priority: v("priority"), agent: v("agent"), mail: v("mail") };
 }
 
 // Live count shown while choosing.
 export async function countTransferAction(campaignId: number, f: TransferFilter): Promise<number> {
   await assertUser(MANAGERS);
-  return countTransfer(Number(campaignId), { statuses: Array.isArray(f.statuses) ? f.statuses.map(String) : [], code: f.code || undefined, zone: f.zone || undefined, priority: f.priority || undefined, agent: f.agent || undefined });
+  return countTransfer(Number(campaignId), { statuses: Array.isArray(f.statuses) ? f.statuses.map(String) : [], code: f.code || undefined, zone: f.zone || undefined, priority: f.priority || undefined, agent: f.agent || undefined, mail: f.mail || undefined });
 }
 
 export async function transferCampaignAction(_: ActionState, form: FormData): Promise<ActionState> {
@@ -870,11 +874,26 @@ export async function transferCampaignAction(_: ActionState, form: FormData): Pr
   if (!from) return { error: "Not found" };
   const parsed = campaignSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") };
-  const r = await transferToNewCampaign(from, transferFilter(form), parsed.data, me.id);
+  // Two buttons: a call campaign (originals close as «Transferida») or an email campaign (originals keep going).
+  const kind = form.get("kind") === "email" ? "email" : "standard";
+  if (from.kind === "email") return { error: "Not found" };
+  const r = await transferToNewCampaign(from, transferFilter(form), parsed.data, me.id, kind);
   if (!r) return { error: t.transferNone };
-  await logActivity(me, "campaign.from_results", { campaignId: r.campaign.id, entity: "campaign", entityId: r.campaign.id, summary: `${r.count} tareas de «${from.name}» → «${r.campaign.name}»` });
+  await logActivity(me, "campaign.from_results", { campaignId: r.campaign.id, entity: "campaign", entityId: r.campaign.id, summary: `${r.count} tareas de «${from.name}» → «${r.campaign.name}»${kind === "email" ? " (campaña de correo)" : ""}` });
   revalidatePath("/campaigns", "layout");
-  redirect(`/campaigns/${r.campaign.id}/companies`);
+  redirect(`/campaigns/${r.campaign.id}/${kind === "email" ? "email" : "companies"}`);
+}
+
+// ---------- «Reporte de cambios» ----------
+
+export async function markChangesSigturAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const me = await assertUser(MANAGERS);
+  const { t } = await getDict();
+  const ids = form.getAll("ids").map(Number);
+  const n = await markSigturDone(ids, me);
+  if (n) await logActivity(me, "changes.sigtur_done", { entity: "change", summary: `${n} cambios` });
+  revalidatePath("/reports/changes");
+  return { ok: true, message: t.changesMarked.replace("{n}", String(n)) };
 }
 
 // ---------- Integraciones (SIGTUR) — administrators ----------

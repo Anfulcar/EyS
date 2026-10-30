@@ -2,14 +2,14 @@
 // and the download (to build only what was chosen).
 import { MATRIX_COLUMNS } from "./catalog";
 
-export const MATRIX_EXTRA = ["Contacto (nombre)", "Contacto (cargo)", "Correo actualizado", "Cerrado desde", "Obstáculo", "Teléfonos de la empresa", "Agente asignado", "Estado de la tarea"];
+export const MATRIX_EXTRA = ["Contacto (nombre)", "Contacto (cargo)", "Correo actualizado", "¿Recibió el correo?", "Cerrado desde", "Obstáculo", "Teléfonos de la empresa", "Agente asignado", "Estado de la tarea"];
 
 export const EXPORT_SHEETS = [
   { key: "matriz", name: "Matriz de seguimiento", columns: [...MATRIX_COLUMNS.map((m) => m.header), ...MATRIX_EXTRA] },
   {
     key: "llamadas",
     name: "Llamadas",
-    columns: ["Fecha y hora", "Intento", "Agente", "ID SIGTUR", "Nombre comercial", "Razón social", "Número marcado", "¿Contactó?", "¿Le atendieron?", "Habló con", "Cargo", "¿Responsable?", "WhatsApp", "Tipificación", "¿En operación?", "Fecha compromiso", "Cerrado desde", "Obstáculo", "Observaciones (llamada)", "Observaciones (establecimiento)", "Revisada", "Revisada por", "Comentario de revisión"],
+    columns: ["Fecha y hora", "Intento", "Agente", "ID SIGTUR", "Nombre comercial", "Razón social", "Número marcado", "¿Contactó?", "¿Le atendieron?", "Habló con", "Cargo", "¿Responsable?", "WhatsApp", "¿Recibió el correo?", "Tipificación", "¿En operación?", "Fecha compromiso", "Cerrado desde", "Obstáculo", "Observaciones (llamada)", "Observaciones (establecimiento)", "Revisada", "Revisada por", "Comentario de revisión"],
   },
   { key: "telefonos", name: "Teléfonos", columns: ["Razón social", "RNC", "Número", "Origen", "Tipo", "Motivo", "Detalle", "Sustituye a", "Activo", "Calidad", "Agregado por", "Fecha"] },
   { key: "visitas", name: "Visitas", columns: ["ID SIGTUR", "Nombre comercial", "Zona operativa", "Visita", "Fecha", "Resultado", "Fecha compromiso", "Inspector", "Observaciones"] },

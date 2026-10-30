@@ -1,4 +1,4 @@
-import { ne } from "drizzle-orm";
+import { and, ne } from "drizzle-orm";
 import ExcelJS from "exceljs";
 import { db } from "@/db";
 import { campaigns } from "@/db/schema";
@@ -17,7 +17,7 @@ export async function GET(req: Request) {
   const sp = Object.fromEntries(new URL(req.url).searchParams);
   const ids = sp.campaign
     ? [Number(sp.campaign)]
-    : (await db.select({ id: campaigns.id }).from(campaigns).where(sp.include === "open" ? ne(campaigns.status, "closed") : undefined)).map((c) => c.id);
+    : (await db.select({ id: campaigns.id }).from(campaigns).where(and(ne(campaigns.kind, "email"), sp.include === "open" ? ne(campaigns.status, "closed") : undefined))).map((c) => c.id);
   const f = parseDrill(sp);
   const rows = await drillDown(ids, f);
   const title = drillTitle(f, DICTS.es, "es");

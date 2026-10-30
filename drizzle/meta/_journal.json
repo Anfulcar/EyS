@@ -85,6 +85,13 @@
       "when": 1793032984239,
       "tag": "0011_removed_tasks",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1793373905393,
+      "tag": "0012_email_changes",
+      "breakpoints": true
     }
   ]
 }

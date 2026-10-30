@@ -7,7 +7,7 @@ import { visitPending } from "./workflow";
 
 // Campaign and zone accept several choices ("a|b").
 export async function pendingVisits(filters: { campaign?: string | null; zone?: string | null; showAll?: boolean }) {
-  const active = await db.select().from(campaigns).where(ne(campaigns.status, "closed"));
+  const active = await db.select().from(campaigns).where(and(ne(campaigns.status, "closed"), ne(campaigns.kind, "email")));
   const wanted = manyIds(filters.campaign);
   const zoneList = many(filters.zone);
   const ids = active.map((c) => c.id).filter((id) => !wanted.length || wanted.includes(id));

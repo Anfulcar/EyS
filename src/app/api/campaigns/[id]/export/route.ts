@@ -115,6 +115,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         "Contacto (nombre)": e.contactoNombre,
         "Contacto (cargo)": e.contactoCargo,
         "Correo actualizado": e.correoActualizado,
+        "¿Recibió el correo?": e.correoRecibido,
         "Cerrado desde": e.cerradoDesde,
         "Obstáculo": label(OBSTACLES, e.obstaculo, "es"),
         "Teléfonos de la empresa": (phonesBy.get(e.companyId) ?? []).join(" / "),
@@ -132,7 +133,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       return {
         "Fecha y hora": d(a.calledAt), Intento: a.attemptNo, Agente: names.get(a.userId), "ID SIGTUR": e?.sigturId, "Nombre comercial": e?.nombreComercial,
         "Razón social": e?.razonSocial, "Número marcado": a.phoneNumber, "¿Contactó?": yn(a.contacted), "¿Le atendieron?": yn(a.attended), "Habló con": a.spokeWith,
-        Cargo: a.spokeRole, "¿Responsable?": yn(a.isResponsible), WhatsApp: yn(a.whatsappSent), "Tipificación": codeMatrixText(r.code), "¿En operación?": r.enOperacion,
+        Cargo: a.spokeRole, "¿Responsable?": yn(a.isResponsible), WhatsApp: yn(a.whatsappSent), "¿Recibió el correo?": a.emailReceived, "Tipificación": codeMatrixText(r.code), "¿En operación?": r.enOperacion,
         "Fecha compromiso": d(r.commitmentDate), "Cerrado desde": r.closedSince, "Obstáculo": label(OBSTACLES, r.obstacle, "es"), "Observaciones (llamada)": a.notes,
         "Observaciones (establecimiento)": r.notes, Revisada: d(a.reviewedAt), "Revisada por": a.reviewedBy ? names.get(a.reviewedBy) : "", "Comentario de revisión": a.reviewComment,
       };

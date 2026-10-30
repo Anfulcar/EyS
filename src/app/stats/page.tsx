@@ -1,4 +1,4 @@
-import { asc, desc } from "drizzle-orm";
+import { asc, desc, ne } from "drizzle-orm";
 import { FileDown } from "lucide-react";
 import Link from "next/link";
 import { Overlay } from "@/components/Overlay";
@@ -21,7 +21,8 @@ export default async function GlobalStatsPage({ searchParams }: { searchParams: 
     requireUser(["admin", "supervisor"]),
     getDict(),
     searchParams,
-    db.select().from(campaigns).orderBy(desc(campaigns.startDate)),
+    // Email campaigns have no calls: they don't count in the call statistics.
+    db.select().from(campaigns).where(ne(campaigns.kind, "email")).orderBy(desc(campaigns.startDate)),
     db.select().from(reportTemplates).orderBy(asc(reportTemplates.name)),
     runDueReports().catch((e) => console.error("[reports]", e)),
     reportPeople(),

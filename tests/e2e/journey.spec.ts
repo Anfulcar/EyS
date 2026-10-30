@@ -94,6 +94,9 @@ test("main journey: campaign → upload → assign → calls → visit → dashb
   await page.locator("label.choice-yes").nth(0).click(); // reached someone
   await page.locator("label.choice-yes").nth(1).click(); // was attended
   await page.locator("label.choice-yes").nth(2).click(); // person in charge
+  // The email can be corrected, and they say they didn't receive it
+  await page.locator("#call-email").fill("buceo.nuevo@example.com");
+  await page.locator("div:has(> .label:text-is('¿Recibió el correo?'))").locator("label.choice-no").click();
   const blocks = page.locator(".rounded-2xl.bg-slate-50\\/80");
   await expect(blocks).toHaveCount(2);
   for (let i = 0; i < 2; i++) {
@@ -188,7 +191,11 @@ test("main journey: campaign → upload → assign → calls → visit → dashb
   const results = sheet.getColumn(30).values.map(String); // "Llamada 1 resultado"
   expect(results).toContain("En operación – iniciará solicitud (compromiso)");
   const calls = wb.getWorksheet("Llamadas")!;
-  expect(calls.getColumn(23).values.map(String)).toContain("Buen manejo de la objeción.");
+  const reviewCol = (calls.getRow(1).values as unknown[]).indexOf("Comentario de revisión");
+  expect(calls.getColumn(reviewCol).values.map(String)).toContain("Buen manejo de la objeción.");
+  // The new «¿Recibió el correo?» column carries the agent's answer
+  const mailCol = (calls.getRow(1).values as unknown[]).indexOf("¿Recibió el correo?");
+  expect(calls.getColumn(mailCol).values.map(String)).toContain("No");
   // The old full download still works
   expect((await page.request.get(campaignUrl.replace("/campaigns/", "/api/campaigns/") + "/export")).status()).toBe(200);
 
@@ -359,9 +366,45 @@ test("delete a report, new campaign from results, and the SIGTUR connection", as
   await page.locator("a.card", { hasText: "Campaña de prueba" }).click();
   await expect(page).toHaveURL(/\/campaigns\/\d+$/);
   const fromUrl = page.url();
+
+  // «¿Recibió el correo?: No» → an email campaign with the corrected address; the original tasks keep going
+  await page.goto(fromUrl + "/companies?mail=no");
+  await expect(page.getByTestId("filter-chips")).toContainText("¿Recibió el correo?: No");
+  await expect(page.getByRole("link", { name: "Buceo Uno" })).toBeVisible();
+  await page.getByRole("button", { name: "Nueva campaña de correo con estas tareas" }).click();
+  const mailPanel = page.getByRole("dialog", { name: "Nueva campaña de correo con estas tareas" });
+  await expect(mailPanel.getByText(/^[1-9]\d* tareas irán a la campaña de correo\.$/)).toBeVisible();
+  await mailPanel.locator("input[name=endDate]").fill("2030-12-31");
+  await mailPanel.getByRole("button", { name: "Crear campaña de correo" }).click();
+  await expect(page).toHaveURL(/\/campaigns\/\d+\/email$/);
+  await expect(page.getByText("Campaña de correo", { exact: true }).first()).toBeVisible();
+  const mailUrl = page.url().replace(/\/email$/, "");
+  const merge = await page.request.get(mailUrl.replace("/campaigns/", "/api/campaigns/") + "/mailmerge");
+  const mergeBook = new ExcelJS.Workbook();
+  await mergeBook.xlsx.load(Buffer.from(await merge.body()) as unknown as ArrayBuffer);
+  const addresses = mergeBook.worksheets.flatMap((w) => w.getColumn(1).values.map(String));
+  expect(addresses).toContain("buceo.nuevo@example.com");
+  await page.goto(fromUrl + "/companies?mail=no");
+  await expect(page.getByRole("link", { name: "Transferida a otra campaña →" })).toHaveCount(0);
+
+  // «Reporte de cambios»: the corrected email, pending until it is marked as updated in SIGTUR
+  await page.goto("/reports");
+  await page.getByRole("link", { name: "Reporte de cambios" }).click();
+  await page.goto("/reports/changes?field=correo");
+  const changes = page.getByTestId("changes-table");
+  await expect(changes).toContainText("buceo.nuevo@example.com");
+  await expect(changes).toContainText("Pendiente en SIGTUR");
+  const changesXlsx = await page.request.get("/api/changes?field=correo");
+  expect((await changesXlsx.body()).subarray(0, 2).toString()).toBe("PK");
+  await changes.locator("thead input[type=checkbox]").check();
+  await page.getByRole("button", { name: "Marcar como actualizado en SIGTUR" }).click();
+  await expect(page.getByTestId("notices").getByText(/cambios marcados como actualizados en SIGTUR/)).toBeVisible();
+  await expect(changes).toContainText("Actualizado en SIGTUR");
+  await expect(changes).not.toContainText("Pendiente en SIGTUR");
+
   await page.goto(fromUrl + "/companies");
-  await page.getByRole("button", { name: "Nueva campaña con estas tareas" }).click();
-  const tr = page.getByRole("dialog", { name: "Nueva campaña con estas tareas" });
+  await page.getByRole("button", { name: "Nueva campaña de llamadas con estas tareas" }).click();
+  const tr = page.getByRole("dialog", { name: "Nueva campaña de llamadas con estas tareas" });
   for (const box of await tr.locator("input[name=statuses]").all()) await box.check();
   await expect(tr.getByText(/^[1-9]\d* tareas pasarán a la nueva campaña\.$/)).toBeVisible();
   await tr.locator("input[name=name]").fill("Campaña de prueba – seguimiento");

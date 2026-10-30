@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { redirect } from "next/navigation";
 import { StatsView } from "@/components/StatsView";
 import { db } from "@/db";
 import { campaigns } from "@/db/schema";
@@ -10,6 +11,8 @@ export default async function CampaignDashboard({ params }: { params: Promise<{ 
   const id = Number((await params).id);
   const [c0, { t, lang }, s] = await Promise.all([db.query.campaigns.findFirst({ where: eq(campaigns.id, id) }), getDict(), computeStats([id])]);
   const c = c0!;
+  // «Campaña de correo» has no call dashboard: it opens on «Correos».
+  if (c.kind === "email") redirect(`/campaigns/${id}/email`);
   const start = new Date(c.startDate).getTime();
   const end = new Date(c.endDate).getTime();
   const now = new Date(todayLocal()).getTime();

@@ -6,6 +6,7 @@ type Section = { id: string; roles: string[]; title: string; intro?: string; ste
 type L<T> = Record<Lang, T>;
 
 export const WHATS_NEW: { date: string; es: string; en: string }[] = [
+  { date: "2026-10-30", es: "Correo: en la llamada el correo aparece ya escrito y se puede corregir, con la nueva pregunta «¿Recibió el correo?»; en la visita, «Nuevo correo». Filtro «¿Recibió el correo?» en «Tareas y asignación» y dos botones: «Nueva campaña de llamadas con estas tareas» y «Nueva campaña de correo con estas tareas» (sin llamadas; las tareas originales siguen). Nuevo «Reporte de cambios» en «Informes»: cada dato cambiado, con su historia, para actualizar SIGTUR a mano y marcarlo como hecho.", en: "Email: in the call the email is already filled in and can be corrected, with the new question “Did they receive the email?”; in the visit, “New email”. “Did they receive the email?” filter in “Tasks and assignment” and two buttons: “New call campaign from these tasks” and “New email campaign from these tasks” (no calls; the original tasks keep going). New “Change report” in “Reports”: every changed detail, with its history, to update SIGTUR by hand and mark it done." },
   { date: "2026-10-30", es: "Pantallas más cómodas: el menú lateral se puede plegar a solo iconos («Plegar menú») y queda a la vista al bajar; todos los filtros aceptan varias opciones, que se ven como etiquetas que se quitan con ×; en «Tareas y asignación» la barra para asignar o eliminar aparece abajo al marcar filas; las confirmaciones usan una ventana propia de la aplicación y «Guardado» aparece como aviso verde arriba a la derecha; en el celular el menú se abre con ☰; «?» explica cada indicador y «↑ Arriba» vuelve al inicio en páginas largas.", en: "Easier screens: the side menu folds down to icons (“Collapse menu”) and stays in view when scrolling; every filter accepts several choices, shown as labels you remove with ×; in “Tasks and assignment” the bar to assign or remove appears at the bottom when rows are ticked; confirmations use the app's own window and “Saved” appears as a green notice at the top right; on phones the menu opens with ☰; “?” explains each indicator and “↑ Top” goes back up on long pages." },
   { date: "2026-10-29", es: "Informes por agente: en «Generar informe», «Elegir agentes» crea un informe por persona (sus tareas y sus llamadas), también programado. Botón «Generar informe» en «Resumen del agente».", en: "Reports per agent: in “Generate report”, “Choose agents” makes one report per person (their tasks and their calls), also scheduled. “Generate report” button in “Agent summary”." },
   { date: "2026-10-29", es: "Nuevo «Resumen del agente»: al pulsar el nombre de una persona en «Estadísticas», «Tablero» o «Seguimiento» se ven sus números, resultados, llamadas por día y todas sus llamadas, cada una con su detalle. Los agentes ven el suyo con «Mi resumen».", en: "New “Agent summary”: pressing a person's name in “Statistics”, “Dashboard” or “Follow-up” shows their numbers, results, calls per day and all their calls, each with its detail. Agents see their own with “My summary”." },
@@ -63,7 +64,7 @@ const ES: Section[] = [
       "Abra la tarjeta. Revise el guion, los teléfonos y los datos del establecimiento.",
       "Si el mismo RNC tiene otros establecimientos, puede marcarlos en «Registrar esta llamada también para» y se registrará la misma llamada para todos.",
       "Elija el número marcado y responda: ¿pudo contactar a alguien?, ¿le atendieron?",
-      "Si habló con alguien: con quién, su cargo y si es el responsable.",
+      "Si habló con alguien: con quién, su cargo y si es el responsable. El «Correo» aparece ya escrito: corríjalo si cambió. Responda «¿Recibió el correo?» (Sí / No).",
       "Para cada establecimiento: ¿sigue operando? y la respuesta (iniciará solicitud, ya inició, requiere asistencia, no interesado, cambió dueño). «Iniciará solicitud» exige la fecha de compromiso.",
       "Pulse «Guardar». La fecha y la hora de la llamada se registran solas en ese momento, y la tarea pasa sola al estado que corresponde.",
     ],
@@ -102,7 +103,7 @@ const ES: Section[] = [
       "«Carga masiva»: descargue la plantilla maestra, pegue los establecimientos (mismos encabezados que la Matriz) y cárguela. Verá una vista previa antes de confirmar.",
       "«Tareas y asignación»: la lista muestra cada establecimiento con su último resultado. «Asignar tareas» abre un panel con el método (repartir equitativamente, por zona o todo a un agente); los establecimientos de la misma empresa quedan con el mismo agente. Junto a cada persona se ve su carga actual («N abiertos») y, si está ausente hoy, «Ausente» (queda sin marcar). Con «Considerar la carga actual de cada persona», al repartir equitativamente recibe más quien tiene menos trabajo abierto en las campañas activas. También puede marcar filas: abajo aparece una barra con «Asignar seleccionadas a» (y «Eliminar…» para administradores); la × la cierra y desmarca todo. O cambie el agente de una fila (se guarda solo). El filtro «Seguimiento» muestra: abiertas, para hoy, seguimiento vencido, sin actividad hace más de N días o con cobertura por ausencia.",
       "«Configuración» → «Guion de llamada» (administradores y supervisores): el texto que ven los agentes en «Guion» al abrir cada tarea de la campaña, en español y, si quiere, en inglés.",
-      "«Correos»: registre la fecha de envío del correo masivo y cargue los correos rebotados.",
+      "«Correos»: registre la fecha de envío del correo masivo y cargue los correos rebotados. La lista para combinar correspondencia usa el correo corregido cuando lo hay.",
       "«Actualización de estatus»: cargue el estatus de SIGTUR para medir quién pasó a «En proceso».",
       "Filtros extra en «Tareas y asignación»: estatus RNT, subsector / tipo, prioridad y último resultado. Todos aceptan varias opciones (por ejemplo «Sin llamar» y «Reintentar» a la vez).",
       "«Exportar»: marque las hojas que quiere (Matriz, Llamadas, Teléfonos, Visitas, Cambios de estatus) y, en «Elegir columnas», las columnas de cada una. Puede filtrar por fechas, agente asignado, zona, prioridad, resultado y estado de la tarea. «Descargar Excel» baja solo lo elegido; su última elección se recuerda en ese navegador. También puede bajar todas las llamadas en CSV.",
@@ -154,10 +155,11 @@ const ES: Section[] = [
   {
     id: "transfer", roles: ["supervisor", "admin"], title: "Nueva campaña con resultados de otra",
     steps: [
-      "En la lista de tareas de una campaña pulse «Nueva campaña con estas tareas».",
+      "En la lista de tareas de una campaña pulse «Nueva campaña de llamadas con estas tareas» o «Nueva campaña de correo con estas tareas». Puede filtrar también por «¿Recibió el correo?».",
+      "«Campaña de correo»: no tiene llamadas ni agentes y no aparece en «Mis llamadas». Sus pestañas son «Correos» (lista para combinar correspondencia con el correo corregido, marcar enviados, cargar rebotados), «Tareas», «Exportar» y «Configuración». Las tareas de la campaña original siguen en curso.",
       "Marque los estados que quiere llevar (por ejemplo En seguimiento, Reintentar, Visita) y, si quiere, filtre por resultado, zona, prioridad o persona. El número de tareas se actualiza al momento.",
       "Complete el nombre, fechas, intentos y días de seguimiento de la nueva campaña y pulse «Crear campaña y transferir».",
-      "La nueva campaña queda en «Borrador», con los establecimientos y teléfonos copiados, el guion de la original y una nota en cada tarea: «Viene de «…»: último resultado …». Revísela, asígnela y actívela.",
+      "Campaña de llamadas: la nueva campaña queda en «Borrador», con los establecimientos y teléfonos copiados, el guion de la original y una nota en cada tarea: «Viene de «…»: último resultado …». Revísela, asígnela y actívela.",
       "En la campaña original esas tareas quedan cerradas como «Transferida», con un enlace a la nueva; ya no se pueden llamar allí.",
     ],
   },
@@ -206,7 +208,9 @@ const ES: Section[] = [
     id: "update-data", roles: ["agent", "inspector", "supervisor", "admin"], title: "Actualizar datos del establecimiento",
     bullets: [
       "En la llamada, al elegir el resultado «Cambió dueño / nombre / dirección» aparecen «Nuevo nombre comercial», «Nueva dirección» y «Dueño / responsable» dentro del mismo recuadro del establecimiento.",
-      "En la visita, «Actualizar datos (si cambió)» debajo de las notas.",
+      "En la visita, «Actualizar datos (si cambió)» debajo de las notas, con «Nuevo correo».",
+      "El correo corregido reemplaza al anterior desde ese momento (lista de correo, exportaciones, llamada) y quita la marca de rebotado. El anterior queda en el «Reporte de cambios».",
+      "«Informes» → «Reporte de cambios»: cada dato cambiado (correo, nombre, dirección, dueño, «¿En operación?», cerrado desde) con RUT, ID SIGTUR, antes → ahora, quién y cuándo. Filtre por campaña, dato, fechas y «Pendiente / Actualizado en SIGTUR», descargue el Excel y, después de actualizar SIGTUR, marque las filas y pulse «Marcar como actualizado en SIGTUR». Incluye la historia: los cambios desde el 26 oct y los correos corregidos antes (con fecha aproximada).",
       "Cada dato que cambia una persona (estos campos, el correo actualizado, «¿En operación?», la fecha de cierre y los teléfonos agregados, sustituidos o marcados como equivocados) se envía a SIGTUR como solicitud de cambio y queda en «Registro».",
     ],
   },
@@ -309,7 +313,7 @@ const EN: Section[] = [
       "Open the card. Check the script, the phone numbers and the establishment's details.",
       "If the same RNC has other establishments, tick them under “Also log this call for” and the same call is logged for all of them.",
       "Choose the number dialed and answer: did you reach anyone? did they attend the call?",
-      "If you spoke with someone: who, their role, and whether they are the person in charge.",
+      "If you spoke with someone: who, their role, and whether they are the person in charge. The “Email” is already filled in: correct it if it changed. Answer “Did they receive the email?” (Yes / No).",
       "For each establishment: is it still operating? and the response (will apply, already applied, needs help, not interested, changed owner). “Will apply” requires the commitment date.",
       "Click “Save”. The date and time of the call are recorded automatically at that moment, and the task moves to the right status on its own.",
     ],
@@ -348,7 +352,7 @@ const EN: Section[] = [
       "“Bulk upload”: download the master template, paste the establishments (same headers as the Matriz) and upload it. You see a preview before confirming.",
       "“Tasks & assignment”: the list shows each establishment with its last result. “Assign tasks” opens a panel with the method (split evenly, by zone or all to one agent); establishments of the same company stay with the same agent. Next to each person you see their current load (“N open”) and, if absent today, “Absent” (left unticked). With “Take each person's current workload into account”, an even split gives more to whoever has less open work in active campaigns. You can also tick rows: a bar appears at the bottom with “Assign selected to” (and “Remove…” for administrators); its × closes it and unticks everything. Or change a row's agent (it saves on its own). The “Follow-up” filter shows: open, due today, overdue follow-up, no activity for more than N days, or covered for an absence.",
       "“Settings” → “Call script” (administrators and supervisors): the text agents see under “Script” when they open each task of the campaign, in Spanish and, optionally, English.",
-      "“Emails”: log the mass email's send date and upload bounced emails.",
+      "“Emails”: log the mass email's send date and upload bounced emails. The mail-merge list uses the corrected email when there is one.",
       "“Status update”: upload the SIGTUR status to measure who moved to “En proceso”.",
       "Extra filters in “Tasks and assignment”: RNT status, subsector / type, priority and last result. All of them accept several choices (e.g. “Not called” and “Retry” together).",
       "“Export”: tick the sheets you want (Matriz, Calls, Phones, Visits, Status changes) and, under “Choose columns”, the columns of each. You can filter by dates, assigned agent, zone, priority, result and task status. “Download Excel” gets only what you chose; your last choice is remembered in that browser. You can also download every call as CSV.",
@@ -400,10 +404,11 @@ const EN: Section[] = [
   {
     id: "transfer", roles: ["supervisor", "admin"], title: "New campaign from another campaign's results",
     steps: [
-      "In a campaign's task list press “New campaign from these tasks”.",
+      "In a campaign's task list press “New call campaign from these tasks” or “New email campaign from these tasks”. You can also filter by “Did they receive the email?”.",
+      "“Email campaign”: no calls and no agents, and it doesn't appear in “My calls”. Its tabs are “Emails” (mail-merge list with the corrected email, mark sent, upload bounces), “Tasks”, “Export” and “Settings”. The tasks of the original campaign keep going.",
       "Tick the statuses to take (for example Follow-up, Retry, Visit) and, if you want, filter by result, zone, priority or person. The number of tasks updates instantly.",
       "Fill in the new campaign's name, dates, attempts and follow-up days and press “Create campaign and transfer”.",
-      "The new campaign is a “Draft”, with the establishments and phones copied, the original script and a note on each task: “Comes from «…»: last result …”. Review it, assign it and activate it.",
+      "Call campaign: the new campaign is a “Draft”, with the establishments and phones copied, the original script and a note on each task: “Comes from «…»: last result …”. Review it, assign it and activate it.",
       "In the original campaign those tasks are closed as “Transferred”, with a link to the new one; they can no longer be called there.",
     ],
   },
@@ -452,7 +457,9 @@ const EN: Section[] = [
     id: "update-data", roles: ["agent", "inspector", "supervisor", "admin"], title: "Updating establishment details",
     bullets: [
       "In a call, choosing the result “Changed owner / name / address” shows “New trade name”, “New address” and “Owner / person in charge” inside the same establishment box.",
-      "In a visit, “Update details (if changed)” below the notes.",
+      "In a visit, “Update details (if changed)” below the notes, with “New email”.",
+      "The corrected email replaces the old one from then on (mailing list, exports, call) and clears the bounce mark. The old one stays in the “Change report”.",
+      "“Reports” → “Change report”: every changed detail (email, name, address, owner, “Operating?”, closed since) with RUT, SIGTUR ID, before → now, who and when. Filter by campaign, detail, dates and “Pending / Updated in SIGTUR”, download the Excel and, after updating SIGTUR, tick the rows and press “Mark as updated in SIGTUR”. It includes the history: changes since 26 Oct and emails corrected before that (approximate date).",
       "Each detail a person changes (these fields, the updated email, “Operating?”, the closing date and phones added, replaced or marked wrong) is sent to SIGTUR as a change request and recorded in “Log”.",
     ],
   },
