@@ -1,7 +1,5 @@
 import Link from "next/link";
 import { MultiSelect } from "@/components/MultiSelect";
-import { QrTabs } from "@/components/qr/QrTabs";
-import { HBars } from "@/components/StatsView";
 import { fmtDate } from "@/lib/dates";
 import { getDict } from "@/lib/i18n-server";
 import { many } from "@/lib/multi";
@@ -11,9 +9,29 @@ import { QR_CHANNEL_TEXT, QR_TEXT, QR_TYPE_TEXT } from "@/lib/qr-i18n";
 
 const PERIODS = [30, 90, 180, 365];
 
+// Horizontal bars as in the preview: name, bar and number on one line.
+function Bars({ rows }: { rows: { label: string; n: number; href?: string }[] }) {
+  const max = Math.max(1, ...rows.map((r) => r.n));
+  return (
+    <div className="space-y-2">
+      {rows.map((r) => {
+        const inner = (
+          <>
+            <span className="truncate text-sm text-slate-700" title={r.label}>{r.label}</span>
+            <span className="h-3 overflow-hidden rounded bg-slate-100"><span className="block h-full rounded-r bg-brand-600" style={{ width: `${(r.n / max) * 100}%` }} /></span>
+            <b className="text-right text-sm tabular-nums">{r.n}</b>
+          </>
+        );
+        const cls = "grid grid-cols-[minmax(0,11rem)_minmax(0,1fr)_2.5rem] items-center gap-3 rounded-lg px-1 py-0.5";
+        return r.href ? <Link key={r.label} href={r.href} className={`${cls} hover:bg-slate-50`} title={`${r.label}: ${r.n}`}>{inner}</Link> : <div key={r.label} className={cls} title={`${r.label}: ${r.n}`}>{inner}</div>;
+      })}
+    </div>
+  );
+}
+
 // Statistics of «Quejas y reclamaciones» (handlers and supervisors).
 export default async function QrStatsPage({ searchParams }: { searchParams: Promise<{ days?: string; type?: string }> }) {
-  const u = await requireQr("manage");
+  await requireQr("manage");
   const sp = await searchParams;
   const { t: common, lang } = await getDict();
   const t = QR_TEXT[lang];
@@ -34,9 +52,9 @@ export default async function QrStatsPage({ searchParams }: { searchParams: Prom
           <div><label className="label" htmlFor="st-days">{t.period}</label><select id="st-days" name="days" defaultValue={days} className="input w-44">{PERIODS.map((p, i) => <option key={p} value={p}>{[t.last30, t.last90, t.last180, t.last365][i]}</option>)}</select></div>
           <div><label className="label" htmlFor="st-type">{t.fType}</label><MultiSelect key={sp.type ?? ""} id="st-type" name="type" value={sp.type} options={QR_TYPES.map((x) => ({ value: x, label: QR_TYPE_TEXT[lang][x] }))} t={common} className="w-48" /></div>
           <button className="btn-secondary">{common.filter}</button>
+          <a href={`/api/quejas/export?days=${days}${typeQs}`} className="btn-secondary">Excel</a>
         </form>
       </div>
-      <QrTabs t={t} u={u} />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" data-testid="qr-kpis">
         <div className="card p-4"><div className="text-2xl font-bold tabular-nums">{s.received}</div><div className="text-sm font-semibold text-slate-700">{t.kReceived}</div><div className="text-xs text-slate-500">{t.kOpenClosed.replace("{o}", String(s.open)).replace("{c}", String(s.closed))}</div></div>
@@ -59,8 +77,8 @@ export default async function QrStatsPage({ searchParams }: { searchParams: Prom
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="card"><h3 className="mb-4">{t.byTopic}</h3>{s.byTopic.length ? <HBars total={s.received} rows={s.byTopic.map((r) => ({ label: r.key, n: r.n, href: `/quejas?status=open&status=cerrada&topic=${encodeURIComponent(r.key)}${typeQs}` }))} /> : <p className="text-sm text-slate-500">{t.noData}</p>}</div>
-        <div className="card"><h3 className="mb-4">{t.byChannel}</h3>{s.byChannel.length ? <HBars total={s.received} rows={s.byChannel.map((r) => ({ label: QR_CHANNEL_TEXT[lang][r.key] ?? r.key, n: r.n, href: `/quejas?status=open&status=cerrada&channel=${r.key}${typeQs}` }))} /> : <p className="text-sm text-slate-500">{t.noData}</p>}</div>
+        <div className="card"><h3 className="mb-4">{t.byTopic}</h3>{s.byTopic.length ? <Bars rows={s.byTopic.map((r) => ({ label: r.key, n: r.n }))} /> : <p className="text-sm text-slate-500">{t.noData}</p>}</div>
+        <div className="card"><h3 className="mb-4">{t.byChannel}</h3>{s.byChannel.length ? <Bars rows={s.byChannel.map((r) => ({ label: QR_CHANNEL_TEXT[lang][r.key] ?? r.key, n: r.n, href: `/quejas?status=open&status=cerrada&channel=${r.key}${typeQs}` }))} /> : <p className="text-sm text-slate-500">{t.noData}</p>}</div>
       </div>
 
       <div className="card overflow-hidden p-0">

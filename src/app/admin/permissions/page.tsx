@@ -29,7 +29,7 @@ export default async function PermissionsPage() {
         <div className="overflow-x-auto">
           <table className="table" data-testid="permissions">
             <thead>
-              <tr><th>{t.name}</th><th>{t.permCalls}</th><th>{t.permQr}</th></tr>
+              <tr><th>{t.name}</th><th>{t.permCalls}</th><th>{t.permQr}</th><th>{t.permAdmin}</th></tr>
             </thead>
             <tbody>
               {people.map((p) => (
@@ -44,6 +44,8 @@ export default async function PermissionsPage() {
                   <td>
                     {p.role === "admin" ? (
                       <span className="badge bg-brand-50 text-brand-700">{t.permAlways}</span>
+                    ) : p.role === "complaints" ? (
+                      <span className="text-slate-400" title={t.permComplaintsRole}>—</span>
                     ) : (
                       <label className="inline-flex items-center gap-2 text-sm">
                         <input type="checkbox" name={`calls-${p.id}`} value="1" defaultChecked={p.callsAccess} className="h-4 w-4 accent-brand-600" aria-label={`${p.name}: ${t.permCalls}`} /> {t.permAccess}
@@ -59,6 +61,7 @@ export default async function PermissionsPage() {
                     </select>
                     )}
                   </td>
+                  <td>{p.role === "admin" ? <span className="badge bg-brand-50 text-brand-700">{t.yes}</span> : <span className="text-slate-400">—</span>}</td>
                 </tr>
               ))}
             </tbody>

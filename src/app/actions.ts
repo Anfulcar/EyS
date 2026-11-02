@@ -137,6 +137,12 @@ function defaultPassword(username: string) {
   return `${username}123`;
 }
 
+// «Gestor de quejas» works only in complaints: no call campaigns, and at least «Gestionar» there.
+function roleDefaults(role: string, qrLevel = "none") {
+  if (role === "complaints") return { callsAccess: false, qrLevel: qrLevel === "supervise" ? "supervise" : "manage" };
+  return { callsAccess: true };
+}
+
 export async function createUserAction(_: ActionState, form: FormData): Promise<ActionState> {
   const me = await assertUser(["admin"]);
   const reauth = await reauthRequired();
@@ -160,6 +166,7 @@ export async function createUserAction(_: ActionState, form: FormData): Promise<
     role: parsed.data.role,
     passwordHash: await bcrypt.hash(password, 10),
     mustChangePassword: true,
+    ...roleDefaults(parsed.data.role),
   }).returning({ id: users.id });
   await logActivity(me, "user.created", { entity: "user", entityId: created.id, summary: `${parsed.data.username} (${parsed.data.role})` });
   revalidatePath("/users");
@@ -200,6 +207,7 @@ export async function editUserAction(_: ActionState, form: FormData): Promise<Ac
   if (d.id !== me.id) {
     set.role = d.role;
     set.active = d.active === "1";
+    if (d.role !== target.role) Object.assign(set, roleDefaults(d.role, target.qrLevel));
   }
   let newPassword: string | null = null;
   if (d.resetDefault) newPassword = defaultPassword(d.username);

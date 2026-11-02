@@ -6,6 +6,7 @@ type Section = { id: string; roles: string[]; title: string; intro?: string; ste
 type L<T> = Record<Lang, T>;
 
 export const WHATS_NEW: { date: string; es: string; en: string }[] = [
+  { date: "2026-11-02", es: "«Quejas y reclamaciones» queda como en el diseño aprobado: el menú se divide por módulo («Campañas de llamadas», «Quejas y reclamaciones», «General»); «Casos» con su número de pendientes, «Formulario público», «Estadísticas» (con «Excel») y «Configuración del módulo» en el menú; nuevo rol «Gestor de quejas»; «Nuevo caso» en una ventana; el estado y el responsable se guardan al elegirlos; temas e instituciones uno por casilla con «+ Agregar».", en: "“Complaints and claims” now matches the approved design: the menu is divided by module (“Call campaigns”, “Complaints and claims”, “General”); “Cases” with its pending count, “Public form”, “Statistics” (with “Excel”) and “Module settings” in the menu; new “Complaints handler” role; “New case” in a pop-up; status and handler save when chosen; topics and institutions one per box with “+ Add”." },
   { date: "2026-11-02", es: "La aplicación ahora se llama «Atención al Cliente EyS» (antes «Campañas de Formalización»). Todo sigue igual.", en: "The app is now called “Atención al Cliente EyS” (formerly “Formalization Campaigns”). Everything else stays the same." },
   { date: "2026-11-02", es: "Nuevo módulo «Quejas y reclamaciones»: un expediente por caso (enlazado a un RUT de SIGTUR o con los datos de quien esté involucrado), pasos, referencias a otras instituciones, pruebas, solución y cierre aprobado por un supervisor, informe en PDF automático al cerrar y a pedido, plazos por tipo, estadísticas, configuración propia, formulario público y casos enviados desde SIGTUR. Quién lo usa y con qué nivel se decide en «Permisos por módulo».", en: "New “Complaints and claims” module: one file per case (linked to a SIGTUR RUT or with the details of whoever is involved), steps, referrals to other institutions, proof, solution and closing approved by a supervisor, PDF report automatically at closing and on request, deadlines per type, statistics, its own settings, a public form and cases sent from SIGTUR. Who uses it, and at which level, is set in “Permissions per module”." },
   { date: "2026-11-02", es: "Un panel por módulo y uno general: «Administración general» (solo administradores) reúne «Personas», «Permisos por módulo», «Conexión con SIGTUR» y «Registro»; «Configuración · Llamadas» (administradores y supervisores) tiene los valores para las campañas nuevas (intentos, días de seguimiento, guion estándar) y las solicitudes de llamada de SIGTUR (encender o pausar, quién las recibe, simular). Nuevo: «Permisos por módulo», para dar o quitar a cada persona el acceso a las campañas de llamadas.", en: "One panel per module plus a general one: “General administration” (administrators only) gathers “People”, “Permissions per module”, “SIGTUR connection” and “Log”; “Settings · Calls” (administrators and supervisors) has the values for new campaigns (attempts, follow-up days, standard script) and SIGTUR call requests (switch on or pause, who receives them, simulate). New: “Permissions per module”, to give or remove each person's access to the call campaigns." },
@@ -39,7 +40,7 @@ export const WHATS_NEW: { date: string; es: string; en: string }[] = [
 
 const ES: Section[] = [
   {
-    id: "start", roles: ["admin", "supervisor", "agent", "inspector"], title: "Primeros pasos",
+    id: "start", roles: ["admin", "supervisor", "agent", "inspector", "complaints"], title: "Primeros pasos",
     bullets: [
       "Ingrese con el usuario que le dio el administrador. La primera vez la contraseña es su usuario seguido de 123 (por ejemplo ana123) y se le pedirá cambiarla.",
       "El menú de la izquierda muestra solo lo que su rol puede usar y queda a la vista al bajar por la página. «Plegar menú» (abajo) lo deja en solo iconos; la elección se recuerda en esa computadora. En el celular el menú se abre con el botón ☰.",
@@ -280,8 +281,8 @@ const ES: Section[] = [
     ],
   },
   {
-    id: "complaints", roles: ["admin", "supervisor", "agent", "inspector"], title: "Quejas y reclamaciones",
-    intro: "Un módulo aparte para quejas, reclamaciones, denuncias y sugerencias. Se ve si en «Permisos por módulo» tiene un nivel: Registrar (crea casos y ve los suyos), Gestionar (ve todos y trabaja los asignados) o Supervisar (además asigna, aprueba cierres, reabre y cambia la configuración). Los administradores pueden todo.",
+    id: "complaints", roles: ["admin", "supervisor", "agent", "inspector", "complaints"], title: "Quejas y reclamaciones",
+    intro: "Un módulo aparte para quejas, reclamaciones, denuncias y sugerencias, con su propio grupo en el menú: «Casos», «Formulario público», «Estadísticas» y «Configuración del módulo». Se ve si en «Permisos por módulo» tiene un nivel: Registrar (crea casos y ve los suyos), Gestionar (ve todos y trabaja los asignados) o Supervisar (además asigna, aprueba cierres, reabre y cambia la configuración). Los administradores pueden todo. El rol «Gestor de quejas» es para quien solo trabaja en este módulo (no usa las campañas de llamadas).",
     steps: [
       "Menú «Quejas y reclamaciones» → «Casos»: arriba los contadores (abiertos, fuera de plazo, vencen pronto, sin asignar, cierres por aprobar, asignados a mí) y la lista con su plazo de respuesta (punto verde, ámbar o rojo). Los filtros aceptan varias opciones.",
       "«+ Nuevo caso»: primero a quién se refiere (busque el RUT o ID SIGTUR y los datos se traen solos, o elija «No está en SIGTUR» y escríbalos), luego quién lo presenta (o anónimo), qué pasó (tipo, tema, canal, prioridad, asunto, descripción) y las pruebas (fotos, PDF, Word, Excel, audio; hasta 8 MB cada uno). Cada caso recibe un número: QR-2026-0001.",
@@ -296,7 +297,7 @@ const ES: Section[] = [
     ],
   },
   {
-    id: "messages", roles: ["admin", "supervisor", "agent", "inspector"], title: "Mensajes que puede ver",
+    id: "messages", roles: ["admin", "supervisor", "agent", "inspector", "complaints"], title: "Mensajes que puede ver",
     bullets: [
       "«No se pudo conectar con el servidor»: revise su internet y pulse «Intentar de nuevo». Lo que estaba guardando no se guardó.",
       "«No encontrado»: la página no existe o su rol no tiene acceso a ella.",
@@ -307,7 +308,7 @@ const ES: Section[] = [
 
 const EN: Section[] = [
   {
-    id: "start", roles: ["admin", "supervisor", "agent", "inspector"], title: "Getting started",
+    id: "start", roles: ["admin", "supervisor", "agent", "inspector", "complaints"], title: "Getting started",
     bullets: [
       "Sign in with the username your administrator gave you. The first time, the password is your username followed by 123 (e.g. ana123) and you will be asked to change it.",
       "The menu on the left shows only what your role can use and stays in view when you scroll. “Collapse menu” (at the bottom) leaves only the icons; the choice is remembered on that computer. On phones the menu opens with the ☰ button.",
@@ -548,8 +549,8 @@ const EN: Section[] = [
     ],
   },
   {
-    id: "complaints", roles: ["admin", "supervisor", "agent", "inspector"], title: "Complaints and claims",
-    intro: "A separate module for complaints, claims, reports and suggestions. You see it if “Permissions per module” gives you a level: Register (creates cases and sees their own), Handle (sees every case and works the assigned ones) or Supervise (also assigns, approves closings, reopens and changes the settings). Administrators can do everything.",
+    id: "complaints", roles: ["admin", "supervisor", "agent", "inspector", "complaints"], title: "Complaints and claims",
+    intro: "A separate module for complaints, claims, reports and suggestions, with its own group in the menu: “Cases”, “Public form”, “Statistics” and “Module settings”. You see it if “Permissions per module” gives you a level: Register (creates cases and sees their own), Handle (sees every case and works the assigned ones) or Supervise (also assigns, approves closings, reopens and changes the settings). Administrators can do everything. The “Complaints handler” role is for people who only work in this module (no call campaigns).",
     steps: [
       "“Complaints and claims” menu → “Cases”: counters at the top (open, out of time, due soon, unassigned, closings to approve, assigned to me) and the list with each answer deadline (green, amber or red dot). Filters accept several choices.",
       "“+ New case”: first who it is about (search the RUT or SIGTUR ID and the details come by themselves, or choose “Not in SIGTUR” and type them), then who brings it (or anonymous), what happened (type, topic, channel, priority, subject, description) and the proof (photos, PDF, Word, Excel, audio; up to 8 MB each). Each case gets a number: QR-2026-0001.",
@@ -564,7 +565,7 @@ const EN: Section[] = [
     ],
   },
   {
-    id: "messages", roles: ["admin", "supervisor", "agent", "inspector"], title: "Messages you may see",
+    id: "messages", roles: ["admin", "supervisor", "agent", "inspector", "complaints"], title: "Messages you may see",
     bullets: [
       "“Can't reach the server”: check your internet and click “Try again”. What you were saving was not saved.",
       "“Not found”: the page doesn't exist or your role can't use it.",

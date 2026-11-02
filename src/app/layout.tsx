@@ -13,7 +13,7 @@ import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { companies } from "@/db/schema";
 import { currentUser, hasCalls } from "@/lib/auth";
-import { atLeast } from "@/lib/qr";
+import { atLeast, caseCounters } from "@/lib/qr";
 import { QR_TEXT } from "@/lib/qr-i18n";
 import { attentionSummary } from "@/lib/queue";
 import { newReportsCount } from "@/lib/report-run";
@@ -49,19 +49,33 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const hasAssigned = assigned > 0;
   const newReports = user && isManager ? await newReportsCount(user) : 0;
   // Call-campaign screens only for people with «Campañas de llamadas» in «Permisos por módulo».
-  const calls = !!user && hasCalls(user);
+  const calls = !!user && hasCalls(user) && ["admin", "supervisor", "agent", "inspector"].includes(role ?? "");
+  const qt = QR_TEXT[lang];
+  // «Casos» shows what waits for the person: supervisors, unassigned cases and closings to approve; handlers, their open cases.
+  const qrCount = user && atLeast(user, "manage") ? await caseCounters(user) : null;
+  const qrBadge = !qrCount ? 0 : atLeast(user!, "supervise") ? qrCount.unassigned + qrCount.toApprove : qrCount.mine;
+  const G = { calls: t.navGroupCalls, qr: qt.module, general: t.navGroupGeneral };
   const nav: NavItem[] = [
     ...(calls && hasAssigned ? [{ href: "/calls", label: t.navCalls, icon: "calls" as const, badge: attention?.total ?? 0 }] : []),
-    ...(calls && role && role !== "inspector" ? [{ href: "/reviews", label: t.navReviews, icon: "reviews" as const }] : []),
+    ...(calls && role !== "inspector" ? [{ href: "/reviews", label: t.navReviews, icon: "reviews" as const }] : []),
     ...(calls && isManager ? [{ href: "/campaigns", label: t.navCampaigns, icon: "campaigns" as const }] : []),
-    ...(calls && role && role !== "agent" ? [{ href: "/visits", label: t.navVisits, icon: "visits" as const }] : []),
+    ...(calls && role !== "agent" ? [{ href: "/visits", label: t.navVisits, icon: "visits" as const }] : []),
     ...(calls && isManager ? [{ href: "/stats", label: t.navStats, icon: "stats" as const }] : []),
     ...(calls && isManager ? [{ href: "/reports", label: t.navReports, icon: "reports" as const, badge: newReports }] : []),
     ...(calls && isManager ? [{ href: "/calls-settings", label: t.navCallsSettings, icon: "settings" as const }] : []),
-    ...(user && atLeast(user, "register") ? [{ href: "/quejas", label: QR_TEXT[lang].module, icon: "complaints" as const }] : []),
-    ...(role === "admin" ? [{ href: "/users", label: t.navAdmin, icon: "admin" as const, match: ["/users", "/admin", "/logs", "/integrations"] }] : []),
-    ...(role ? [{ href: "/help", label: t.navHelp, icon: "help" as const }] : []),
-  ];
+  ].map((n) => ({ ...n, group: G.calls }));
+  if (user && atLeast(user, "register")) {
+    nav.push(
+      { href: "/quejas", label: qt.navCases, icon: "complaints", badge: qrBadge, exact: true, match: ["/quejas/QR"], group: G.qr },
+      { href: "/formulario-quejas", label: qt.navPublicForm, icon: "form", group: G.qr },
+      ...(atLeast(user, "manage") ? [{ href: "/quejas/estadisticas", label: qt.tabStats, icon: "stats" as const, group: G.qr }] : []),
+      ...(atLeast(user, "supervise") ? [{ href: "/quejas/configuracion", label: qt.navModuleSettings, icon: "settings" as const, group: G.qr }] : []),
+    );
+  }
+  nav.push(
+    ...(role === "admin" ? [{ href: "/users", label: t.navAdmin, icon: "admin" as const, match: ["/users", "/admin", "/logs", "/integrations"], group: G.general }] : []),
+    ...(role ? [{ href: "/help", label: t.navHelp, icon: "help" as const, group: G.general }] : []),
+  );
   const showNav = !!user && !user.mustChangePassword;
   const folded = (await cookies()).get(NAV_COOKIE)?.value === "folded";
 

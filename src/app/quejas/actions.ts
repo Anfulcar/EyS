@@ -171,23 +171,45 @@ export async function generateReportAction(_: ActionState, form: FormData): Prom
   return { ok: true, message: (await txt()).saved };
 }
 
-export async function saveQrSettingsAction(_: ActionState, form: FormData): Promise<ActionState> {
+// «Configuración del módulo» (supervisors): deadlines, the two lists and the public form, each saved on its own.
+async function saveSettings(patch: (cur: QrSettings, form: FormData) => QrSettings, form: FormData, summary: (s: QrSettings) => string) {
   const u = await assertQr("supervise");
-  const cur = await qrSettings();
-  const lines = (k: string) => [...new Set(str(form.get(k), 5000).split("\n").map((x) => x.trim().slice(0, 100)).filter(Boolean))].slice(0, 60);
-  const num = (k: string, dflt: number, max: number) => Math.min(max, Math.max(1, Number(form.get(k)) || dflt));
-  const next: QrSettings = {
-    sla: Object.fromEntries(QR_TYPES.map((t) => [t, { first: num(`first-${t}`, cur.sla[t]?.first ?? 2, 60), resp: num(`resp-${t}`, cur.sla[t]?.resp ?? 15, 180) }])),
-    warnDays: num("warnDays", cur.warnDays, 20),
-    topics: lines("topics").length ? lines("topics") : cur.topics,
-    institutions: lines("institutions").length ? lines("institutions") : cur.institutions,
-    publicForm: form.get("publicForm") === "1",
-  };
-  if (!next.topics.includes("Otro")) next.topics.push("Otro");
+  const next = patch(await qrSettings(), form);
   await saveQrSettings(next);
-  await logActivity(u, "qr.settings_changed", { entity: "settings", summary: QR_TYPES.map((t) => `${t} ${next.sla[t].first}/${next.sla[t].resp}`).join(" · ") });
+  await logActivity(u, "qr.settings_changed", { entity: "settings", summary: summary(next).slice(0, 500) });
   revalidatePath("/quejas/configuracion");
   return { ok: true, message: (await txt()).saved };
+}
+
+export async function saveQrSlaAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const num = (f: FormData, k: string, dflt: number, max: number) => Math.min(max, Math.max(1, Number(f.get(k)) || dflt));
+  return saveSettings(
+    (cur, f) => ({
+      ...cur,
+      sla: Object.fromEntries(QR_TYPES.map((t) => [t, { first: num(f, `first-${t}`, cur.sla[t]?.first ?? 2, 60), resp: num(f, `resp-${t}`, cur.sla[t]?.resp ?? 15, 180) }])),
+      warnDays: num(f, "warnDays", cur.warnDays, 20),
+    }),
+    form,
+    (n) => `Plazos: ${QR_TYPES.map((t) => `${t} ${n.sla[t].first}/${n.sla[t].resp}`).join(" · ")}`,
+  );
+}
+
+export async function saveQrListsAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const which = form.get("list") === "institutions" ? "institutions" : "topics";
+  const items = [...new Set(str(form.get("items"), 8000).split("\n").map((x) => x.trim().slice(0, 100)).filter(Boolean))].slice(0, 60);
+  return saveSettings(
+    (cur) => {
+      const list = items.length ? items : cur[which];
+      if (which === "topics" && !list.includes("Otro")) list.push("Otro");
+      return { ...cur, [which]: list };
+    },
+    form,
+    (n) => `${which === "topics" ? "Temas" : "Instituciones"}: ${n[which].join(", ")}`,
+  );
+}
+
+export async function saveQrPublicFormAction(_: ActionState, form: FormData): Promise<ActionState> {
+  return saveSettings((cur, f) => ({ ...cur, publicForm: f.get("publicForm") === "1" }), form, (n) => `Formulario público: ${n.publicForm ? "encendido" : "apagado"}`);
 }
 
 // ---------- Public form (no account) ----------
@@ -199,7 +221,7 @@ export async function publicCaseAction(_: ActionState, form: FormData): Promise<
   // Robots fill the hidden field or send in under 3 seconds.
   if (str(form.get("website"))) return { error: t.pfRequired };
   if (Date.now() - Number(form.get("startedAt") ?? 0) < 3000) return { error: t.pfRequired };
-  if (form.get("consent") !== "1") return { error: t.pfRequired };
+  if (form.get("consent") !== "1" || form.get("human") !== "1") return { error: t.pfRequired };
   const h = await headers();
   const ip = (h.get("x-forwarded-for") ?? "").split(",")[0].trim() || h.get("x-real-ip") || "local";
   const sender = senderFingerprint(ip);

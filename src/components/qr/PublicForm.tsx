@@ -63,9 +63,10 @@ export function PublicForm({ t, types, topics, action }: { t: QrDict; types: Opt
       </div>
       <fieldset className="space-y-3">
         <legend className="mb-2 font-semibold text-slate-900">{t.pfPlace}</legend>
-        <div className="flex flex-wrap gap-2">
-          <label className="choice"><input type="radio" name="knows" checked={!knows} onChange={() => setKnows(false)} className="accent-brand-600" /> {t.pfDontKnow}</label>
-          <label className="choice"><input type="radio" name="knows" checked={knows} onChange={() => setKnows(true)} className="accent-brand-600" /> {t.pfKnowRut}</label>
+        <div className="segmented">
+          {[[true, t.pfKnowRut], [false, t.pfDontKnow]].map(([v, l]) => (
+            <button key={String(v)} type="button" aria-pressed={knows === v} onClick={() => setKnows(v as boolean)} className={`rounded-lg px-3.5 py-1.5 text-sm font-medium ${knows === v ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"}`}>{l as string}</button>
+          ))}
         </div>
         {knows ? field("RUT / ID SIGTUR", "rut", { required: true }) : (
           <div className="grid gap-3 sm:grid-cols-2">
@@ -93,13 +94,14 @@ export function PublicForm({ t, types, topics, action }: { t: QrDict; types: Opt
         {field(t.pfOneLine, "subject", { required: true })}
         <div><label className="label" htmlFor="pf-description">{t.pfDetails} *</label><textarea id="pf-description" className="input" rows={5} value={f.description} onChange={set("description")} required maxLength={5000} /></div>
         <div>
-          <label className="label" htmlFor="pf-files">{t.proofs}</label>
-          <input id="pf-files" type="file" multiple accept={ACCEPT} className="block w-full text-sm" onChange={(e) => { setFiles([...files, ...Array.from(e.target.files ?? []).filter((x) => x.size <= MAX_FILE)].slice(0, 5)); e.target.value = ""; }} />
-          <p className="mt-1 text-xs text-slate-500">{t.proofsHelp}</p>
+          <span className="label">{t.proofs}</span>
+          <label htmlFor="pf-files" className="block cursor-pointer rounded-xl border-2 border-dashed border-slate-200 px-4 py-4 text-center text-sm text-slate-500 transition hover:border-brand-300 hover:text-brand-700">{t.dropFiles} · {t.proofsHelp}</label>
+          <input id="pf-files" type="file" multiple accept={ACCEPT} className="sr-only" onChange={(e) => { setFiles([...files, ...Array.from(e.target.files ?? []).filter((x) => x.size <= MAX_FILE)].slice(0, 5)); e.target.value = ""; }} />
           {files.length > 0 && <p className="mt-1 text-xs text-slate-600">{files.map((x) => x.name).join(" · ")}</p>}
         </div>
       </fieldset>
       <label className="flex items-start gap-2 text-sm"><input type="checkbox" name="consent" value="1" required className="mt-0.5 h-4 w-4 accent-brand-600" /> {t.pfConsent}</label>
+      <label className="choice w-fit"><input type="checkbox" name="human" value="1" required className="h-4 w-4 accent-brand-600" /> {t.pfHuman}</label>
       {state?.error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{state.error}</p>}
       {busy && <p className="text-sm text-slate-600">{t.uploading.replace("{f}", busy)}</p>}
       <div className="flex justify-end"><button className="btn" disabled={pending || !!busy}>{pending || busy ? "…" : t.pfSend}</button></div>

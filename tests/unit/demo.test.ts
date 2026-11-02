@@ -26,7 +26,7 @@ describe("demo mode", () => {
   it("loads sample people for every role and a sample campaign", async () => {
     await seedDemo(client, env);
     const roles = (await client.execute("SELECT DISTINCT role FROM users")).rows.map((r) => r.role);
-    expect(roles.sort()).toEqual(["admin", "agent", "inspector", "supervisor"]);
+    expect(roles.sort()).toEqual(["admin", "agent", "complaints", "inspector", "supervisor"]);
     expect(await count("SELECT COUNT(*) n FROM users")).toBe(DEMO_USERS.length);
     expect(await count("SELECT COUNT(*) n FROM establishments")).toBeGreaterThan(20);
     expect(await count("SELECT COUNT(*) n FROM companies WHERE assigned_user_id IS NULL")).toBe(0);
