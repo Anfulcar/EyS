@@ -24,7 +24,7 @@ export default async function TaskPage({ params }: { params: Promise<{ companyId
   // Everything about the task is read at the same time as the account; nothing is shown
   // until the permission check below passes (others get "not found").
   const [me, companyRow, { t, lang }, ests, phs, attempts, results, people] = await Promise.all([
-    requireUser(["agent", "admin", "supervisor"]),
+    requireUser("c.call"),
     db.query.companies.findFirst({ where: eq(companies.id, companyId) }),
     getDict(),
     db.select().from(establishments).where(eq(establishments.companyId, companyId)).orderBy(asc(establishments.nombreComercial)),
@@ -61,7 +61,7 @@ export default async function TaskPage({ params }: { params: Promise<{ companyId
       rnt: es[0]?.estatusRnt ?? null,
       warning: history.filter((n) => n.rut && n.rut === es[0]?.rut).map((n) => historyShort(n, t, lang)).join(" · ") || null,
       agentName: r.assignedUserId ? names.get(r.assignedUserId) ?? null : null,
-      canWork: me.role !== "agent" || r.assignedUserId === me.id,
+      canWork: mayWork(me, r),
       establishments: es.map((e) => ({ id: e.id, name: e.nombreComercial ?? e.sigturId, status: e.estatusRnt })),
       phones: relPhones.filter((p) => p.companyId === r.id && p.active).map((p) => ({ id: p.id, number: p.number, quality: p.quality })),
     };

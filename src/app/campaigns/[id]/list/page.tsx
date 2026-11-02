@@ -8,7 +8,7 @@ import { getDict } from "@/lib/i18n-server";
 import { drillDown, parseDrill } from "@/lib/stats";
 
 export default async function CampaignListPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
-  await requireUser(["admin", "supervisor"]);
+  await requireUser("c.view");
   const id = Number((await params).id);
   const sp = await searchParams;
   const { t, lang } = await getDict();

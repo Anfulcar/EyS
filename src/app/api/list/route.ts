@@ -3,7 +3,7 @@ import ExcelJS from "exceljs";
 import { db } from "@/db";
 import { campaigns } from "@/db/schema";
 import { logActivity } from "@/lib/audit";
-import { MANAGERS, notFoundResponse, routeUser } from "@/lib/auth";
+import { notFoundResponse, routeUser } from "@/lib/auth";
 import { codeMatrixText, COMPANY_STATUSES, label } from "@/lib/catalog";
 import { drillTitle } from "@/lib/drill-labels";
 import { DICTS } from "@/lib/i18n";
@@ -12,7 +12,7 @@ import { drillDown, parseDrill } from "@/lib/stats";
 
 // Excel download of a list opened from a dashboard number.
 export async function GET(req: Request) {
-  const user = await routeUser(MANAGERS);
+  const user = await routeUser("c.excel");
   if (!user) return notFoundResponse();
   const sp = Object.fromEntries(new URL(req.url).searchParams);
   const ids = sp.campaign

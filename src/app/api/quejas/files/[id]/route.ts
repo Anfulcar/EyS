@@ -1,18 +1,17 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { qrCases } from "@/db/schema";
-import { notFoundResponse } from "@/lib/auth";
-import { canSee, fileContent } from "@/lib/qr";
-import { routeQr } from "@/lib/qr-auth";
+import { notFoundResponse, routeUser } from "@/lib/auth";
+import { canGetFiles, canSee, fileContent } from "@/lib/qr";
 
-// A proof file, only for people who may see its case.
+// A proof file, only for people who may see its case and have «Descargar pruebas» (or registered it).
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
-  const u = await routeQr("register");
+  const u = await routeUser("q.register");
   if (!u) return notFoundResponse();
   const r = await fileContent(Number((await params).id));
   if (!r) return notFoundResponse();
   const [c] = await db.select().from(qrCases).where(eq(qrCases.id, r.file.caseId));
-  if (!c || !canSee(u, c)) return notFoundResponse();
+  if (!c || !canSee(u, c) || !canGetFiles(u, c)) return notFoundResponse();
   const inline = /^(image\/|application\/pdf|audio\/|video\/)/.test(r.file.mime);
   return new Response(new Uint8Array(r.data), {
     headers: {

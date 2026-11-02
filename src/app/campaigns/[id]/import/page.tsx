@@ -5,8 +5,10 @@ import { importLogs, users } from "@/db/schema";
 import { fmtDateTime } from "@/lib/dates";
 import { getDict } from "@/lib/i18n-server";
 import { commitUploadAction, previewUploadAction } from "../../../actions";
+import { requireUser } from "@/lib/auth";
 
 export default async function ImportPage({ params }: { params: Promise<{ id: string }> }) {
+  await requireUser("c.upload");
   const id = Number((await params).id);
   const { t, lang } = await getDict();
   const logs = await db

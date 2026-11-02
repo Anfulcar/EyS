@@ -7,6 +7,7 @@ import { Empty } from "@/components/ui";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
+import { idsWho } from "@/lib/permissions";
 import { CALL_CODES } from "@/lib/catalog";
 import { getDict } from "@/lib/i18n-server";
 import { callCampaigns, callRows, canSeeAllCalls, type CallFilters } from "@/lib/reviews";
@@ -14,7 +15,7 @@ import { callCampaigns, callRows, canSeeAllCalls, type CallFilters } from "@/lib
 const PAGE = 100;
 
 export default async function ReviewsPage({ searchParams }: { searchParams: Promise<CallFilters & { page?: string }> }) {
-  const me = await requireUser(["admin", "supervisor", "agent"]);
+  const me = await requireUser(["c.own", "c.review"]);
   const sp = await searchParams;
   const { t, lang } = await getDict();
   const all = canSeeAllCalls(me);
@@ -23,7 +24,7 @@ export default async function ReviewsPage({ searchParams }: { searchParams: Prom
   const [rows, camps, agents] = await Promise.all([
     callRows(me, filters, PAGE + 1, page * PAGE),
     callCampaigns(me),
-    all ? db.select({ id: users.id, name: users.name }).from(users).where(and(inArray(users.role, ["agent", "supervisor", "admin"]), eq(users.active, true))).orderBy(asc(users.name)) : [],
+    all ? idsWho("c.call").then((ids) => db.select({ id: users.id, name: users.name }).from(users).where(and(inArray(users.id, ids), eq(users.active, true))).orderBy(asc(users.name))) : [],
   ]);
   // Campaign, agent and result accept several choices.
   const groups = [

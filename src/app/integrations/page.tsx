@@ -11,7 +11,7 @@ import { outboxOverview, pushSettings } from "@/lib/sigtur-push";
 import { createApiKeyAction, retrySigturPushAction, revokeApiKeyAction, saveSigturPushUrlAction, setSigturPushAction } from "../actions";
 
 export default async function IntegrationsPage() {
-  await requireUser(["admin"]);
+  const me = await requireUser("g.sigtur");
   const { t, lang } = await getDict();
   const [keys, log, push, outbox] = await Promise.all([
     listKeys(),
@@ -36,7 +36,7 @@ export default async function IntegrationsPage() {
 
   return (
     <div className="space-y-6">
-      <AdminTabs t={t} />
+      <AdminTabs t={t} me={me} />
       <div>
         <h2>{t.adminTabSigtur}</h2>
         <p className="subtitle">{t.integrationSubtitleGeneral}</p>

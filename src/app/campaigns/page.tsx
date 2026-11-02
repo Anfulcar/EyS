@@ -9,6 +9,7 @@ import { Empty, StatusBadge } from "@/components/ui";
 import { db } from "@/db";
 import { campaigns, companies, establishments } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
+import { can } from "@/lib/permissions";
 import { fmtDate } from "@/lib/dates";
 import type { Dict } from "@/lib/i18n";
 import { getDict } from "@/lib/i18n-server";
@@ -17,7 +18,7 @@ import { requestsOverview } from "@/lib/sigtur";
 import { createCampaignAction } from "../actions";
 
 export default async function CampaignsPage() {
-  const me = await requireUser(["admin", "supervisor"]);
+  const me = await requireUser("c.view");
   const { t, lang } = await getDict();
   // The permanent SIGTUR campaign has its own block; the grid shows only temporary campaigns.
   const [all, permanent, defaults] = await Promise.all([db.select().from(campaigns).orderBy(desc(campaigns.startDate)), requestsOverview(), campaignDefaults()]);
@@ -44,7 +45,7 @@ export default async function CampaignsPage() {
     <div className="space-y-6">
       <div className="page-title">
         <h1>{t.navCampaigns}</h1>
-        {me.role === "admin" && (
+        {can(me, "c.edit") && (
           <Overlay trigger={<><Plus className="h-4 w-4" />{t.newCampaign}</>} title={t.newCampaign}>
             <ActionForm action={createCampaignAction} className="space-y-5">
               <CampaignFields t={t} values={{ maxAttempts: defaults.maxAttempts, followupDays: defaults.followupDays }} />

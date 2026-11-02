@@ -8,25 +8,32 @@ import { StatusBadge } from "@/components/ui";
 import { db } from "@/db";
 import { absences, users } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
+import { grantable, listProfiles } from "@/lib/permissions";
 import { ABSENCE_LABELS, label, ROLES } from "@/lib/catalog";
 import { fmtDate, todayLocal } from "@/lib/dates";
 import { getDict } from "@/lib/i18n-server";
 import { addAbsenceAction, createUserAction, deleteAbsenceAction, editUserAction } from "../actions";
 
 export default async function UsersPage() {
-  const me = await requireUser(["admin"]);
+  const me = await requireUser("g.people");
   const { t, lang } = await getDict();
   const today = todayLocal();
-  const [list, abs] = await Promise.all([
+  const [list, abs, profiles] = await Promise.all([
     db.select().from(users).orderBy(asc(users.name)),
     db.select().from(absences).where(gte(absences.toDate, today)).orderBy(asc(absences.fromDate)),
+    listProfiles(),
   ]);
   const absBy = new Map<number, typeof abs>();
   for (const a of abs) absBy.set(a.userId, [...(absBy.get(a.userId) ?? []), a]);
-  const roleOptions = Object.entries(ROLES).map(([k, v]) => <option key={k} value={k}>{v[lang]}</option>);
+  // The profiles this person may give; people with a profile beyond that can't be edited by them.
+  const mine = grantable(me, profiles);
+  const canGive = new Set(mine.map((p) => p.id));
+  const profileName = new Map(profiles.map((p) => [p.id, p.name]));
+  const profileOptions = mine.map((p) => <option key={p.id} value={p.id}>{p.name}</option>);
+  const firstChoice = mine.find((p) => p.key === "agent")?.id ?? mine.find((p) => p.key !== "admin")?.id;
   return (
     <div className="space-y-6">
-      <AdminTabs t={t} />
+      <AdminTabs t={t} me={me} />
       <div className="page-title">
         <h2>{t.adminTabPeople}</h2>
         <Overlay trigger={<><Plus className="h-4 w-4" />{t.newUser}</>} title={t.newUser} width="max-w-lg">
@@ -41,8 +48,8 @@ export default async function UsersPage() {
                 <input name="name" className="input" required placeholder="Ana Pérez" />
               </div>
               <div>
-                <label className="label">{t.role}</label>
-                <select name="role" className="input" defaultValue="agent">{roleOptions}</select>
+                <label className="label">{t.profile}</label>
+                <select name="profileId" className="input" defaultValue={firstChoice} required>{profileOptions}</select>
               </div>
               <div>
                 <label className="label">{t.passwordOptional}</label>
@@ -58,7 +65,7 @@ export default async function UsersPage() {
       <div className="card overflow-hidden p-0">
         <table className="table">
           <thead>
-            <tr><th>{t.name}</th><th>{t.role}</th><th>{t.status}</th><th className="text-right">{t.actions}</th></tr>
+            <tr><th>{t.name}</th><th>{t.profile}</th><th>{t.status}</th><th className="text-right">{t.actions}</th></tr>
           </thead>
           <tbody>
             {list.map((u) => (
@@ -72,7 +79,7 @@ export default async function UsersPage() {
                     </div>
                   </div>
                 </td>
-                <td className="text-slate-700">{ROLES[u.role]?.[lang] ?? u.role}</td>
+                <td className="text-slate-700">{u.profileId ? profileName.get(u.profileId) : ROLES[u.role]?.[lang] ?? u.role}</td>
                 <td>
                   <StatusBadge status={u.active ? "active" : "closed"} label={u.active ? t.active : t.inactive} />
                   {absBy.get(u.id)?.slice(0, 1).map((a) => (
@@ -119,7 +126,7 @@ export default async function UsersPage() {
                       </ActionForm>
                     </div>
                   </Overlay>
-                  <Overlay key={`${u.username}|${u.name}|${u.role}|${u.active}`} trigger={<><Pencil className="h-3.5 w-3.5" />{t.edit}</>} triggerClassName="btn-secondary btn-sm" title={`${t.editUserTitle}: ${u.name}`} width="max-w-lg">
+                  {(u.id === me.id || (u.profileId === null ? me.isAdmin : canGive.has(u.profileId))) && <Overlay key={`${u.username}|${u.name}|${u.profileId}|${u.active}`} trigger={<><Pencil className="h-3.5 w-3.5" />{t.edit}</>} triggerClassName="btn-secondary btn-sm" title={`${t.editUserTitle}: ${u.name}`} width="max-w-lg">
                     <ActionForm action={editUserAction} className="space-y-4 text-left">
                       <input type="hidden" name="id" value={u.id} />
                       <div className="grid gap-4 sm:grid-cols-2">
@@ -132,9 +139,15 @@ export default async function UsersPage() {
                           <input name="name" className="input" defaultValue={u.name} required />
                         </div>
                         <div>
-                          <label className="label">{t.role}</label>
-                          <select name="role" className="input" defaultValue={u.role} disabled={u.id === me.id}>{roleOptions}</select>
-                          {u.id === me.id && <input type="hidden" name="role" value={u.role} />}
+                          <label className="label">{t.profile}</label>
+                          {u.id === me.id ? (
+                            <>
+                              <select className="input" defaultValue={u.profileId ?? ""} disabled><option value={u.profileId ?? ""}>{u.profileId ? profileName.get(u.profileId) : "—"}</option></select>
+                              <input type="hidden" name="profileId" value={u.profileId ?? 0} />
+                            </>
+                          ) : (
+                            <select name="profileId" className="input" defaultValue={u.profileId ?? firstChoice}>{profileOptions}</select>
+                          )}
                         </div>
                         <div>
                           <label className="label">{t.status}</label>
@@ -152,7 +165,7 @@ export default async function UsersPage() {
                       </div>
                       <div className="flex justify-end"><SubmitButton>{t.save}</SubmitButton></div>
                     </ActionForm>
-                  </Overlay>
+                  </Overlay>}
                 </td>
               </tr>
             ))}

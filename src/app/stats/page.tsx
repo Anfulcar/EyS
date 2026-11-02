@@ -18,7 +18,7 @@ import { saveReportTemplateAction } from "../actions";
 
 export default async function GlobalStatsPage({ searchParams }: { searchParams: Promise<{ include?: string }> }) {
   const [, { t, lang }, sp, list, templates, , chooseable] = await Promise.all([
-    requireUser(["admin", "supervisor"]),
+    requireUser("c.stats"),
     getDict(),
     searchParams,
     // Email campaigns have no calls: they don't count in the call statistics.

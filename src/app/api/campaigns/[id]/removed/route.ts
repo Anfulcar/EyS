@@ -1,13 +1,13 @@
 import ExcelJS from "exceljs";
 import { logActivity } from "@/lib/audit";
-import { MANAGERS, notFoundResponse, routeUser } from "@/lib/auth";
+import { notFoundResponse, routeUser } from "@/lib/auth";
 import { COMPANY_STATUSES, label } from "@/lib/catalog";
 import { removedList } from "@/lib/remove";
 import { styleHeader, workbookResponse } from "@/lib/sheets";
 
 // «Eliminadas»: the RUTs removed from a campaign, with the reason (supervisors and administrators).
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
-  const user = await routeUser(MANAGERS);
+  const user = await routeUser("c.excel");
   if (!user) return notFoundResponse();
   const id = Number((await params).id);
   const rows = await removedList(id, 50000);

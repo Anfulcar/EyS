@@ -16,6 +16,7 @@ import { Empty } from "@/components/ui";
 import { db } from "@/db";
 import { campaigns, reportTemplates, users } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
+import { can, withActions } from "@/lib/permissions";
 import { agentSummary } from "@/lib/agent-summary";
 import { CALL_CODES, codeLabel, codeTone, ROLES, label } from "@/lib/catalog";
 import { toIsoDate } from "@/lib/dates";
@@ -28,16 +29,17 @@ import { absentOn } from "@/lib/team";
 
 const PAGE = 100;
 
-// «Resumen del agente»: supervisors and administrators open anyone's; agents only their own (others: not found).
+// «Resumen del agente»: with «Revisar las llamadas de todos» anyone's; otherwise only one's own (others: not found).
 export default async function AgentSummaryPage({ params, searchParams }: {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ campaign?: string; from?: string; to?: string; code?: string; review?: string; page?: string }>;
 }) {
-  const me = await requireUser(["admin", "supervisor", "agent"]);
+  const me = await requireUser(["c.own", "c.review"]);
   const id = Number((await params).id);
-  if (!Number.isInteger(id) || (me.role === "agent" && id !== me.id)) notFound();
-  const person = await db.query.users.findFirst({ where: eq(users.id, id) });
-  if (!person) notFound();
+  if (!Number.isInteger(id) || (!can(me, "c.review") && id !== me.id)) notFound();
+  const row = await db.query.users.findFirst({ where: eq(users.id, id) });
+  if (!row) notFound();
+  const [person] = await withActions([row]);
   const sp = await searchParams;
   const { t, lang } = await getDict();
   const campaignId = Number(sp.campaign) || undefined;
@@ -55,8 +57,8 @@ export default async function AgentSummaryPage({ params, searchParams }: {
   const qs = (o: Record<string, string | undefined>) => "?" + new URLSearchParams(Object.entries({ ...clean, ...o }).filter(([, v]) => v) as [string, string][]).toString();
   const pct = (n: number, d: number) => (d ? `${Math.round((n / d) * 100)} %` : "—");
   const off = absent.get(id);
-  // «Generar informe» (supervisors and administrators): the report panel with this agent, campaign and period chosen.
-  const manager = me.role !== "agent";
+  // «Generar informe» («Informes» in the profile): the report panel with this agent, campaign and period chosen.
+  const manager = can(me, "c.reports");
   const [allCampaigns, templates, chooseable] = manager
     ? await Promise.all([
         db.select({ id: campaigns.id, name: campaigns.name, status: campaigns.status }).from(campaigns).orderBy(desc(campaigns.startDate)),
@@ -87,7 +89,7 @@ export default async function AgentSummaryPage({ params, searchParams }: {
           <div>
             <h1>{person.name}</h1>
             <p className="subtitle">
-              {label(ROLES, person.role, lang)} · {off ? t.absentTag : t.agentAvailable} · {campaign ? `${t.campaign}: ${campaign.name}` : t.allCampaigns}
+              {person.profileName || label(ROLES, person.role, lang)} · {off ? t.absentTag : t.agentAvailable} · {campaign ? `${t.campaign}: ${campaign.name}` : t.allCampaigns}
               {campaign && <> · <Link href={qs({ campaign: undefined, page: undefined })} className="text-brand-700 hover:underline">{t.seeAllCampaigns}</Link></>}
             </p>
           </div>

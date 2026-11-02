@@ -9,16 +9,14 @@ import { buildReport, type ReportAgent } from "./report-data";
 import { cleanOptions, nextRun, type Frequency, type ReportOptions } from "./report-options";
 import { renderPdf } from "./report-pdf";
 import { renderPptx } from "./report-pptx";
+import { idsWho, withActions } from "./permissions";
 
 export const MIME = { pdf: "application/pdf", pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation" } as const;
 
 // People who can be chosen in «Agentes» (active people who work tasks).
 export async function reportPeople() {
-  return db
-    .select({ id: users.id, name: users.name })
-    .from(users)
-    .where(and(eq(users.active, true), inArray(users.role, ["agent", "supervisor", "admin"])))
-    .orderBy(users.name);
+  const ids = await idsWho("c.call");
+  return db.select({ id: users.id, name: users.name }).from(users).where(and(eq(users.active, true), inArray(users.id, ids))).orderBy(users.name);
 }
 
 export const slugOf = (v: string) => v.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 80) || "Informe";
@@ -34,7 +32,8 @@ async function generateOne(o: ReportOptions, who: { name: string; scheduled?: bo
 // The whole team in one report, or one report per chosen agent («Elegir agentes»).
 export async function generateReports(o: ReportOptions, who: { name: string; scheduled?: boolean }, lang: Lang = "es"): Promise<GeneratedFile[]> {
   if (!o.agents.length) return [await generateOne(o, who, lang)];
-  const people = await db.select({ id: users.id, name: users.name, role: users.role }).from(users).where(inArray(users.id, o.agents));
+  // The person's profile name is shown under their name in the report.
+  const people = (await withActions(await db.select().from(users).where(inArray(users.id, o.agents)))).map((p) => ({ id: p.id, name: p.name, role: p.profileName || p.role }));
   const byId = new Map(people.map((p) => [p.id, p]));
   const out: GeneratedFile[] = [];
   for (const id of o.agents) {

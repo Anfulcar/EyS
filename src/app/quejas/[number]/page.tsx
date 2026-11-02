@@ -8,8 +8,9 @@ import { db } from "@/db";
 import { users } from "@/db/schema";
 import { fmtDate, fmtDateTime, todayLocal } from "@/lib/dates";
 import { getDict } from "@/lib/i18n-server";
-import { atLeast, businessDaysBetween, caseDetail, caseFor, canWork, deadlineOf, handlers, openCallTasksOfRut, otherCasesOfRut, qrSettings } from "@/lib/qr";
-import { requireQr } from "@/lib/qr-auth";
+import { businessDaysBetween, caseDetail, caseFor, canGetFiles, canSeePersonal, canWork, deadlineOf, handlers, openCallTasksOfRut, otherCasesOfRut, qrSettings, shown } from "@/lib/qr";
+import { can, canAny } from "@/lib/permissions";
+import { requireUser } from "@/lib/auth";
 import { QR_CHANNEL_TEXT, QR_CHANNEL_TONE, QR_STATUS_TEXT, QR_STATUS_TONE, QR_TEXT, QR_TYPE_TEXT } from "@/lib/qr-i18n";
 import {
   addStepAction, answerReferralAction, approveCloseAction, assignAction, generateReportAction, markFileReplacedAction, proposeCloseAction, referAction, reopenAction, returnCloseAction, setStatusAction,
@@ -19,10 +20,14 @@ const FLOW = ["recibida", "analisis", "referida", "porcerrar", "cerrada"];
 const TABS = ["resumen", "pasos", "referencias", "pruebas", "solucion", "informes"] as const;
 
 export default async function CasePage({ params, searchParams }: { params: Promise<{ number: string }>; searchParams: Promise<{ tab?: string }> }) {
-  const u = await requireQr("register");
+  const u = await requireUser("q.register");
   const number = decodeURIComponent((await params).number);
-  const c = await caseFor(u, number);
-  if (!c) notFound();
+  const found = await caseFor(u, number);
+  if (!found) notFound();
+  // Without «Ver datos personales» the presenter's data shows as ••••.
+  const c = shown(u, found);
+  const personal = canSeePersonal(u, c);
+  const files = canGetFiles(u, c);
   const tab = (TABS as readonly string[]).includes((await searchParams).tab ?? "") ? (await searchParams).tab! : "resumen";
   const { lang } = await getDict();
   const t = QR_TEXT[lang];
@@ -31,8 +36,12 @@ export default async function CasePage({ params, searchParams }: { params: Promi
   ]);
   const nameOf = (id: number | null) => all.find((p) => p.id === id)?.name ?? "—";
   const work = canWork(u, c);
-  const sup = atLeast(u, "supervise");
-  const manager = atLeast(u, "manage");
+  const approver = can(u, "q.approve");
+  const assigner = can(u, "q.assign");
+  const reopener = can(u, "q.reopen");
+  const seesAll = can(u, "q.seeAll");
+  // The report carries the presenter's personal data.
+  const reporter = canAny(u, ["q.seeAll", "q.workMine"]) && personal;
   const dl = deadlineOf(c, s.warnDays);
   const firstLeft = businessDaysBetween(todayLocal(), c.firstDue);
   const cur = c.status === "espera" ? "analisis" : c.status;
@@ -65,7 +74,7 @@ export default async function CasePage({ params, searchParams }: { params: Promi
             <AutoSelect key={c.status} action={setStatusAction} number={c.number} name="status" value={c.status} label={t.changeStatus} className="w-56"
               options={["recibida", "analisis", "referida", "espera"].map((k) => ({ value: k, label: QR_STATUS_TEXT[lang][k] }))} />
           )}
-          {manager && (
+          {reporter && (
             <ActionForm action={generateReportAction}>{hidden}<SubmitButton className="btn-secondary"><FileText className="h-4 w-4" />{t.genReport}</SubmitButton></ActionForm>
           )}
         </div>
@@ -77,7 +86,7 @@ export default async function CasePage({ params, searchParams }: { params: Promi
         ))}
         {c.status === "espera" && <li className="rounded-full bg-amber-500 px-3 py-1 text-xs font-semibold text-white">{QR_STATUS_TEXT[lang].espera}</li>}
       </ol>
-      {!work && c.status !== "cerrada" && <p className="rounded-xl bg-amber-50 px-4 py-2 text-sm text-amber-800">{manager ? t.readOnlyOther : t.readOnlyOwn}</p>}
+      {!work && c.status !== "cerrada" && <p className="rounded-xl bg-amber-50 px-4 py-2 text-sm text-amber-800">{seesAll ? t.readOnlyOther : t.readOnlyOwn}</p>}
 
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <div className="card min-w-0 p-0">
@@ -113,7 +122,7 @@ export default async function CasePage({ params, searchParams }: { params: Promi
                   <section className="min-w-0 space-y-2">
                     <h3>{t.presenter}</h3>
                     {c.complainantAnonymous ? <p className="text-sm text-slate-600">{t.anonymous}</p> : kv([[t.cName, c.complainantName], [t.cDoc, c.complainantDoc], [t.cNationality, c.complainantNationality], [t.pPhone, c.complainantPhone], [t.pEmail, c.complainantEmail]])}
-                    <p className="text-xs text-slate-500">{t.personalNote}</p>
+                    <p className="text-xs text-slate-500">{personal ? t.personalNote : t.personalHidden}</p>
                   </section>
                 </div>
               </>
@@ -194,16 +203,20 @@ export default async function CasePage({ params, searchParams }: { params: Promi
                   <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" data-testid="qr-files">
                     {d.files.map((f) => (
                       <li key={f.id} className={`overflow-hidden rounded-xl border border-slate-200 ${f.replacedAt ? "opacity-60" : ""}`}>
-                        <a href={`/api/quejas/files/${f.id}`} target="_blank" rel="noreferrer" className="block">
-                          {f.mime.startsWith("image/") ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={`/api/quejas/files/${f.id}`} alt={f.name} className="aspect-[4/3] w-full bg-slate-100 object-cover" />
-                          ) : (
-                            <div className="grid aspect-[4/3] place-items-center bg-slate-50 text-slate-400"><Paperclip className="h-8 w-8" /></div>
-                          )}
-                        </a>
+                        {files ? (
+                          <a href={`/api/quejas/files/${f.id}`} target="_blank" rel="noreferrer" className="block">
+                            {f.mime.startsWith("image/") ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={`/api/quejas/files/${f.id}`} alt={f.name} className="aspect-[4/3] w-full bg-slate-100 object-cover" />
+                            ) : (
+                              <div className="grid aspect-[4/3] place-items-center bg-slate-50 text-slate-400"><Paperclip className="h-8 w-8" /></div>
+                            )}
+                          </a>
+                        ) : (
+                          <div className="grid aspect-[4/3] place-items-center bg-slate-50 px-3 text-center text-xs text-slate-400"><Paperclip className="h-8 w-8" />{t.noPermission}</div>
+                        )}
                         <div className="space-y-1 p-3 text-xs">
-                          <a href={`/api/quejas/files/${f.id}`} target="_blank" rel="noreferrer" className="block truncate font-semibold text-slate-900 hover:text-brand-700" title={f.name}>{f.name}</a>
+                          {files ? <a href={`/api/quejas/files/${f.id}`} target="_blank" rel="noreferrer" className="block truncate font-semibold text-slate-900 hover:text-brand-700" title={f.name}>{f.name}</a> : <span className="block truncate font-semibold text-slate-900" title={f.name}>{f.name}</span>}
                           <div className="text-slate-500">{Math.max(1, Math.round(f.size / 1024))} KB · {f.uploadedByName ?? "—"} · {fmtDate(f.at, lang)}{f.replacedAt ? ` · ${t.replaced}` : ""}</div>
                           {work && !f.replacedAt && (
                             <ActionForm action={markFileReplacedAction}>{hidden}<input type="hidden" name="fileId" value={f.id} /><SubmitButton className="text-xs font-semibold text-slate-500 hover:text-slate-800">{t.markReplaced}</SubmitButton></ActionForm>
@@ -223,7 +236,7 @@ export default async function CasePage({ params, searchParams }: { params: Promi
                   <>
                     <div><div className="label">{t.solution}</div><p className="whitespace-pre-line rounded-xl bg-slate-50 p-3 text-sm">{c.solution}</p></div>
                     <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-900">{t.closedInfo.replace("{d}", fmtDateTime(c.closedAt, lang)).replace("{p}", nameOf(c.closeProposedBy)).replace("{a}", nameOf(c.closedBy))}</p>
-                    {sup && (
+                    {reopener && (
                       <ActionForm action={reopenAction} className="flex flex-wrap gap-2">
                         {hidden}
                         <input name="reason" className="input min-w-0 flex-1" placeholder={t.reopenWhy} aria-label={t.reopenWhy} required />
@@ -235,7 +248,7 @@ export default async function CasePage({ params, searchParams }: { params: Promi
                   <>
                     <div><div className="label">{t.solution}</div><p className="whitespace-pre-line rounded-xl bg-slate-50 p-3 text-sm">{c.solution}</p></div>
                     <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900">{t.pendingApproval.replace("{p}", nameOf(c.closeProposedBy)).replace("{d}", fmtDateTime(c.closeProposedAt, lang))}{c.closeNote ? ` «${c.closeNote}»` : ""}</p>
-                    {sup && c.closeProposedBy !== u.id && (
+                    {approver && c.closeProposedBy !== u.id && (
                       <div className="flex flex-wrap gap-2">
                         <ActionForm action={approveCloseAction}>{hidden}<SubmitButton className="btn">{t.approve}</SubmitButton></ActionForm>
                         <ActionForm action={returnCloseAction} className="flex min-w-0 flex-1 flex-wrap gap-2">
@@ -245,7 +258,7 @@ export default async function CasePage({ params, searchParams }: { params: Promi
                         </ActionForm>
                       </div>
                     )}
-                    {sup && c.closeProposedBy === u.id && <p className="text-sm text-slate-500">{t.ownProposal}</p>}
+                    {approver && c.closeProposedBy === u.id && <p className="text-sm text-slate-500">{t.ownProposal}</p>}
                   </>
                 ) : work ? (
                   <ActionForm action={proposeCloseAction} className="space-y-3">
@@ -266,7 +279,7 @@ export default async function CasePage({ params, searchParams }: { params: Promi
             {tab === "informes" && (
               <>
                 <p className="text-sm text-slate-600">{t.reportsHelp}</p>
-                {manager && <ActionForm action={generateReportAction}>{hidden}<SubmitButton className="btn-secondary">{t.genReportNow}</SubmitButton></ActionForm>}
+                {reporter && <ActionForm action={generateReportAction}>{hidden}<SubmitButton className="btn-secondary">{t.genReportNow}</SubmitButton></ActionForm>}
                 {d.reports.length === 0 ? <p className="text-sm text-slate-500">{t.noReports}</p> : (
                   <table className="table" data-testid="qr-reports">
                     <thead><tr><th>{t.version}</th><th>{t.received}</th><th>{t.origin}</th><th /></tr></thead>
@@ -276,7 +289,7 @@ export default async function CasePage({ params, searchParams }: { params: Promi
                           <td>v{r.version}</td>
                           <td className="whitespace-nowrap text-sm">{fmtDateTime(r.createdAt, lang)}</td>
                           <td className="text-sm">{r.origin === "auto" ? t.auto : `${t.onRequest} · ${r.byName ?? ""}`}</td>
-                          <td className="text-right"><a href={`/api/quejas/reports/${r.id}`} target="_blank" rel="noreferrer" className="btn-secondary btn-sm">{t.download}</a></td>
+                          <td className="text-right">{personal ? <a href={`/api/quejas/reports/${r.id}`} target="_blank" rel="noreferrer" className="btn-secondary btn-sm">{t.download}</a> : <span className="text-xs text-slate-400">{t.noPermission}</span>}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -296,7 +309,7 @@ export default async function CasePage({ params, searchParams }: { params: Promi
           </div>
           <div className="card space-y-2 p-4 text-sm">
             <h3>{t.responsible}</h3>
-            {sup && c.status !== "cerrada" ? (
+            {assigner && c.status !== "cerrada" ? (
               <AutoSelect key={c.assignedUserId ?? "none"} action={assignAction} number={c.number} name="userId" value={String(c.assignedUserId ?? "")} label={t.responsible}
                 options={[{ value: "", label: t.none }, ...people.map((p) => ({ value: String(p.id), label: p.name }))]} />
             ) : (

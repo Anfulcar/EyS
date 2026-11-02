@@ -6,12 +6,13 @@ import { RemoveFromFile } from "@/components/RemoveTasks";
 import { db } from "@/db";
 import { campaigns } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
+import { can } from "@/lib/permissions";
 import { getDict } from "@/lib/i18n-server";
 import { previewRemovalFileAction, removeTasksAction, uploadStatusAction } from "../../../actions";
 
 export default async function StatusPage({ params }: { params: Promise<{ id: string }> }) {
   const id = Number((await params).id);
-  const me = await requireUser(["admin", "supervisor"]);
+  const me = await requireUser("c.upload");
   const { t, lang } = await getDict();
   const campaign = await db.query.campaigns.findFirst({ where: eq(campaigns.id, id) });
   return (
@@ -31,7 +32,7 @@ export default async function StatusPage({ params }: { params: Promise<{ id: str
       </ActionForm>
 
       {/* Removing RUTs from this campaign with a file (administrators only; checked on the server too). */}
-      {me.role === "admin" && campaign?.status !== "closed" && (
+      {can(me, "c.remove") && campaign?.status !== "closed" && (
         <div className="card space-y-3 border-rose-200" data-testid="remove-from-file">
           <h2 className="flex items-center gap-2 text-rose-800"><Trash2 className="h-5 w-5" />{t.removeFileTitle}</h2>
           <p className="text-sm text-slate-600">{t.removeFileHelp}</p>

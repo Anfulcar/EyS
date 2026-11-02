@@ -10,7 +10,7 @@ import { pendingVisits } from "@/lib/visits";
 import { logVisitAction } from "../actions";
 
 export default async function VisitsPage({ searchParams }: { searchParams: Promise<{ campaign?: string; zone?: string; all?: string }> }) {
-  await requireUser(["admin", "supervisor", "inspector"]);
+  await requireUser("c.visits");
   const sp = await searchParams;
   const { t, lang } = await getDict();
   const { rows, active, zones } = await pendingVisits({ campaign: sp.campaign, zone: sp.zone, showAll: sp.all === "1" });

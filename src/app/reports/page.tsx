@@ -8,6 +8,7 @@ import { Empty, SectionTitle } from "@/components/ui";
 import { db } from "@/db";
 import { campaigns, generatedReports, reportTemplates, users } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
+import { can } from "@/lib/permissions";
 import { fmtDate, fmtDateTime, nowIso, todayLocal } from "@/lib/dates";
 import { getDict } from "@/lib/i18n-server";
 import { cleanOptions, scheduleLabel, type Frequency } from "@/lib/report-options";
@@ -15,7 +16,7 @@ import { reportPeople, runDueReports } from "@/lib/report-run";
 import { deleteGeneratedReportAction, deleteReportTemplateAction, generateReportNowAction, pauseReportTemplateAction, saveReportTemplateAction } from "../actions";
 
 export default async function ReportsPage() {
-  const me = await requireUser(["admin", "supervisor"]);
+  const me = await requireUser("c.reports");
   const { t, lang } = await getDict();
   await runDueReports().catch((e) => console.error("[reports]", e));
   const [files, templates, people, campaignList, chooseable] = await Promise.all([
@@ -78,7 +79,7 @@ export default async function ReportsPage() {
                     <td>
                       <div className="flex justify-end gap-2">
                         <a href={`/api/reports/${f.id}`} className="btn-secondary btn-sm" download><Download className="h-3.5 w-3.5" />{f.format === "pptx" ? "PowerPoint" : "PDF"}</a>
-                        {me.role === "admin" && (
+                        {can(me, "c.edit") && (
                           <ActionForm action={deleteGeneratedReportAction}>
                             <input type="hidden" name="reportId" value={f.id} />
                             <ConfirmButton message={t.reportsDeleteFileConfirm} danger className="btn-secondary btn-sm"><Trash2 className="h-3.5 w-3.5" />{t.delete}</ConfirmButton>

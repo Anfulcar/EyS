@@ -17,7 +17,7 @@ import { activityRows, errorRows, type LogFilters } from "@/lib/logs";
 const PAGE = 100;
 
 export default async function LogsPage({ searchParams }: { searchParams: Promise<LogFilters & { tab?: string; page?: string }> }) {
-  await requireUser(["admin"]);
+  const me = await requireUser("g.log");
   const sp = await searchParams;
   const { t, lang } = await getDict();
   const tab = sp.tab === "errors" ? "errors" : "activity";
@@ -43,7 +43,7 @@ export default async function LogsPage({ searchParams }: { searchParams: Promise
 
   return (
     <div className="space-y-6">
-      <AdminTabs t={t} />
+      <AdminTabs t={t} me={me} />
       <div className="page-title">
         <div>
           <h2>{t.logsTitle}</h2>

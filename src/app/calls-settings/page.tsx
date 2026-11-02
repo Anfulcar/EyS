@@ -5,7 +5,8 @@ import { SigturStatusBadge, SigturSwitch } from "@/components/SigturPermanentCar
 import { SectionTitle } from "@/components/ui";
 import { db } from "@/db";
 import { users } from "@/db/schema";
-import { MANAGERS, requireUser } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
+import { idsWho } from "@/lib/permissions";
 import { fmtDateTime } from "@/lib/dates";
 import { getDict } from "@/lib/i18n-server";
 import { campaignDefaults } from "@/lib/settings";
@@ -14,12 +15,12 @@ import { saveAutoAssigneesAction, saveCampaignDefaultsAction, simulateCallReques
 
 // «Configuración · Campañas de llamadas»: what is set for the whole calls module (administrators and supervisors).
 export default async function CallsSettingsPage() {
-  await requireUser(MANAGERS);
+  await requireUser("c.settings");
   const { t, lang } = await getDict();
   const [d, campaign, staff] = await Promise.all([
     campaignDefaults(),
     requestsCampaign(),
-    db.select({ id: users.id, name: users.name, role: users.role }).from(users).where(and(eq(users.active, true), inArray(users.role, ["agent", "supervisor", "admin"]))).orderBy(asc(users.name)),
+    idsWho("c.call").then((ids) => db.select({ id: users.id, name: users.name }).from(users).where(and(eq(users.active, true), inArray(users.id, ids))).orderBy(asc(users.name))),
   ]);
   const chosen = new Set<number>(campaign.autoAssignees ? JSON.parse(campaign.autoAssignees) : []);
 

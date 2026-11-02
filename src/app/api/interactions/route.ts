@@ -1,12 +1,12 @@
 import ExcelJS from "exceljs";
 import { logActivity } from "@/lib/audit";
-import { MANAGERS, notFoundResponse, routeUser } from "@/lib/auth";
+import { notFoundResponse, routeUser } from "@/lib/auth";
 import { buildInteractions } from "@/lib/sigtur";
 import { styleHeader, workbookResponse } from "@/lib/sheets";
 
 // Excel with the SIGTUR interactions of a date range («Informes» → «Descargar interacciones»).
 export async function GET(req: Request) {
-  const user = await routeUser(MANAGERS);
+  const user = await routeUser("c.excel");
   if (!user) return notFoundResponse();
   const sp = new URL(req.url).searchParams;
   const date = (v: string | null) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined);

@@ -5,6 +5,7 @@ import { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import bcrypt from "bcryptjs";
 import fs from "node:fs";
+import { ensureProfiles } from "../src/lib/permissions-core.mjs";
 
 if (fs.existsSync(".env.local")) process.loadEnvFile?.(".env.local");
 else if (fs.existsSync(".env")) process.loadEnvFile?.(".env");
@@ -40,4 +41,7 @@ if (Number(rows[0].n) === 0) {
     console.log(`[migrate] created admin user "${username}"`);
   }
 }
+// «Perfiles de permisos»: day-one profiles and a profile for anyone who doesn't have one yet.
+const p = await ensureProfiles(client);
+if (p.created || p.assigned) console.log(`[migrate] permission profiles: ${p.created} created, ${p.assigned} people assigned`);
 client.close();

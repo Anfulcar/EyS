@@ -1,4 +1,5 @@
 import "server-only";
+import { can, type Who } from "./permissions";
 import { and, count, eq, inArray, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { callAttempts, callResults, campaigns, companies, establishments, phones, statusChanges, visits, type User } from "@/db/schema";
@@ -51,9 +52,9 @@ export async function canWorkCompany(user: User, companyId: number) {
   return c && mayWork(user, c) ? c : null;
 }
 
-// Administrators and supervisors work any task; agents only the ones assigned to them.
-export function mayWork(user: User, c: { assignedUserId: number | null }) {
-  return user.role === "admin" || user.role === "supervisor" || (user.role === "agent" && c.assignedUserId === user.id);
+// People who make calls work the tasks assigned to them; with «Asignar y mover tareas» they work any task.
+export function mayWork(user: Who & { id: number }, c: { assignedUserId: number | null }) {
+  return can(user, "c.call") && (can(user, "c.assign") || c.assignedUserId === user.id);
 }
 
 // What a call changed, for the log and for SIGTUR (only changes a person decided).

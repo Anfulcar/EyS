@@ -3,13 +3,13 @@ import { ActionForm, SubmitButton } from "@/components/ActionForm";
 import { ListEditor } from "@/components/qr/ListEditor";
 import { getDict } from "@/lib/i18n-server";
 import { qrSettings, QR_TYPES } from "@/lib/qr";
-import { requireQr } from "@/lib/qr-auth";
+import { requireUser } from "@/lib/auth";
 import { QR_TEXT, QR_TYPE_TEXT } from "@/lib/qr-i18n";
 import { saveQrListsAction, saveQrPublicFormAction, saveQrSlaAction } from "../actions";
 
 // «Configuración del módulo»: administrators and module supervisors, laid out as in the preview.
 export default async function QrSettingsPage() {
-  await requireQr("supervise");
+  await requireUser("q.settings");
   const { lang } = await getDict();
   const t = QR_TEXT[lang];
   const s = await qrSettings();

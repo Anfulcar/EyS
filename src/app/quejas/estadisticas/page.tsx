@@ -4,7 +4,7 @@ import { fmtDate } from "@/lib/dates";
 import { getDict } from "@/lib/i18n-server";
 import { many } from "@/lib/multi";
 import { qrStats, QR_TYPES } from "@/lib/qr";
-import { requireQr } from "@/lib/qr-auth";
+import { requireUser } from "@/lib/auth";
 import { QR_CHANNEL_TEXT, QR_TEXT, QR_TYPE_TEXT } from "@/lib/qr-i18n";
 
 const PERIODS = [30, 90, 180, 365];
@@ -31,7 +31,7 @@ function Bars({ rows }: { rows: { label: string; n: number; href?: string }[] })
 
 // Statistics of «Quejas y reclamaciones» (handlers and supervisors).
 export default async function QrStatsPage({ searchParams }: { searchParams: Promise<{ days?: string; type?: string }> }) {
-  await requireQr("manage");
+  await requireUser("q.stats");
   const sp = await searchParams;
   const { t: common, lang } = await getDict();
   const t = QR_TEXT[lang];

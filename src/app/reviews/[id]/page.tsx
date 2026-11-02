@@ -13,7 +13,7 @@ import { historyDay, historyFor } from "@/lib/history";
 import { reviewCallAction } from "../../actions";
 
 export default async function CallSummaryPage({ params }: { params: Promise<{ id: string }> }) {
-  const me = await requireUser(["admin", "supervisor", "agent"]);
+  const me = await requireUser(["c.own", "c.review"]);
   const id = Number((await params).id);
   // Agents can only open their own calls; anything else answers "not found".
   const c = Number.isInteger(id) ? await callDetail(me, id) : null;

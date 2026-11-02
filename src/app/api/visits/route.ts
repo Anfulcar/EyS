@@ -6,7 +6,7 @@ import { styleHeader, workbookResponse } from "@/lib/sheets";
 import { pendingVisits } from "@/lib/visits";
 
 export async function GET(req: Request) {
-  const user = await routeUser(["admin", "supervisor", "inspector"]);
+  const user = await routeUser("c.visits");
   if (!user) return notFoundResponse();
   await logActivity(user, "export.downloaded", { entity: "visits", summary: "Ruta de visitas (Excel)" });
   const sp = new URL(req.url).searchParams;

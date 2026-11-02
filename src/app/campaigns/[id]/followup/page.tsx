@@ -14,6 +14,7 @@ import { getDict } from "@/lib/i18n-server";
 import { dueCondition } from "@/lib/queue";
 import { currentAndUpcomingAbsences, workload } from "@/lib/team";
 import { coverTasksAction, moveTasksAction } from "../../../actions";
+import { idsWho, withActions } from "@/lib/permissions";
 
 const IDLE_DAYS = 3;
 
@@ -40,7 +41,7 @@ export default async function FollowupPage({ params }: { params: Promise<{ id: s
       .from(companies)
       .where(eq(companies.campaignId, id))
       .groupBy(companies.assignedUserId),
-    db.select().from(users).where(and(eq(users.active, true), inArray(users.role, ["agent", "supervisor", "admin"]))).orderBy(asc(users.name)),
+    idsWho("c.call").then(async (ids) => withActions(await db.select().from(users).where(and(eq(users.active, true), inArray(users.id, ids))).orderBy(asc(users.name)))),
     currentAndUpcomingAbsences(14),
   ]);
   const [load, pending, coveredRows] = await Promise.all([
@@ -62,9 +63,9 @@ export default async function FollowupPage({ params }: { params: Promise<{ id: s
   const nextAbsence = new Map<number, (typeof absences)[number]>();
   for (const a of absences) if (!nextAbsence.has(a.userId)) nextAbsence.set(a.userId, a);
   const pendingBy = new Map(pending.map((p) => [p.userId, Number(p.n)]));
-  const people = staff.map((s) => ({ id: s.id, name: s.name, load: load.get(s.id) ?? 0, absent: absentNow.has(s.id), agent: s.role === "agent" }));
-  // People shown: agents, plus anyone with tasks in this campaign.
-  const rows = staff.filter((s) => s.role === "agent" || byUser.has(s.id));
+  const people = staff.map((s) => ({ id: s.id, name: s.name, load: load.get(s.id) ?? 0, absent: absentNow.has(s.id), agent: !s.actions.includes("c.assign") }));
+  // People shown: those who only make calls, plus anyone with tasks in this campaign.
+  const rows = staff.filter((s) => !s.actions.includes("c.assign") || byUser.has(s.id));
   const unassigned = byUser.get(null);
   const list = (o: Record<string, string | number>) => `/campaigns/${id}/companies?` + new URLSearchParams(Object.entries(o).map(([k, v]) => [k, String(v)])).toString();
   // Absences with open tasks to cover, or already covered (kept on screen so the result can be seen).

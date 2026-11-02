@@ -22,6 +22,7 @@ import { requestDeadline } from "@/lib/sigtur";
 import { removedCount, removedList } from "@/lib/remove";
 import { TASK_FILTER_KEYS, taskWhere } from "@/lib/task-filters";
 import { requireUser } from "@/lib/auth";
+import { can, idsWho, withActions } from "@/lib/permissions";
 import { absentOn, workload } from "@/lib/team";
 import { TRANSFERABLE } from "@/lib/transfer";
 import { assignAction, bulkAssignAction, countTransferAction, previewRemovalAction, reassignCompanyAction, removeTasksAction, transferCampaignAction } from "../../../actions";
@@ -33,8 +34,9 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
   const id = Number((await params).id);
   const sp = await searchParams;
   const { t, lang } = await getDict();
-  const me = await requireUser(["admin", "supervisor"]);
-  const agents = await db.select().from(users).where(and(eq(users.active, true), inArray(users.role, ["agent", "supervisor", "admin"]))).orderBy(asc(users.name));
+  const me = await requireUser("c.view");
+  // People who make calls; those who don't direct the campaign («Asignar y mover tareas») start ticked.
+  const agents = await withActions(await db.select().from(users).where(and(eq(users.active, true), inArray(users.id, await idsWho("c.call")))).orderBy(asc(users.name)));
   const [load, absent, byStatus, campaign] = await Promise.all([
     workload(agents.map((a) => a.id)),
     absentOn(),
@@ -154,7 +156,7 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
                   const off = absent.get(a.id);
                   return (
                     <label key={a.id} className="choice">
-                      <input type="checkbox" name="agents" value={a.id} defaultChecked={a.role === "agent" && !off} className="h-4 w-4 accent-brand-600" />
+                      <input type="checkbox" name="agents" value={a.id} defaultChecked={!a.actions.includes("c.assign") && !off} className="h-4 w-4 accent-brand-600" />
                       <span className="min-w-0 flex-1">
                         {a.name}
                         <span className="block text-xs text-slate-500">{t.openLoad.replace("{n}", String(load.get(a.id) ?? 0))}</span>
@@ -197,7 +199,7 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
             {showRemoved ? t.removedBack : t.removedLink.replace("{n}", String(nRemoved))}
           </Link>
         )}
-        {me.role === "admin" && campaign?.status !== "closed" && (
+        {can(me, "c.remove") && campaign?.status !== "closed" && (
           <Overlay variant="drawer" triggerId="remove-trigger" triggerClassName="btn-secondary text-rose-700" trigger={<><Trash2 className="h-4 w-4" />{t.removeButton}</>} title={t.removeTitle.replace("{name}", campaign?.name ?? "")}>
             <RemoveFromList campaignId={id} filters={activeFilters} total={Number(total)} t={t} preview={previewRemovalAction} action={removeTasksAction} />
           </Overlay>
@@ -325,7 +327,7 @@ export default async function TasksPage({ params, searchParams }: { params: Prom
         </div>
       )}
       {!showRemoved && !isEmail && (
-        <BulkBar campaignId={id} agents={agentOptions} action={bulkAssignAction} removeTriggerId={me.role === "admin" && campaign?.status !== "closed" ? "remove-trigger" : undefined} t={t} />
+        <BulkBar campaignId={id} agents={agentOptions} action={bulkAssignAction} removeTriggerId={can(me, "c.remove") && campaign?.status !== "closed" ? "remove-trigger" : undefined} t={t} />
       )}
     </div>
   );

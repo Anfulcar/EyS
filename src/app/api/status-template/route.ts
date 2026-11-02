@@ -1,10 +1,10 @@
 import ExcelJS from "exceljs";
-import { MANAGERS, notFoundResponse, routeUser } from "@/lib/auth";
+import { notFoundResponse, routeUser } from "@/lib/auth";
 import { SIGTUR_STATUSES } from "@/lib/catalog";
 import { addListValidation, styleHeader, workbookResponse } from "@/lib/sheets";
 
 export async function GET() {
-  if (!(await routeUser(MANAGERS))) return notFoundResponse();
+  if (!(await routeUser("c.upload"))) return notFoundResponse();
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("Estatus");
   ws.columns = [
