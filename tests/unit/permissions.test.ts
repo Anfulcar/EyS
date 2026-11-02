@@ -3,13 +3,15 @@ import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { db } from "@/db";
 import { permissionProfiles, users, type User } from "@/db/schema";
-import { hasCalls, homeFor, mayUse } from "@/lib/auth";
+import { hasCalls, homeFor as homeOf, mayUse } from "@/lib/auth";
 import { can, grantable, manualKinds, withActions } from "@/lib/permissions";
 import { ACTION_IDS, ensureProfiles, legacyActions, parseActions, STANDARD_PROFILES, withoutDependents, withRequirements } from "@/lib/permissions-core.mjs";
 import { ACTION_TEXT, menuFor, type MenuLabels } from "@/lib/permissions-text";
 
 const u = (role: string, callsAccess: boolean, qrLevel = "none") => ({ role, callsAccess, qrLevel }) as User;
 const withActs = (actions: string[]) => ({ ...u("agent", true), actions });
+// The first screen of someone whose profile copies their old access.
+const homeFor = (x: User & { actions?: string[] }) => homeOf({ ...x, actions: x.actions ?? legacyActions(x.role, x.callsAccess, x.qrLevel) });
 
 describe("permission profiles: actions", () => {
   it("every action has a name and an explanation in both languages", () => {

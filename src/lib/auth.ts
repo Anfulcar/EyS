@@ -80,7 +80,7 @@ export const hasCalls = (u: Who) => canAny(u, CALL_ACTIONS);
 export const ADMIN_ACTIONS = ["g.people", "g.perms", "g.sigtur", "g.log"] as const;
 
 // First screen after signing in: the most useful one the profile allows.
-export function homeFor(u: Who) {
+export function homeFor(u: Who & { actions: readonly string[] }) {
   if (can(u, "c.view")) return "/campaigns";
   if (can(u, "c.call")) return "/calls";
   if (can(u, "c.visits")) return "/visits";

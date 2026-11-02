@@ -31,7 +31,7 @@ import { countTransfer, transferToNewCampaign, type TransferFilter } from "@/lib
 import { ABSENCE_KINDS, coverTasks, distribute, moveTasks, syncCoverage, workload } from "@/lib/team";
 import { formatPhone, normalizePhone, readTable, str } from "@/lib/sheets";
 import { applyStatusUpdates, canWorkCompany, logCall, logVisit, relatedTasks, type CallInput, type CallOutcome } from "@/lib/workflow";
-import { grantable, idsWho, listProfiles } from "@/lib/permissions";
+import { grantable, idsWho, listProfiles, withActions } from "@/lib/permissions";
 import { ACTION_IDS, ADMIN_KEY, legacyActions, parseActions, withRequirements } from "@/lib/permissions-core.mjs";
 import { ACTION_TEXT } from "@/lib/permissions-text";
 
@@ -65,7 +65,10 @@ export async function loginAction(form: FormData) {
   await db.update(users).set({ failedLogins: 0, lockedUntil: null }).where(eq(users.id, u.id));
   await setSessionCookie(u);
   await logActivity(u, "login.success", { entity: "user", entityId: u.id, summary: u.username });
-  redirect(u.mustChangePassword ? "/account?force=1" : homeFor(u));
+  if (u.mustChangePassword) redirect("/account?force=1");
+  // The first screen comes from the person's permission profile.
+  const [withProfile] = await withActions([u]);
+  redirect(homeFor(withProfile));
 }
 
 export async function logoutAction() {
