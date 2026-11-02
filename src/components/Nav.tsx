@@ -1,11 +1,12 @@
 "use client";
 
-import { BarChart3, CircleHelp, ClipboardCheck, FileText, Megaphone, MapPin, Phone, Plug, ScrollText, Users } from "lucide-react";
+import { BarChart3, CircleHelp, ClipboardCheck, FileText, Megaphone, MapPin, Phone, Plug, ScrollText, Settings2, ShieldCheck, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const ICONS = { calls: Phone, reviews: ClipboardCheck, reports: FileText, campaigns: Megaphone, visits: MapPin, stats: BarChart3, users: Users, logs: ScrollText, integrations: Plug, help: CircleHelp };
-export type NavItem = { href: string; label: string; icon: keyof typeof ICONS; badge?: number };
+const ICONS = { calls: Phone, reviews: ClipboardCheck, reports: FileText, campaigns: Megaphone, visits: MapPin, stats: BarChart3, users: Users, logs: ScrollText, integrations: Plug, help: CircleHelp, settings: Settings2, admin: ShieldCheck };
+// match = other addresses that light up this item (a panel with several pages).
+export type NavItem = { href: string; label: string; icon: keyof typeof ICONS; badge?: number; match?: string[] };
 
 // folded = only the icons (the name shows on hover), with the number as a small dot.
 export function Nav({ items, folded }: { items: NavItem[]; folded?: boolean }) {
@@ -14,7 +15,7 @@ export function Nav({ items, folded }: { items: NavItem[]; folded?: boolean }) {
     <nav className="flex flex-col gap-1">
       {items.map((n) => {
         const Icon = ICONS[n.icon];
-        const active = path === n.href || path.startsWith(n.href + "/");
+        const active = [n.href, ...(n.match ?? [])].some((h) => path === h || path.startsWith(h + "/"));
         const badge = n.badge ? (n.badge > 99 ? "99+" : String(n.badge)) : "";
         return (
           <Link

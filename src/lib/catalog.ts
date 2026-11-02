@@ -250,6 +250,8 @@ export const ACTIVITY_LABELS: Record<string, L> = {
   "report.template_paused": { es: "Programación de informe pausada / reanudada", en: "Report schedule paused / resumed" },
   "establishment.updated": { es: "Datos del establecimiento actualizados", en: "Establishment details updated" },
   "changes.sigtur_done": { es: "Cambios marcados como actualizados en SIGTUR", en: "Changes marked as updated in SIGTUR" },
+  "user.permissions_changed": { es: "Permisos por módulo cambiados", en: "Permissions per module changed" },
+  "settings.calls_updated": { es: "Configuración de llamadas cambiada", en: "Calls settings changed" },
   "phone.marked": { es: "Número marcado", en: "Number marked" },
   "export.downloaded": { es: "Descarga de datos", en: "Data downloaded" },
 };

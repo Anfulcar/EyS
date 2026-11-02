@@ -40,7 +40,7 @@ export function SigturStatusBadge({ paused, t }: { paused: boolean; t: Dict }) {
   );
 }
 
-export function SigturPermanentCard({ o, t, lang, isAdmin }: { o: Overview; t: Dict; lang: Lang; isAdmin: boolean }) {
+export function SigturPermanentCard({ o, t, lang, canSwitch }: { o: Overview; t: Dict; lang: Lang; canSwitch: boolean }) {
   const paused = o.campaign.requestsPaused;
   const stat = (n: number, l: string) => (
     <div className="rounded-xl bg-slate-50 px-3 py-2"><div className="text-lg font-bold tabular-nums text-slate-900">{n}</div><div className="text-xs text-slate-500">{l}</div></div>
@@ -59,7 +59,7 @@ export function SigturPermanentCard({ o, t, lang, isAdmin }: { o: Overview; t: D
             : t.sigturPermanentHelp}
         </p>
         <p className="mt-0.5 text-sm text-slate-500">{o.assignees.length ? t.sigturAssignedTo.replace("{names}", o.assignees.join(", ")) : t.sigturNoAssignees}</p>
-        {!isAdmin && <p className="mt-0.5 text-xs text-slate-400">{t.sigturOnlyAdmin}</p>}
+        {!canSwitch && <p className="mt-0.5 text-xs text-slate-400">{t.sigturOnlyAdmin}</p>}
       </div>
       <div className="grid grid-cols-3 gap-3 text-sm">
         {stat(o.open, t.sigturOpenCount)}
@@ -67,7 +67,7 @@ export function SigturPermanentCard({ o, t, lang, isAdmin }: { o: Overview; t: D
         {stat(o.done, t.sigturDoneCount)}
       </div>
       <div className="flex flex-col items-end gap-2">
-        {isAdmin && <SigturSwitch paused={paused} t={t} />}
+        {canSwitch && <SigturSwitch paused={paused} t={t} />}
         <Link href={`/campaigns/${o.campaign.id}/companies`} className="flex items-center gap-1 text-sm font-medium text-brand-600 hover:underline">{t.sigturSeeTasks}<ChevronRight className="h-4 w-4" /></Link>
       </div>
     </div>

@@ -40,15 +40,25 @@ export async function requireUser(roles?: Role[]): Promise<User> {
   if (!u) redirect("/login");
   if (u.mustChangePassword) redirect("/account?force=1");
   // A screen a role may not use answers "not found" (it doesn't reveal that it exists).
-  if (roles && !roles.includes(u.role as Role)) notFound();
+  if (roles && !mayUse(u, roles)) notFound();
   return u;
+}
+
+// Screens with a role list belong to the call campaigns (or general administration): the role must match and,
+// except for administrators, the person needs «Campañas de llamadas» in «Permisos por módulo».
+export function mayUse(u: User, roles: Role[]) {
+  return roles.includes(u.role as Role) && (u.role === "admin" || u.callsAccess);
+}
+
+export function hasCalls(u: Pick<User, "role" | "callsAccess">) {
+  return u.role === "admin" || u.callsAccess;
 }
 
 // For server actions / route handlers: throws instead of redirecting.
 export async function assertUser(roles?: Role[]): Promise<User> {
   const u = await currentUser();
   if (!u || u.mustChangePassword) throw new Error("Not found");
-  if (roles && !roles.includes(u.role as Role)) throw new Error("Not found");
+  if (roles && !mayUse(u, roles)) throw new Error("Not found");
   return u;
 }
 
@@ -56,7 +66,7 @@ export async function assertUser(roles?: Role[]): Promise<User> {
 export async function routeUser(roles?: Role[]): Promise<User | null> {
   const u = await currentUser();
   if (!u || u.mustChangePassword) return null;
-  if (roles && !roles.includes(u.role as Role)) return null;
+  if (roles && !mayUse(u, roles)) return null;
   return u;
 }
 
@@ -66,7 +76,9 @@ export function notFoundResponse() {
 
 export const MANAGERS: Role[] = ["admin", "supervisor"];
 
-export function homeFor(role: string) {
+export function homeFor(u: Pick<User, "role" | "callsAccess">) {
+  const role = u.role;
+  if (!hasCalls(u)) return "/help";
   if (role === "agent") return "/calls";
   if (role === "inspector") return "/visits";
   return "/campaigns";

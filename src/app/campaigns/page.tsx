@@ -12,6 +12,7 @@ import { requireUser } from "@/lib/auth";
 import { fmtDate } from "@/lib/dates";
 import type { Dict } from "@/lib/i18n";
 import { getDict } from "@/lib/i18n-server";
+import { campaignDefaults } from "@/lib/settings";
 import { requestsOverview } from "@/lib/sigtur";
 import { createCampaignAction } from "../actions";
 
@@ -19,7 +20,7 @@ export default async function CampaignsPage() {
   const me = await requireUser(["admin", "supervisor"]);
   const { t, lang } = await getDict();
   // The permanent SIGTUR campaign has its own block; the grid shows only temporary campaigns.
-  const [all, permanent] = await Promise.all([db.select().from(campaigns).orderBy(desc(campaigns.startDate)), requestsOverview()]);
+  const [all, permanent, defaults] = await Promise.all([db.select().from(campaigns).orderBy(desc(campaigns.startDate)), requestsOverview(), campaignDefaults()]);
   const list = all.filter((c) => c.kind !== "sigtur_requests");
   const ids = list.length ? list.map((c) => c.id) : [-1];
   // Counts per campaign (grouped queries, so each card shows its own totals).
@@ -46,7 +47,7 @@ export default async function CampaignsPage() {
         {me.role === "admin" && (
           <Overlay trigger={<><Plus className="h-4 w-4" />{t.newCampaign}</>} title={t.newCampaign}>
             <ActionForm action={createCampaignAction} className="space-y-5">
-              <CampaignFields t={t} />
+              <CampaignFields t={t} values={{ maxAttempts: defaults.maxAttempts, followupDays: defaults.followupDays }} />
               <div className="flex justify-end"><SubmitButton>{t.create}</SubmitButton></div>
             </ActionForm>
           </Overlay>
@@ -54,7 +55,8 @@ export default async function CampaignsPage() {
       </div>
       <section className="space-y-3">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t.sigturPermanent}</h2>
-        <SigturPermanentCard o={permanent} t={t} lang={lang} isAdmin={me.role === "admin"} />
+        {/* Administrators and supervisors switch SIGTUR requests on or off (as in «Configuración · Llamadas»). */}
+        <SigturPermanentCard o={permanent} t={t} lang={lang} canSwitch />
       </section>
       <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t.sigturTemporary}</h2>
       {list.length === 0 ? (

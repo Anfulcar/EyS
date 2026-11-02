@@ -16,6 +16,10 @@ export const users = sqliteTable("users", {
   lockedUntil: text("locked_until"),
   // Last time the person opened "Informes generados" (for the "new" counter)
   reportsSeenAt: text("reports_seen_at"),
+  // «Permisos por módulo»: access to the call campaigns (administrators always have it)…
+  callsAccess: integer("calls_access", { mode: "boolean" }).notNull().default(true),
+  // …and level in «Quejas y reclamaciones»: none | register | manage | supervise
+  qrLevel: text("qr_level").notNull().default("none"),
   createdAt: text("created_at").notNull().default(now),
 });
 

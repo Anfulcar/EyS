@@ -7,7 +7,7 @@ import { loginAction } from "../actions";
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const u = await currentUser();
-  if (u) redirect(homeFor(u.role));
+  if (u) redirect(homeFor(u));
   const { t, lang } = await getDict();
   const { error } = await searchParams;
   return (

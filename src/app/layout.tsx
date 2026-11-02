@@ -12,7 +12,7 @@ import { NavProgress } from "@/components/NavProgress";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { companies } from "@/db/schema";
-import { currentUser } from "@/lib/auth";
+import { currentUser, hasCalls } from "@/lib/auth";
 import { attentionSummary } from "@/lib/queue";
 import { newReportsCount } from "@/lib/report-run";
 import { syncCoverage } from "@/lib/team";
@@ -44,18 +44,19 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         attentionSummary(user.id),
       ])
     : [0, null];
-  const hasCalls = assigned > 0;
+  const hasAssigned = assigned > 0;
   const newReports = user && isManager ? await newReportsCount(user) : 0;
+  // Call-campaign screens only for people with «Campañas de llamadas» in «Permisos por módulo».
+  const calls = !!user && hasCalls(user);
   const nav: NavItem[] = [
-    ...(hasCalls ? [{ href: "/calls", label: t.navCalls, icon: "calls" as const, badge: attention?.total ?? 0 }] : []),
-    ...(role && role !== "inspector" ? [{ href: "/reviews", label: t.navReviews, icon: "reviews" as const }] : []),
-    ...(isManager ? [{ href: "/campaigns", label: t.navCampaigns, icon: "campaigns" as const }] : []),
-    ...(role && role !== "agent" ? [{ href: "/visits", label: t.navVisits, icon: "visits" as const }] : []),
-    ...(isManager ? [{ href: "/stats", label: t.navStats, icon: "stats" as const }] : []),
-    ...(isManager ? [{ href: "/reports", label: t.navReports, icon: "reports" as const, badge: newReports }] : []),
-    ...(role === "admin" ? [{ href: "/users", label: t.navUsers, icon: "users" as const }] : []),
-    ...(role === "admin" ? [{ href: "/logs", label: t.navLogs, icon: "logs" as const }] : []),
-    ...(role === "admin" ? [{ href: "/integrations", label: t.navIntegrations, icon: "integrations" as const }] : []),
+    ...(calls && hasAssigned ? [{ href: "/calls", label: t.navCalls, icon: "calls" as const, badge: attention?.total ?? 0 }] : []),
+    ...(calls && role && role !== "inspector" ? [{ href: "/reviews", label: t.navReviews, icon: "reviews" as const }] : []),
+    ...(calls && isManager ? [{ href: "/campaigns", label: t.navCampaigns, icon: "campaigns" as const }] : []),
+    ...(calls && role && role !== "agent" ? [{ href: "/visits", label: t.navVisits, icon: "visits" as const }] : []),
+    ...(calls && isManager ? [{ href: "/stats", label: t.navStats, icon: "stats" as const }] : []),
+    ...(calls && isManager ? [{ href: "/reports", label: t.navReports, icon: "reports" as const, badge: newReports }] : []),
+    ...(calls && isManager ? [{ href: "/calls-settings", label: t.navCallsSettings, icon: "settings" as const }] : []),
+    ...(role === "admin" ? [{ href: "/users", label: t.navAdmin, icon: "admin" as const, match: ["/users", "/admin", "/logs", "/integrations"] }] : []),
     ...(role ? [{ href: "/help", label: t.navHelp, icon: "help" as const }] : []),
   ];
   const showNav = !!user && !user.mustChangePassword;

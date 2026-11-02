@@ -3,6 +3,7 @@ import { Download } from "lucide-react";
 import Link from "next/link";
 import { FilterChips } from "@/components/FilterChips";
 import { MultiSelect } from "@/components/MultiSelect";
+import { AdminTabs } from "@/components/AdminTabs";
 import { Empty } from "@/components/ui";
 import { db } from "@/db";
 import { users } from "@/db/schema";
@@ -42,9 +43,10 @@ export default async function LogsPage({ searchParams }: { searchParams: Promise
 
   return (
     <div className="space-y-6">
+      <AdminTabs t={t} />
       <div className="page-title">
         <div>
-          <h1>{t.logsTitle}</h1>
+          <h2>{t.logsTitle}</h2>
           <p className="subtitle">{t.logsSubtitle}</p>
         </div>
         <a href={`/api/logs${qs({ tab })}`} className="btn-secondary"><Download className="h-4 w-4" />{t.downloadCsv}</a>
