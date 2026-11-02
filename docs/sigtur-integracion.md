@@ -1,4 +1,4 @@
-# Integración SIGTUR ↔ EyS – Campañas de Formalización
+# Integración SIGTUR ↔ Atención al Cliente EyS
 
 Guía para el equipo técnico de SIGTUR. Describe las tres conexiones que ofrece la aplicación de campañas:
 

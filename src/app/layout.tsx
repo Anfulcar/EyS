@@ -27,7 +27,7 @@ import { getDict } from "@/lib/i18n-server";
 import { logoutAction, setLangAction } from "./actions";
 import "./globals.css";
 
-export const metadata: Metadata = { title: "EyS – Campañas" };
+export const metadata: Metadata = { title: "Atención al Cliente EyS" };
 
 const isManagerRole = (r: string | undefined) => r === "admin" || r === "supervisor";
 
