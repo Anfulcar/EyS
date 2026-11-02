@@ -2,14 +2,15 @@ import { FileText, Paperclip } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
+import { AutoSelect } from "@/components/qr/AutoSelect";
 import { FileUploader } from "@/components/qr/FileUploader";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { fmtDate, fmtDateTime, todayLocal } from "@/lib/dates";
 import { getDict } from "@/lib/i18n-server";
-import { atLeast, businessDaysBetween, caseDetail, caseFor, canWork, deadlineOf, handlers, otherCasesOfRut, qrSettings } from "@/lib/qr";
+import { atLeast, businessDaysBetween, caseDetail, caseFor, canWork, deadlineOf, handlers, openCallTasksOfRut, otherCasesOfRut, qrSettings } from "@/lib/qr";
 import { requireQr } from "@/lib/qr-auth";
-import { QR_CHANNEL_TEXT, QR_STATUS_TEXT, QR_STATUS_TONE, QR_TEXT, QR_TYPE_TEXT } from "@/lib/qr-i18n";
+import { QR_CHANNEL_TEXT, QR_CHANNEL_TONE, QR_STATUS_TEXT, QR_STATUS_TONE, QR_TEXT, QR_TYPE_TEXT } from "@/lib/qr-i18n";
 import {
   addStepAction, answerReferralAction, approveCloseAction, assignAction, generateReportAction, markFileReplacedAction, proposeCloseAction, referAction, reopenAction, returnCloseAction, setStatusAction,
 } from "../actions";
@@ -25,7 +26,9 @@ export default async function CasePage({ params, searchParams }: { params: Promi
   const tab = (TABS as readonly string[]).includes((await searchParams).tab ?? "") ? (await searchParams).tab! : "resumen";
   const { lang } = await getDict();
   const t = QR_TEXT[lang];
-  const [d, s, people, all, others] = await Promise.all([caseDetail(c.id), qrSettings(), handlers(), db.select({ id: users.id, name: users.name }).from(users), c.partyRut ? otherCasesOfRut(c.partyRut, c.id) : 0]);
+  const [d, s, people, all, others, openTasks] = await Promise.all([
+    caseDetail(c.id), qrSettings(), handlers(), db.select({ id: users.id, name: users.name }).from(users), c.partyRut ? otherCasesOfRut(c.partyRut, c.id) : 0, c.partyRut ? openCallTasksOfRut(c.partyRut) : 0,
+  ]);
   const nameOf = (id: number | null) => all.find((p) => p.id === id)?.name ?? "—";
   const work = canWork(u, c);
   const sup = atLeast(u, "supervise");
@@ -51,7 +54,7 @@ export default async function CasePage({ params, searchParams }: { params: Promi
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="tabular-nums">{c.number}</h1>
             <span className={`badge ${QR_STATUS_TONE[c.status]}`}>{QR_STATUS_TEXT[lang][c.status]}</span>
-            <span className="badge bg-slate-100 text-slate-700">{QR_CHANNEL_TEXT[lang][c.channel]}</span>
+            <span className={`badge ${QR_CHANNEL_TONE[c.channel] ?? "bg-brand-50 text-brand-700"}`}>{QR_CHANNEL_TEXT[lang][c.channel]}</span>
             {c.priority === "Alta" && <span className="badge bg-red-50 text-mitur-red">{t.highPriority}</span>}
           </div>
           <p className="mt-1 font-semibold text-slate-900">{c.subject}</p>
@@ -59,13 +62,8 @@ export default async function CasePage({ params, searchParams }: { params: Promi
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {work && !["porcerrar", "cerrada"].includes(c.status) && (
-            <ActionForm action={setStatusAction} className="flex gap-2">
-              {hidden}
-              <select name="status" defaultValue={c.status} aria-label={t.changeStatus} className="input w-52">
-                {["recibida", "analisis", "referida", "espera"].map((k) => <option key={k} value={k}>{QR_STATUS_TEXT[lang][k]}</option>)}
-              </select>
-              <SubmitButton className="btn-secondary">{t.changeStatus}</SubmitButton>
-            </ActionForm>
+            <AutoSelect key={c.status} action={setStatusAction} number={c.number} name="status" value={c.status} label={t.changeStatus} className="w-56"
+              options={["recibida", "analisis", "referida", "espera"].map((k) => ({ value: k, label: QR_STATUS_TEXT[lang][k] }))} />
           )}
           {manager && (
             <ActionForm action={generateReportAction}>{hidden}<SubmitButton className="btn-secondary"><FileText className="h-4 w-4" />{t.genReport}</SubmitButton></ActionForm>
@@ -103,7 +101,14 @@ export default async function CasePage({ params, searchParams }: { params: Promi
                   <section className="min-w-0 space-y-2">
                     <h3 className="flex items-center gap-2">{t.party} {c.partySigtur ? <span className="badge bg-violet-50 text-violet-700">{t.inSigturTag}</span> : <span className="badge bg-slate-100 text-slate-600">{t.noRut}</span>}</h3>
                     {kv([["RUT", c.partyRut], ["ID SIGTUR", c.partySigturId], [t.pName, c.partyName], ["Razón social", c.partyRazon], [t.pDoc, c.partyRnc], ["Estatus RNT", c.partyRntStatus], [t.pAddress, [c.partyAddress, c.partyMunicipality, c.partyProvince].filter(Boolean).join(", ")], [t.pPhone, c.partyPhone], [t.pEmail, c.partyEmail]])}
-                    {c.partyRut && <Link href={`/quejas?status=open&status=cerrada&q=${encodeURIComponent(c.partyRut)}`} className="text-xs font-medium text-brand-700 hover:underline">{t.otherCases.replace("{n}", String(others))}</Link>}
+                    {c.partyRut ? (
+                      <p className="text-xs text-slate-500">
+                        <Link href={`/quejas?status=open&status=cerrada&q=${encodeURIComponent(c.partyRut)}`} className="font-medium text-brand-700 hover:underline">{t.otherCases.replace("{n}", String(others))}</Link>{" "}
+                        {t.openTasks.replace("{n}", String(openTasks))}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-slate-500">{t.linkLater}</p>
+                    )}
                   </section>
                   <section className="min-w-0 space-y-2">
                     <h3>{t.presenter}</h3>
@@ -261,6 +266,7 @@ export default async function CasePage({ params, searchParams }: { params: Promi
             {tab === "informes" && (
               <>
                 <p className="text-sm text-slate-600">{t.reportsHelp}</p>
+                {manager && <ActionForm action={generateReportAction}>{hidden}<SubmitButton className="btn-secondary">{t.genReportNow}</SubmitButton></ActionForm>}
                 {d.reports.length === 0 ? <p className="text-sm text-slate-500">{t.noReports}</p> : (
                   <table className="table" data-testid="qr-reports">
                     <thead><tr><th>{t.version}</th><th>{t.received}</th><th>{t.origin}</th><th /></tr></thead>
@@ -291,14 +297,8 @@ export default async function CasePage({ params, searchParams }: { params: Promi
           <div className="card space-y-2 p-4 text-sm">
             <h3>{t.responsible}</h3>
             {sup && c.status !== "cerrada" ? (
-              <ActionForm action={assignAction} className="flex gap-2">
-                {hidden}
-                <select name="userId" defaultValue={c.assignedUserId ?? ""} className="input min-w-0 flex-1" aria-label={t.responsible}>
-                  <option value="">{t.none}</option>
-                  {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-                <SubmitButton className="btn-secondary">OK</SubmitButton>
-              </ActionForm>
+              <AutoSelect key={c.assignedUserId ?? "none"} action={assignAction} number={c.number} name="userId" value={String(c.assignedUserId ?? "")} label={t.responsible}
+                options={[{ value: "", label: t.none }, ...people.map((p) => ({ value: String(p.id), label: p.name }))]} />
             ) : (
               <b>{c.assignedUserId ? nameOf(c.assignedUserId) : t.none}</b>
             )}

@@ -11,8 +11,8 @@ import { ACCEPT, MAX_FILE, uploadFiles } from "./upload";
 type Opt = { value: string; label: string };
 
 // «+ Nuevo caso»: who it is about (RUT from SIGTUR or typed), who brings it, what happened and the proof.
-export function NewCaseForm({ t, types, topics, channels, priorities, handlers, canAssign, action, lookup }: {
-  t: QrDict; types: Opt[]; topics: string[]; channels: Opt[]; priorities: Opt[]; handlers: Opt[]; canAssign: boolean;
+export function NewCaseForm({ t, types, topics, channels, priorities, handlers, canAssign, cancelLabel, action, lookup }: {
+  t: QrDict; types: Opt[]; topics: string[]; channels: Opt[]; priorities: Opt[]; handlers: Opt[]; canAssign: boolean; cancelLabel: string;
   action: (s: ActionState, f: FormData) => Promise<ActionState>; lookup: (key: string) => Promise<PartyFromSigtur | null>;
 }) {
   const router = useRouter();
@@ -129,9 +129,9 @@ export function NewCaseForm({ t, types, topics, channels, priorities, handlers, 
         <div><label className="label" htmlFor="nc-subject">{t.subject} *</label><input id="nc-subject" className="input" maxLength={200} value={w.subject} onChange={(e) => setW({ ...w, subject: e.target.value })} /></div>
         <div><label className="label" htmlFor="nc-desc">{t.description} *</label><textarea id="nc-desc" className="input" rows={4} placeholder={t.descriptionPh} value={w.description} onChange={(e) => setW({ ...w, description: e.target.value })} /></div>
         <div>
-          <label className="label" htmlFor="nc-files">{t.proofs}</label>
-          <input id="nc-files" type="file" multiple accept={ACCEPT} className="block w-full text-sm" onChange={(e) => { pick(e.target.files); e.target.value = ""; }} />
-          <p className="mt-1 text-xs text-slate-500">{t.proofsHelp}</p>
+          <span className="label">{t.proofs}</span>
+          <label htmlFor="nc-files" className="block cursor-pointer rounded-xl border-2 border-dashed border-slate-200 px-4 py-4 text-center text-sm text-slate-500 transition hover:border-brand-300 hover:text-brand-700">{t.dropFiles} · {t.proofsHelp}</label>
+          <input id="nc-files" type="file" multiple accept={ACCEPT} className="sr-only" onChange={(e) => { pick(e.target.files); e.target.value = ""; }} />
           {files.length > 0 && (
             <ul className="mt-2 flex flex-wrap gap-2">
               {files.map((f, i) => (
@@ -150,7 +150,11 @@ export function NewCaseForm({ t, types, topics, channels, priorities, handlers, 
 
       {(err || state?.error) && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{err || state?.error}</p>}
       {uploading && <p className="text-sm text-slate-600">{t.uploading.replace("{f}", uploading)}</p>}
-      <div className="flex justify-end"><button className="btn" disabled={pending || !!uploading}>{pending || uploading ? "…" : t.create}</button></div>
+      <div className="flex justify-end gap-2">
+        {/* The window closes with Escape, like every pop-up of the app. */}
+        <button type="button" className="btn-secondary" onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))}>{cancelLabel}</button>
+        <button className="btn" disabled={pending || !!uploading}>{pending || uploading ? "…" : t.create}</button>
+      </div>
     </form>
   );
 }

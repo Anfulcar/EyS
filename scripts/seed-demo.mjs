@@ -11,8 +11,9 @@ export const DEMO_USERS = [
   { username: "demo.agente1", name: "Ana Agente (demo)", role: "agent" },
   { username: "demo.agente2", name: "Luis Agente (demo)", role: "agent" },
   { username: "demo.inspector", name: "Iván Inspector (demo)", role: "inspector" },
-  // Handles complaints only (no call campaigns).
-  { username: "demo.quejas", name: "Laura Quejas (demo)", role: "agent", callsAccess: 0, qrLevel: "manage" },
+  // «Gestor de quejas»: works only in «Quejas y reclamaciones».
+  { username: "demo.quejas", name: "Laura Quejas (demo)", role: "complaints", callsAccess: 0, qrLevel: "manage" },
+  { username: "demo.quejas2", name: "José Quejas (demo)", role: "complaints", callsAccess: 0, qrLevel: "manage" },
 ];
 // Level in «Quejas y reclamaciones» of the other demo people.
 const QR_LEVELS = { "demo.supervisor": "supervise", "demo.agente1": "register" };

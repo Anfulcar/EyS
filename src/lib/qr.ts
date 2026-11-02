@@ -207,6 +207,7 @@ export function caseWhere(u: User, f: CaseFilters, today = todayLocal(), warnDay
     else if (s === "late") conds.push(and(sql`${qrCases.status} <> 'cerrada'`, sql`${qrCases.due} < ${today}`)!);
     else if (s === "soon") conds.push(and(sql`${qrCases.status} <> 'cerrada'`, sql`${qrCases.due} >= ${today}`, sql`${qrCases.due} <= ${addBusinessDays(today, warnDays)}`)!);
     else if (s === "unassigned") conds.push(and(sql`${qrCases.status} <> 'cerrada'`, isNull(qrCases.assignedUserId))!);
+    else if (s === "mine") conds.push(and(sql`${qrCases.status} <> 'cerrada'`, eq(qrCases.assignedUserId, u.id))!);
     else if ((QR_STATUSES as readonly string[]).includes(s)) conds.push(eq(qrCases.status, s));
   }
   if (conds.length) w.push(or(...conds)!);
@@ -274,6 +275,15 @@ export async function caseDetail(caseId: number) {
     db.select({ id: qrReports.id, version: qrReports.version, origin: qrReports.origin, byName: qrReports.byName, createdAt: qrReports.createdAt }).from(qrReports).where(eq(qrReports.caseId, caseId)).orderBy(desc(qrReports.version)),
   ]);
   return { steps, refs, files, reports };
+}
+
+// Open tasks of the same RUT in the call campaigns (shown in the case summary).
+export async function openCallTasksOfRut(rut: string) {
+  const [r] = await db
+    .select({ n: sql<number>`count(distinct ${establishments.companyId})` })
+    .from(establishments)
+    .where(and(eq(establishments.rut, rut), sql`exists (select 1 from companies c where c.id = ${establishments.companyId} and c.status not in ('done', 'transferred'))`));
+  return Number(r.n);
 }
 
 export async function otherCasesOfRut(rut: string, exceptId: number) {

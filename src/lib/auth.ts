@@ -7,7 +7,7 @@ import { db } from "@/db";
 import { users, type User } from "@/db/schema";
 import { isRecentAuth, readSession, SESSION_COOKIE, SESSION_HOURS, signSession } from "./session";
 
-export type Role = "admin" | "supervisor" | "agent" | "inspector";
+export type Role = "admin" | "supervisor" | "agent" | "inspector" | "complaints";
 
 // Call only right after the person typed their password: it restarts the "recent sign-in" clock.
 export async function setSessionCookie(user: User) {
@@ -51,7 +51,7 @@ export function mayUse(u: User, roles: Role[]) {
 }
 
 export function hasCalls(u: Pick<User, "role" | "callsAccess">) {
-  return u.role === "admin" || u.callsAccess;
+  return u.role === "admin" || (u.role !== "complaints" && u.callsAccess);
 }
 
 // For server actions / route handlers: throws instead of redirecting.

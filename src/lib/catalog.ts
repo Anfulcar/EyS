@@ -87,6 +87,8 @@ export const ROLES: Record<string, L> = {
   supervisor: { es: "Supervisor", en: "Supervisor" },
   agent: { es: "Agente de llamadas", en: "Call agent" },
   inspector: { es: "Inspector (visitas)", en: "Inspector (visits)" },
+  // Works only in «Quejas y reclamaciones» (no call campaigns).
+  complaints: { es: "Gestor de quejas", en: "Complaints handler" },
 };
 
 export function label(map: Record<string, L>, key: string | null | undefined, lang: Lang) {

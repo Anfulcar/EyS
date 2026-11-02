@@ -751,7 +751,9 @@ test("«Quejas y reclamaciones»: case linked to a RUT, steps, proof, closing ap
   await expect(page.getByTestId("notices").getByText("Permisos guardados.")).toBeVisible();
 
   // New case linked to a RUT from SIGTUR, assigned to Bruno, with a photo
-  await page.locator("aside nav a", { hasText: "Quejas y reclamaciones" }).click();
+  // The menu is divided by module: «Casos» sits under «Quejas y reclamaciones»
+  await expect(page.locator("aside nav")).toContainText("Quejas y reclamaciones");
+  await page.locator("aside nav a", { hasText: "Casos" }).click();
   await expect(page).toHaveURL(/\/quejas$/);
   await page.getByRole("button", { name: "+ Nuevo caso" }).click();
   const nc = page.getByRole("dialog", { name: "Nuevo caso" });
@@ -798,7 +800,7 @@ test("«Quejas y reclamaciones»: case linked to a RUT, steps, proof, closing ap
   await expect(page.getByTestId("qr-by-type")).toContainText("Reclamación");
   await page.goto("/quejas/configuracion");
   await page.getByLabel("Queja: Respuesta").fill("20");
-  await page.getByRole("button", { name: "Guardar" }).click();
+  await page.getByRole("button", { name: "Guardar plazos" }).click();
   await expect(page.getByTestId("notices").getByText("Guardado.")).toBeVisible();
 
   // Public form, without an account
@@ -810,6 +812,7 @@ test("«Quejas y reclamaciones»: case linked to a RUT, steps, proof, closing ap
   await page.getByLabel("En una línea *").fill("No respetaron el precio de la reserva");
   await page.getByLabel("Cuéntenos los detalles *").fill("Reservé a 120 USD y me cobraron 160.");
   await page.getByLabel(/Acepto que el Ministerio/).check();
+  await page.getByLabel("No soy un robot").check();
   await page.waitForTimeout(3100);
   await page.getByRole("button", { name: "Enviar" }).click();
   await expect(page.getByTestId("pf-ticket")).toContainText(/QR-\d{4}-\d{4}/);
@@ -819,7 +822,7 @@ test("«Quejas y reclamaciones»: case linked to a RUT, steps, proof, closing ap
 
   // Someone without a level doesn't see the module, and a case they can't see answers "not found"
   await signIn(page, "inspector1", "Inspector-Clave-1");
-  await expect(page.locator("aside nav a", { hasText: "Quejas y reclamaciones" })).toHaveCount(0);
+  await expect(page.locator("aside nav a", { hasText: "Casos" })).toHaveCount(0);
   await page.goto(`/quejas/${number}`);
   await expect(page.getByRole("heading", { name: "No encontrado" })).toBeVisible();
 });
