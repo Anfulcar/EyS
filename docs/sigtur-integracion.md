@@ -237,6 +237,30 @@ Cuando una solicitud de llamada (sección 1) queda resuelta: alguien contestó (
 
 SIGTUR puede mostrarle al analista que pidió la llamada que ya está resuelta, con el resultado.
 
+## 5. Queja o reclamación desde SIGTUR
+
+`POST /api/integrations/sigtur/complaints` con la misma clave (`Authorization: Bearer …`). Crea un caso en el módulo
+«Quejas y reclamaciones», enlazado al RUT, con el canal «SIGTUR».
+
+```json
+{
+  "rut": "RUT-204347",
+  "tipo": "Queja",
+  "tema": "Trámite de licencia (SIGTUR)",
+  "asunto": "Solicitud de licencia sin respuesta hace 45 días",
+  "descripcion": "El establecimiento indica que su solicitud lleva 45 días sin respuesta.",
+  "referencia": "SIG-REQ-8812",
+  "solicitadoPor": "Analista Licencias",
+  "presentadoPor": { "nombre": "Ramón Castillo", "documento": "001-1234567-8", "telefono": "809-555-0158", "correo": "dueno@example.com" }
+}
+```
+
+- `rut` o `idSigtur`: obligatorio y debe existir en los datos cargados; si no, responde 400.
+- `tipo`: `Queja`, `Reclamación`, `Denuncia` o `Sugerencia`. `asunto` y `descripcion` son obligatorios.
+- `tema` debe ser uno de la lista del módulo; si no, se guarda como «Otro».
+- `presentadoPor.anonimo: true` para un caso anónimo.
+- Respuesta: `{ "ok": true, "caso": "QR-2026-0012", "vence": "2026-11-23" }` (fecha de respuesta según los plazos del módulo).
+
 ## Pruebas
 
 En **Integraciones → Simular solicitud SIGTUR** un administrador crea una solicitud igual a la de la sección 1, para ver

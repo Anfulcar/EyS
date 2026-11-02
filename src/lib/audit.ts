@@ -17,6 +17,7 @@ export const ACTIONS = [
   "changes.sigtur_done",
   "user.permissions_changed",
   "settings.calls_updated",
+  "qr.case_created", "qr.case_updated", "qr.close_proposed", "qr.closed", "qr.close_returned", "qr.reopened", "qr.report_generated", "qr.settings_changed", "qr.public_case", "qr.sigtur_case", "qr.file_added",
 ] as const;
 export type ActivityAction = (typeof ACTIONS)[number];
 

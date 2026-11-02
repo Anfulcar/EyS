@@ -11,10 +11,14 @@ export const DEMO_USERS = [
   { username: "demo.agente1", name: "Ana Agente (demo)", role: "agent" },
   { username: "demo.agente2", name: "Luis Agente (demo)", role: "agent" },
   { username: "demo.inspector", name: "Iván Inspector (demo)", role: "inspector" },
+  // Handles complaints only (no call campaigns).
+  { username: "demo.quejas", name: "Laura Quejas (demo)", role: "agent", callsAccess: 0, qrLevel: "manage" },
 ];
+// Level in «Quejas y reclamaciones» of the other demo people.
+const QR_LEVELS = { "demo.supervisor": "supervise", "demo.agente1": "register" };
 
 // Tables in delete order (children first).
-const TABLES = ["data_changes", "sigtur_outbox", "history_archive", "integration_log", "api_keys", "generated_reports", "report_templates", "absences", "activity_log", "error_log", "call_results", "call_attempts", "visits", "status_changes", "phones", "establishments", "companies", "import_logs", "campaigns", "users"];
+const TABLES = ["qr_file_parts", "qr_files", "qr_reports", "qr_referrals", "qr_steps", "qr_cases", "removed_tasks", "data_changes", "sigtur_outbox", "history_archive", "integration_log", "api_keys", "generated_reports", "report_templates", "absences", "activity_log", "error_log", "call_results", "call_attempts", "visits", "status_changes", "phones", "establishments", "companies", "import_logs", "campaigns", "users"];
 
 function rng(seed) {
   return () => {
@@ -117,8 +121,8 @@ export async function seedDemo(client, env = process.env) {
   const userIds = {};
   for (const u of DEMO_USERS) {
     const res = await client.execute({
-      sql: "INSERT INTO users (username, name, role, password_hash, must_change_password) VALUES (?, ?, ?, ?, 0) RETURNING id",
-      args: [u.username, u.name, u.role, hash],
+      sql: "INSERT INTO users (username, name, role, password_hash, must_change_password, calls_access, qr_level) VALUES (?, ?, ?, ?, 0, ?, ?) RETURNING id",
+      args: [u.username, u.name, u.role, hash, u.callsAccess ?? 1, u.qrLevel ?? QR_LEVELS[u.username] ?? "none"],
     });
     userIds[u.username] = Number(res.rows[0].id);
   }
@@ -288,6 +292,49 @@ export async function seedDemo(client, env = process.env) {
   await pastCase(fresh[0], { rut: fresh[0]?.e.rut, code: "01", commitment: shiftDays(-45) });
   await pastCase(fresh[1], { rut: fresh[1]?.e.rut, code: "05", closedSince: "2026" });
   await pastCase(fresh[2], { rut: `${fresh[2]?.e.rut}-B`, code: "05", closedSince: "03/2026", name: "Sucursal antigua" });
+
+  // «Quejas y reclamaciones»: a few example cases, linked to demo RUTs or typed in.
+  // Business days from today (negative = in the past).
+  const addBiz = (n) => {
+    const d = new Date(`${today()}T12:00:00Z`);
+    const step = n < 0 ? -1 : 1;
+    for (let left = Math.abs(n); left > 0; ) {
+      d.setUTCDate(d.getUTCDate() + step);
+      if (d.getUTCDay() % 6) left--;
+    }
+    return d.toISOString().slice(0, 10);
+  };
+  const year = Number(today().slice(0, 4));
+  const qrCase = async (seq, o) => {
+    const t = o.task;
+    const res = await client.execute({
+      sql: `INSERT INTO qr_cases (number, year, seq, type, topic, channel, priority, status, assigned_user_id, created_by, created_at, first_due, due, first_done_at, subject, description,
+              party_sigtur, party_rut, party_sigtur_id, party_name, party_razon, party_rnc, party_rnt_status, party_province, party_municipality, party_address,
+              complainant_anonymous, complainant_name, complainant_nationality, complainant_email)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`,
+      args: [`QR-${year}-${String(seq).padStart(4, "0")}`, year, seq, o.type, o.topic ?? null, o.channel, o.priority ?? "Media", o.status, o.assigned ? userIds[o.assigned] : null, o.by ? userIds[o.by] : null,
+        shiftIso(-o.ago), o.firstDue, o.due, o.firstDone ? shiftIso(-o.ago + 1) : null, o.subject, o.description,
+        t ? 1 : 0, t?.e.rut ?? null, t?.e.sigturId ?? null, t ? t.e.nombreComercial : o.partyName, t?.e.razonSocial ?? null, t?.e.rnc ?? null, t?.e.estatusRnt ?? null, t?.e.provincia ?? "La Altagracia", t?.e.municipio ?? "Higüey", t?.e.direccion ?? null,
+        o.anonymous ? 1 : 0, o.anonymous ? null : o.person ?? null, o.anonymous ? null : o.nationality ?? null, o.anonymous ? null : o.email ?? null],
+    });
+    const id = Number(res.rows[0].id);
+    for (const [kind, text, by] of [["system", `Caso recibido por ${o.channelText}.`, null], ...(o.steps ?? [])]) {
+      await client.execute({ sql: "INSERT INTO qr_steps (case_id, at, user_id, by_name, kind, text) VALUES (?, ?, ?, ?, ?, ?)", args: [id, shiftIso(-o.ago + (by ? 1 : 0)), by ? userIds[by] : null, by ? DEMO_USERS.find((u) => u.username === by).name : "Sistema", kind, text] });
+    }
+    return id;
+  };
+  const tq = tasks.filter((x) => x.e.rut);
+  await qrCase(1, { task: tq[0], type: "Reclamación", topic: "Cobro indebido", channel: "web", channelText: "Formulario web", priority: "Alta", status: "referida", assigned: "demo.quejas", ago: 12, firstDue: addBiz(-8), due: addBiz(3), firstDone: true,
+    subject: "Le cobraron una excursión dos veces con tarjeta", description: "La turista pagó la excursión en el punto de venta del hotel y le volvieron a cobrar al día siguiente. Pide la devolución de USD 95.",
+    person: "Marie Dubois", nationality: "Francia", email: "marie.dubois@example.fr",
+    steps: [["public", "Se llamó al establecimiento: confirman los dos cargos y dicen que el banco lo revertirá.", "demo.quejas"], ["public", "Referido a Pro Consumidor.", "demo.quejas"]] });
+  await qrCase(2, { task: tq[1], type: "Denuncia", topic: "Operación sin licencia", channel: "app", channelText: "Registrado en la aplicación", priority: "Alta", status: "recibida", by: "demo.agente1", ago: 2, firstDue: addBiz(-1), due: addBiz(8),
+    subject: "Sigue vendiendo excursiones sin licencia", description: "Durante una llamada de la campaña, un vecino informó que el negocio sigue operando aunque no tiene licencia.", anonymous: true });
+  await qrCase(3, { task: null, partyName: "Cabalgatas Uvero Alto (sin registro)", type: "Queja", topic: "Trato inadecuado", channel: "phone", channelText: "Teléfono", status: "analisis", assigned: "demo.quejas", by: "demo.quejas", ago: 9, firstDue: addBiz(-7), due: addBiz(-1), firstDone: true,
+    subject: "Trato grosero de un guía en una excursión a caballo", description: "Turista canadiense reporta que el guía fue grosero y la dejó sola en el camino de regreso.",
+    person: "Jennifer Clarke", nationality: "Canadá", email: "jclarke@example.ca", steps: [["internal", "Se pidió una visita de inspección.", "demo.quejas"]] });
+  await qrCase(4, { task: tq[2], type: "Sugerencia", topic: "Calidad del servicio", channel: "sigtur", channelText: "SIGTUR", status: "recibida", ago: 1, firstDue: addBiz(4), due: addBiz(29),
+    subject: "Señalización de seguridad en la playa", description: "Enviado desde SIGTUR: sugieren carteles de banderas de seguridad frente al establecimiento.", person: "Analista Licencias (SIGTUR)" });
 
   return { users: DEMO_USERS.length, establishments: ests.length, campaignId, date: today() };
 }

@@ -502,3 +502,148 @@ export const dataChanges = sqliteTable(
   },
   (t) => [index("data_changes_at").on(t.at), index("data_changes_campaign").on(t.campaignId), index("data_changes_est").on(t.establishmentId)],
 );
+
+// ---------- «Quejas y reclamaciones» (a separate module) ----------
+
+// One file per complaint, claim, report or suggestion. «Involucrado» = who it is about (a SIGTUR RUT or typed
+// details); «Presentado por» = who brings it (may be anonymous).
+export const qrCases = sqliteTable(
+  "qr_cases",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    // QR-2026-0001
+    number: text("number").notNull().unique(),
+    year: integer("year").notNull(),
+    seq: integer("seq").notNull(),
+    // Queja | Reclamación | Denuncia | Sugerencia
+    type: text("type").notNull(),
+    topic: text("topic"),
+    // web | sigtur | app | phone | email | office | historic
+    channel: text("channel").notNull(),
+    // Alta | Media | Baja
+    priority: text("priority").notNull().default("Media"),
+    // recibida | analisis | referida | espera | porcerrar | cerrada
+    status: text("status").notNull().default("recibida"),
+    assignedUserId: integer("assigned_user_id").references(() => users.id, { onDelete: "set null" }),
+    createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: text("created_at").notNull().default(now),
+    updatedAt: text("updated_at").notNull().default(now),
+    // Deadlines (local days), fixed when the case is created from «Configuración del módulo»
+    firstDue: text("first_due").notNull(),
+    due: text("due").notNull(),
+    firstDoneAt: text("first_done_at"),
+    subject: text("subject").notNull(),
+    description: text("description").notNull(),
+    solution: text("solution"),
+    partySigtur: integer("party_sigtur", { mode: "boolean" }).notNull().default(false),
+    partyRut: text("party_rut"),
+    partySigturId: text("party_sigtur_id"),
+    partyName: text("party_name").notNull(),
+    partyRazon: text("party_razon"),
+    partyRnc: text("party_rnc"),
+    partyRntStatus: text("party_rnt_status"),
+    partyProvince: text("party_province"),
+    partyMunicipality: text("party_municipality"),
+    partyAddress: text("party_address"),
+    partyPhone: text("party_phone"),
+    partyEmail: text("party_email"),
+    complainantAnonymous: integer("complainant_anonymous", { mode: "boolean" }).notNull().default(false),
+    complainantName: text("complainant_name"),
+    complainantDoc: text("complainant_doc"),
+    complainantNationality: text("complainant_nationality"),
+    complainantPhone: text("complainant_phone"),
+    complainantEmail: text("complainant_email"),
+    closeProposedBy: integer("close_proposed_by").references(() => users.id, { onDelete: "set null" }),
+    closeProposedAt: text("close_proposed_at"),
+    closeNote: text("close_note"),
+    closedBy: integer("closed_by").references(() => users.id, { onDelete: "set null" }),
+    closedAt: text("closed_at"),
+    // SIGTUR's own reference, or the old case number of a historical upload
+    sourceRef: text("source_ref"),
+    // Public form: a fingerprint of the sender's address, only to limit repeated sending
+    senderHash: text("sender_hash"),
+  },
+  (t) => [index("qr_cases_status").on(t.status), index("qr_cases_assigned").on(t.assignedUserId), index("qr_cases_rut").on(t.partyRut), index("qr_cases_created").on(t.createdAt)],
+);
+
+// «Pasos dados»: never edited or deleted. public = can be told to the person and goes in the report.
+export const qrSteps = sqliteTable(
+  "qr_steps",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    caseId: integer("case_id").notNull().references(() => qrCases.id, { onDelete: "cascade" }),
+    at: text("at").notNull().default(now),
+    userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
+    byName: text("by_name"),
+    // public | internal | system
+    kind: text("kind").notNull(),
+    text: text("text").notNull(),
+  },
+  (t) => [index("qr_steps_case").on(t.caseId)],
+);
+
+// «Referencias»: the case was sent to another institution or area.
+export const qrReferrals = sqliteTable(
+  "qr_referrals",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    caseId: integer("case_id").notNull().references(() => qrCases.id, { onDelete: "cascade" }),
+    institution: text("institution").notNull(),
+    sentOn: text("sent_on").notNull(),
+    dueOn: text("due_on"),
+    note: text("note"),
+    response: text("response"),
+    respondedAt: text("responded_at"),
+    createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: text("created_at").notNull().default(now),
+  },
+  (t) => [index("qr_referrals_case").on(t.caseId)],
+);
+
+// «Pruebas»: files are kept in pieces (each upload request stays small); never deleted, only marked replaced.
+export const qrFiles = sqliteTable(
+  "qr_files",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    caseId: integer("case_id").notNull().references(() => qrCases.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    mime: text("mime").notNull(),
+    size: integer("size").notNull(),
+    parts: integer("parts").notNull(),
+    // true once every piece arrived
+    complete: integer("complete", { mode: "boolean" }).notNull().default(false),
+    uploadedBy: integer("uploaded_by").references(() => users.id, { onDelete: "set null" }),
+    uploadedByName: text("uploaded_by_name"),
+    at: text("at").notNull().default(now),
+    replacedAt: text("replaced_at"),
+  },
+  (t) => [index("qr_files_case").on(t.caseId)],
+);
+
+export const qrFileParts = sqliteTable(
+  "qr_file_parts",
+  {
+    fileId: integer("file_id").notNull().references(() => qrFiles.id, { onDelete: "cascade" }),
+    idx: integer("idx").notNull(),
+    data: blob("data", { mode: "buffer" }).notNull(),
+  },
+  (t) => [uniqueIndex("qr_file_parts_pk").on(t.fileId, t.idx)],
+);
+
+// «Informes»: one PDF per version (automatic at closing, or on request).
+export const qrReports = sqliteTable(
+  "qr_reports",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    caseId: integer("case_id").notNull().references(() => qrCases.id, { onDelete: "cascade" }),
+    version: integer("version").notNull(),
+    // auto | request
+    origin: text("origin").notNull(),
+    byName: text("by_name"),
+    createdAt: text("created_at").notNull().default(now),
+    pdf: blob("pdf", { mode: "buffer" }).notNull(),
+  },
+  (t) => [index("qr_reports_case").on(t.caseId)],
+);
+
+export type QrCase = typeof qrCases.$inferSelect;
