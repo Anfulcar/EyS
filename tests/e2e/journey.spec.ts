@@ -33,10 +33,10 @@ test("main journey: campaign → upload → assign → calls → visit → dashb
   await page.goto("/users");
   await page.getByRole("button", { name: "Nuevo usuario" }).click();
   const newUser = page.getByRole("dialog", { name: "Nuevo usuario" });
-  for (const [username, name, role] of [["agente1", "Ana Agente", "agent"], ["inspector1", "Iván Inspector", "inspector"]]) {
+  for (const [username, name, profile] of [["agente1", "Ana Agente", "Agente de llamadas"], ["inspector1", "Iván Inspector", "Inspector"]]) {
     await newUser.locator("input[name=username]").fill(username);
     await newUser.locator("input[name=name]").fill(name);
-    await newUser.locator("select[name=role]").selectOption(role);
+    await newUser.locator("select[name=profileId]").selectOption({ label: profile });
     await newUser.getByRole("button", { name: "Crear" }).click();
     await expect(newUser.getByText(`${username} / ${username}123`)).toBeVisible();
   }
@@ -330,7 +330,7 @@ test("sensitive actions ask for the password again after 10 minutes", async ({ p
   const row = page.locator("tr", { hasText: "agente1" });
   await row.getByRole("button", { name: "Editar" }).click();
   const dialog = page.getByRole("dialog");
-  await dialog.locator("select[name=role]").selectOption("supervisor");
+  await dialog.locator("select[name=profileId]").selectOption({ label: "Supervisor" });
   await dialog.getByRole("button", { name: "Guardar" }).click();
 
   // The server refuses until the password is confirmed; then the change goes through.
@@ -342,8 +342,8 @@ test("sensitive actions ask for the password again after 10 minutes", async ({ p
   await dialog.getByRole("button", { name: "Confirmar y continuar" }).click();
   await expect(row.locator("td", { hasText: /^Supervisor$/ })).toBeVisible();
 
-  await page.goto("/logs?action=user.role_changed");
-  await expect(page.locator("td", { hasText: "agente1: agent → supervisor" })).toBeVisible();
+  await page.goto("/logs?action=user.profile_changed");
+  await expect(page.locator("td", { hasText: "agente1: perfil «Agente de llamadas» → «Supervisor»" })).toBeVisible();
 });
 
 test("delete a report, new campaign from results, and the SIGTUR connection", async ({ page, request }) => {
@@ -584,7 +584,7 @@ test("agent summary from statistics and follow-up; agents only see their own", a
   const newUser = page.getByRole("dialog", { name: "Nuevo usuario" });
   await newUser.locator("input[name=username]").fill("agente2");
   await newUser.locator("input[name=name]").fill("Bruno Agente");
-  await newUser.locator("select[name=role]").selectOption("agent");
+  await newUser.locator("select[name=profileId]").selectOption({ label: "Agente de llamadas" });
   await newUser.getByRole("button", { name: "Crear" }).click();
   await expect(newUser.getByText("agente2 / agente2123")).toBeVisible();
 
@@ -702,28 +702,57 @@ test("easier screens: folding menu, multi-choice filters, bar for ticked rows, p
   await expect(drawer).toHaveCount(0);
 });
 
-test("general administration and per-module permissions; calls settings for the module", async ({ page }) => {
+test("general administration and permission profiles; calls settings for the module", async ({ page }) => {
   await signIn(page, "admin", NEW_PW);
 
   // «Administración general»: one menu entry with its tabs
   await page.locator("aside nav a", { hasText: "Administración general" }).click();
   await expect(page).toHaveURL(/\/users$/);
-  for (const tab of ["Personas", "Permisos por módulo", "Conexión con SIGTUR", "Registro"]) await expect(page.getByRole("link", { name: tab, exact: true })).toBeVisible();
-  await page.getByRole("link", { name: "Permisos por módulo", exact: true }).click();
-  const perms = page.getByTestId("permissions");
-  const bruno = perms.locator("tr", { hasText: "Bruno Agente" });
-  await bruno.getByLabel("Bruno Agente: Campañas de llamadas").uncheck();
-  await bruno.getByLabel("Bruno Agente: Quejas y reclamaciones").selectOption("register");
-  await page.getByRole("button", { name: "Guardar" }).click();
-  await expect(page.getByTestId("notices").getByText("Permisos guardados.")).toBeVisible();
+  for (const tab of ["Personas", "Permisos", "Conexión con SIGTUR", "Registro"]) await expect(page.getByRole("link", { name: tab, exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Permisos", exact: true }).click();
+  const profiles = page.getByTestId("profiles");
+  // Day one: the profiles copy the old roles; the Administrador profile can't be changed.
+  for (const name of ["Administrador", "Supervisor", "Agente de llamadas", "Agente · registra quejas", "Inspector", "Gestor de quejas"]) await expect(profiles.getByRole("button", { name, exact: false }).first()).toBeVisible();
+  await profiles.getByRole("button", { name: /^Administrador/ }).click();
+  await expect(page.getByText(/siempre tiene todas las acciones/)).toBeVisible();
+  await expect(page.locator("[data-action='c.call']")).toBeDisabled();
 
-  // Without «Campañas de llamadas» the call screens answer "not found", also on the server
+  // A new profile: ticking an action ticks what it needs, unticking removes what depends on it; the menu preview follows.
+  await page.getByRole("button", { name: "+ Nuevo perfil" }).click();
+  await expect(page).toHaveURL(/\/admin\/permissions\?p=\d+$/);
+  await page.locator("#pname").fill("Registro de quejas");
+  await page.locator("[data-action='q.workAny']").check();
+  await expect(page.locator("[data-action='q.seeAll']")).toBeChecked();
+  await expect(page.locator("[data-action='q.register']")).toBeChecked();
+  await page.locator("[data-action='q.seeAll']").uncheck();
+  await expect(page.locator("[data-action='q.workAny']")).not.toBeChecked();
+  await expect(page.locator("[data-action='q.workMine']")).toBeChecked();
+  await expect(page.locator("[data-action='g.perms']")).toBeDisabled();
+  await expect(page.getByTestId("menu-preview")).toContainText("Casos");
+  await expect(page.getByTestId("menu-preview")).not.toContainText("Campañas");
+  await page.getByRole("button", { name: "Guardar", exact: true }).click();
+  await expect(page.getByTestId("notices").getByText(/Perfil guardado/)).toBeVisible();
+
+  // «Personas y perfiles»: Bruno gets it
+  await page.getByRole("link", { name: "Personas y perfiles" }).click();
+  await page.getByTestId("assign-profiles").getByLabel("Bruno Agente: Perfil").selectOption({ label: "Registro de quejas" });
+  await page.getByRole("button", { name: "Guardar" }).click();
+  await expect(page.getByTestId("notices").getByText("Perfiles actualizados: 1.")).toBeVisible();
+  await page.getByRole("link", { name: "Comparar perfiles" }).click();
+  await expect(page.getByTestId("compare-profiles")).toContainText("Registro de quejas");
+  const xlsx = await page.request.get("/api/admin/profiles");
+  expect(xlsx.status()).toBe(200);
+
+  // What the profile doesn't allow answers "not found", also on the server
   await signIn(page, "agente2", "Bruno-Clave-1");
-  // With «Registrar» in complaints but no calls, the person starts in «Quejas y reclamaciones»
+  // With «Registrar casos» but nothing in calls, the person starts in «Quejas y reclamaciones»
   await expect(page).toHaveURL(/\/quejas$/);
   await expect(page.locator("aside nav a", { hasText: "Mis llamadas" })).toHaveCount(0);
   await page.goto("/calls");
   await expect(page.getByRole("heading", { name: "No encontrado" })).toBeVisible();
+  await page.goto("/admin/permissions");
+  await expect(page.getByRole("heading", { name: "No encontrado" })).toBeVisible();
+  expect((await page.request.get("/api/admin/profiles")).status()).toBe(404);
 
   // «Configuración · Llamadas»: values for new campaigns
   await signIn(page, "admin", NEW_PW);
@@ -735,20 +764,18 @@ test("general administration and per-module permissions; calls settings for the 
   await page.getByRole("button", { name: "Nueva campaña" }).click();
   await expect(page.getByRole("dialog", { name: "Nueva campaña" }).locator("input[name=maxAttempts]")).toHaveValue("4");
 
-  // Back as it was, so access can be given again
-  await page.goto("/admin/permissions");
-  await page.getByTestId("permissions").locator("tr", { hasText: "Bruno Agente" }).getByLabel("Bruno Agente: Campañas de llamadas").check();
-  await page.getByRole("button", { name: "Guardar" }).click();
-  await expect(page.getByTestId("notices").getByText("Permisos guardados.")).toBeVisible();
+  // The changes are in the log
+  await page.goto("/logs?action=profile.updated");
+  await expect(page.locator("td", { hasText: /«Registro de quejas».*añadió/ })).toBeVisible();
 });
 
 test("«Quejas y reclamaciones»: case linked to a RUT, steps, proof, closing approved by another person, report, public form and SIGTUR", async ({ page, request }) => {
   await signIn(page, "admin", NEW_PW);
-  // Bruno handles complaints (and keeps calls access); administrators always supervise.
-  await page.goto("/admin/permissions");
-  await page.getByTestId("permissions").locator("tr", { hasText: "Bruno Agente" }).getByLabel("Bruno Agente: Quejas y reclamaciones").selectOption("manage");
+  // Bruno handles complaints («Gestor de quejas»); the Administrador profile does everything.
+  await page.goto("/admin/permissions?view=assign");
+  await page.getByTestId("assign-profiles").getByLabel("Bruno Agente: Perfil").selectOption({ label: "Gestor de quejas" });
   await page.getByRole("button", { name: "Guardar" }).click();
-  await expect(page.getByTestId("notices").getByText("Permisos guardados.")).toBeVisible();
+  await expect(page.getByTestId("notices").getByText("Perfiles actualizados: 1.")).toBeVisible();
 
   // New case linked to a RUT from SIGTUR, assigned to Bruno, with a photo
   // The menu is divided by module: «Casos» sits under «Quejas y reclamaciones»

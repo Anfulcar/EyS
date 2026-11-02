@@ -16,7 +16,7 @@ const PAGE = 200;
 
 // «Reporte de cambios»: what changed in each establishment, to update SIGTUR by hand and mark it done.
 export default async function ChangesPage({ searchParams }: { searchParams: Promise<ChangeFilters & { page?: string }> }) {
-  await requireUser(["admin", "supervisor"]);
+  await requireUser("c.changes");
   const sp = await searchParams;
   const { t, lang } = await getDict();
   const page = Math.max(0, Number(sp.page) || 0);

@@ -5,9 +5,10 @@ import { db } from "@/db";
 import { appMeta, establishments, qrCases, qrFileParts, qrFiles, qrReferrals, qrReports, qrSteps, users, type QrCase, type User } from "@/db/schema";
 import { addBusinessDays, localDateOf, localDayEnd, localDayStart, nowIso, todayLocal } from "./dates";
 import { many } from "./multi";
+import { can, peopleWho, withActions, type Who } from "./permissions";
 
-// «Quejas y reclamaciones»: a module separate from the call campaigns, with its own permissions per person
-// (users.qrLevel; administrators always supervise).
+// «Quejas y reclamaciones»: a module separate from the call campaigns. What each person may do comes from
+// their permission profile (actions q.*, see src/lib/permissions-core.mjs).
 
 export const QR_TYPES = ["Queja", "Reclamación", "Denuncia", "Sugerencia"] as const;
 export const QR_STATUSES = ["recibida", "analisis", "referida", "espera", "porcerrar", "cerrada"] as const;
@@ -16,19 +17,27 @@ export const QR_PRIORITIES = ["Alta", "Media", "Baja"] as const;
 // Channels a person can choose when registering a case in the app.
 export const QR_MANUAL_CHANNELS = ["app", "phone", "email", "office"] as const;
 
-const ORDER = { none: 0, register: 1, manage: 2, supervise: 3 } as const;
-export type QrLevel = keyof typeof ORDER;
-
-export function qrLevel(u: Pick<User, "role" | "qrLevel">): QrLevel {
-  if (u.role === "admin") return "supervise";
-  return (u.qrLevel in ORDER ? u.qrLevel : "none") as QrLevel;
+type Person = Who & { id: number };
+// Who sees a case: «Ver todos los casos» every case; otherwise the ones the person registered or is assigned.
+export const canSee = (u: Person, c: Pick<QrCase, "createdBy" | "assignedUserId">) =>
+  can(u, "q.seeAll") || (can(u, "q.register") && (c.createdBy === u.id || c.assignedUserId === u.id));
+// Who works a case: «Trabajar cualquier caso» any open case; «Trabajar los casos asignados» their own.
+export const canWork = (u: Person, c: Pick<QrCase, "assignedUserId" | "status">) =>
+  c.status !== "cerrada" && (can(u, "q.workAny") || (can(u, "q.workMine") && c.assignedUserId === u.id));
+// Name, phone, email and address of whoever presented the case: «Ver datos personales», or the person who
+// registered it (they typed it in).
+export const canSeePersonal = (u: Person, c: Pick<QrCase, "createdBy">) => can(u, "q.personal") || c.createdBy === u.id;
+// Proof files: «Descargar pruebas», or the person who registered the case.
+export const canGetFiles = (u: Person, c: Pick<QrCase, "createdBy">) => can(u, "q.files") || c.createdBy === u.id;
+export const HIDDEN = "••••";
+const PERSONAL = ["complainantName", "complainantDoc", "complainantNationality", "complainantPhone", "complainantEmail"] as const;
+// The case as the person may see it: the presenter's personal data replaced by •••• without «Ver datos personales».
+export function shown<T extends Pick<QrCase, "createdBy"> & Partial<Pick<QrCase, (typeof PERSONAL)[number]>>>(u: Person, c: T): T {
+  if (canSeePersonal(u, c)) return c;
+  const out = { ...c };
+  for (const k of PERSONAL) if (out[k]) (out as Record<string, unknown>)[k] = HIDDEN;
+  return out;
 }
-export const atLeast = (u: Pick<User, "role" | "qrLevel">, min: QrLevel) => ORDER[qrLevel(u)] >= ORDER[min];
-// Who sees a case: handlers and supervisors see every case; «Registrar» only the ones they registered.
-export const canSee = (u: User, c: Pick<QrCase, "createdBy">) => atLeast(u, "manage") || c.createdBy === u.id;
-// Who works a case: supervisors any; handlers the ones assigned to them.
-export const canWork = (u: User, c: Pick<QrCase, "assignedUserId" | "status">) =>
-  c.status !== "cerrada" && (atLeast(u, "supervise") || (qrLevel(u) === "manage" && c.assignedUserId === u.id));
 
 // ---------- Settings («Configuración · Quejas y reclamaciones») ----------
 
@@ -199,7 +208,7 @@ export type CaseFilters = { status?: string; type?: string; channel?: string; to
 // The list a person may see, with the filters of «Casos» (several choices per filter, as everywhere).
 export function caseWhere(u: User, f: CaseFilters, today = todayLocal(), warnDays = 3): SQL[] {
   const w: SQL[] = [];
-  if (!atLeast(u, "manage")) w.push(eq(qrCases.createdBy, u.id));
+  if (!can(u, "q.seeAll")) w.push(or(eq(qrCases.createdBy, u.id), eq(qrCases.assignedUserId, u.id))!);
   const st = many(f.status);
   const conds: SQL[] = [];
   for (const s of st) {
@@ -228,7 +237,10 @@ export function caseWhere(u: User, f: CaseFilters, today = todayLocal(), warnDay
   if (f.to) w.push(sql`${qrCases.createdAt} <= ${localDayEnd(f.to)}`);
   if (f.q) {
     const q = `%${f.q.trim()}%`;
-    w.push(or(like(qrCases.number, q), like(qrCases.subject, q), like(qrCases.partyName, q), like(qrCases.partyRut, q), like(qrCases.partySigturId, q), like(qrCases.complainantName, q))!);
+    // The presenter's name is searchable only with «Ver datos personales».
+    const fields = [like(qrCases.number, q), like(qrCases.subject, q), like(qrCases.partyName, q), like(qrCases.partyRut, q), like(qrCases.partySigturId, q)];
+    if (can(u, "q.personal")) fields.push(like(qrCases.complainantName, q));
+    w.push(or(...fields)!);
   }
   return w;
 }
@@ -243,7 +255,7 @@ export async function listCases(u: User, f: CaseFilters, limit = 200, offset = 0
 export async function caseCounters(u: User) {
   const s = await qrSettings();
   const today = todayLocal();
-  const base = atLeast(u, "manage") ? undefined : eq(qrCases.createdBy, u.id);
+  const base = can(u, "q.seeAll") ? undefined : or(eq(qrCases.createdBy, u.id), eq(qrCases.assignedUserId, u.id));
   const n = (cond: SQL) => sql<number>`coalesce(sum(case when ${cond} then 1 else 0 end), 0)`;
   const open = sql`${qrCases.status} <> 'cerrada'`;
   const [r] = await db
@@ -302,8 +314,9 @@ export async function setStatus(c: QrCase, status: string, by: { id: number; nam
 export async function assign(c: QrCase, userId: number | null, by: { id: number; name: string }) {
   let name = "Sin asignar";
   if (userId) {
-    const [u] = await db.select().from(users).where(eq(users.id, userId));
-    if (!u || !u.active || !atLeast(u, "manage")) return false;
+    const [row] = await db.select().from(users).where(eq(users.id, userId));
+    const [u] = row ? await withActions([row]) : [];
+    if (!u || !u.active || !can(u, "q.workMine")) return false;
     name = u.name;
   }
   await db.update(qrCases).set({ assignedUserId: userId, status: c.status === "recibida" && userId ? "analisis" : c.status, updatedAt: nowIso() }).where(eq(qrCases.id, c.id));
@@ -471,6 +484,6 @@ export async function qrStats(f: { days: number; types: string[] }) {
 }
 
 export async function handlers() {
-  const list = await db.select().from(users).where(eq(users.active, true)).orderBy(asc(users.name));
-  return list.filter((u) => atLeast(u, "manage")).map((u) => ({ id: u.id, name: u.name }));
+  // Who can be assigned a case: «Trabajar los casos asignados».
+  return (await peopleWho("q.workMine")).map((u) => ({ id: u.id, name: u.name }));
 }

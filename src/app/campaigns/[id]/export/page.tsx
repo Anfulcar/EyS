@@ -4,12 +4,15 @@ import { db } from "@/db";
 import { establishments, users } from "@/db/schema";
 import { CALL_CODES, COMPANY_STATUSES, OPERATION_LABELS, VISIT_CODES } from "@/lib/catalog";
 import { getDict } from "@/lib/i18n-server";
+import { idsWho } from "@/lib/permissions";
+import { requireUser } from "@/lib/auth";
 
 export default async function ExportPage({ params }: { params: Promise<{ id: string }> }) {
+  await requireUser("c.excel");
   const id = Number((await params).id);
   const { t, lang } = await getDict();
   const [agents, zones, priorities] = await Promise.all([
-    db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.role, ["agent", "supervisor", "admin"])).orderBy(asc(users.name)),
+    idsWho("c.call", false).then((ids) => db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, ids)).orderBy(asc(users.name))),
     db.selectDistinct({ v: establishments.zonaOperativa }).from(establishments).where(and(eq(establishments.campaignId, id), isNotNull(establishments.zonaOperativa))),
     db.selectDistinct({ v: establishments.prioridad }).from(establishments).where(and(eq(establishments.campaignId, id), isNotNull(establishments.prioridad))),
   ]);

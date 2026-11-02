@@ -1,13 +1,13 @@
 import ExcelJS from "exceljs";
 import { logActivity } from "@/lib/audit";
-import { MANAGERS, notFoundResponse, routeUser } from "@/lib/auth";
+import { notFoundResponse, routeUser } from "@/lib/auth";
 import { CHANGE_FIELDS, changeRows } from "@/lib/changes";
 import { localDateOf } from "@/lib/dates";
 import { styleHeader, workbookResponse } from "@/lib/sheets";
 
 // «Reporte de cambios» as Excel, with the same filters as the screen (to update SIGTUR by hand).
 export async function GET(req: Request) {
-  const user = await routeUser(MANAGERS);
+  const user = await routeUser("c.changes");
   if (!user) return notFoundResponse();
   const sp = Object.fromEntries(new URL(req.url).searchParams);
   const rows = await changeRows({ campaign: sp.campaign, field: sp.field, state: sp.state, from: sp.from, to: sp.to, q: sp.q }, 50000);

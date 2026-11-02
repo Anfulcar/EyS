@@ -3,9 +3,10 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { db } from "@/db";
 import { campaigns, companies, establishments, qrCases, qrReports, users, type User } from "@/db/schema";
 import {
-  addStep, approveClose, atLeast, canSee, canWork, checkUploadToken, cleanCaseInput, createCase, DEFAULT_QR_SETTINGS, fileContent, findSigturParty, listCases, proposeClose, putFilePart,
-  qrSettings, qrStats, refer, answerReferral, reopen, returnClose, saveQrSettings, startFile, uploadToken, businessDaysBetween, type CaseInput,
+  addStep, approveClose, canSee, canSeePersonal, canWork, checkUploadToken, cleanCaseInput, createCase, DEFAULT_QR_SETTINGS, fileContent, findSigturParty, listCases, proposeClose, putFilePart,
+  qrSettings, qrStats, refer, answerReferral, reopen, returnClose, saveQrSettings, shown, startFile, uploadToken, businessDaysBetween, type CaseInput,
 } from "@/lib/qr";
+import { can } from "@/lib/permissions";
 import { generateCaseReport } from "@/lib/qr-report";
 
 let admin: User, sup: User, handler: User, other: User, reg: User, none: User;
@@ -27,12 +28,29 @@ beforeAll(async () => {
   await db.insert(establishments).values({ campaignId: c.id, companyId: co.id, sigturId: "QR-SIG-1", rut: "QR-RUT-1", nombreComercial: "Hotel Prueba", rnc: "130-1", estatusRnt: "Vencida", provincia: "La Altagracia" });
 });
 
-describe("«Quejas y reclamaciones»: permissions per level", () => {
-  it("administrators always supervise; levels add up", () => {
-    expect(atLeast(admin, "supervise")).toBe(true);
-    expect(atLeast(none, "register")).toBe(false);
-    expect(atLeast(reg, "register")).toBe(true);
-    expect(atLeast(reg, "manage")).toBe(false);
+describe("«Quejas y reclamaciones»: permissions from the profile", () => {
+  it("people without a profile keep exactly their old level (administrators everything)", () => {
+    expect(can(admin, "q.settings")).toBe(true);
+    expect(can(none, "q.register")).toBe(false);
+    expect(can(reg, "q.register")).toBe(true);
+    expect(can(reg, "q.seeAll")).toBe(false);
+    expect(can(handler, "q.workMine") && !can(handler, "q.assign")).toBe(true);
+    expect(can(sup, "q.approve")).toBe(true);
+  });
+
+  it("a profile with only some actions: assigned cases are visible, personal data hidden without «Ver datos personales»", () => {
+    const worker = { ...handler, id: other.id, actions: ["q.register", "q.workMine"] };
+    // A case as stored (not saved here, so the statistics below keep their counts).
+    const c = { createdBy: sup.id, assignedUserId: other.id, status: "analisis", complainantName: "Turista", complainantEmail: "t@example.com", complainantDoc: null, complainantNationality: null, complainantPhone: null };
+    expect(canSee(worker, c)).toBe(true);
+    expect(canWork(worker, c)).toBe(true);
+    expect(canSeePersonal(worker, c)).toBe(false);
+    expect(shown(worker, c).complainantName).toBe("••••");
+    expect(shown(worker, c).complainantEmail).toBe("••••");
+    expect(shown({ ...worker, actions: [...worker.actions, "q.personal"] }, c).complainantName).toBe("Turista");
+    // The person who registered a case always sees what they typed.
+    expect(canSeePersonal({ ...sup, actions: ["q.register"] }, c)).toBe(true);
+    expect(canSee({ ...reg, actions: ["q.register"] }, c)).toBe(false);
   });
 
   it("«Registrar» sees only the cases they registered; handlers work only their assigned ones", async () => {

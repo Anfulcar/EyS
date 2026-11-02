@@ -3,11 +3,11 @@ import Papa from "papaparse";
 import { db } from "@/db";
 import { logActivity } from "@/lib/audit";
 import { callAttempts, callResults, establishments, users } from "@/db/schema";
-import { MANAGERS, notFoundResponse, routeUser } from "@/lib/auth";
+import { notFoundResponse, routeUser } from "@/lib/auth";
 import { codeMatrixText } from "@/lib/catalog";
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
-  const user = await routeUser(MANAGERS);
+  const user = await routeUser("c.excel");
   if (!user) return notFoundResponse();
   const id = Number((await params).id);
   await logActivity(user, "export.downloaded", { campaignId: id, entity: "campaign", entityId: id, summary: "Todas las llamadas (CSV)" });

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { blob, index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { blob, index, integer, sqliteTable, text, uniqueIndex, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 
 const now = sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`;
 
@@ -20,8 +20,24 @@ export const users = sqliteTable("users", {
   callsAccess: integer("calls_access", { mode: "boolean" }).notNull().default(true),
   // …and level in «Quejas y reclamaciones»: none | register | manage | supervise
   qrLevel: text("qr_level").notNull().default("none"),
+  // «Perfiles de permisos»: what the person may do (role, callsAccess and qrLevel are kept only as the
+  // starting point for people who don't have a profile yet).
+  profileId: integer("profile_id").references((): AnySQLiteColumn => permissionProfiles.id),
   createdAt: text("created_at").notNull().default(now),
 });
+
+// «Perfiles de permisos»: a named checklist of actions (JSON list, see src/lib/permissions-core.mjs).
+// key = "admin" marks the locked Administrador profile; the other day-one profiles keep their key for reference.
+export const permissionProfiles = sqliteTable("permission_profiles", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  key: text("key").unique(),
+  name: text("name").notNull().unique(),
+  description: text("description"),
+  actions: text("actions").notNull().default("[]"),
+  createdAt: text("created_at").notNull().default(now),
+  updatedAt: text("updated_at").notNull().default(now),
+});
+export type PermissionProfile = typeof permissionProfiles.$inferSelect;
 
 export const campaigns = sqliteTable("campaigns", {
   id: integer("id").primaryKey({ autoIncrement: true }),

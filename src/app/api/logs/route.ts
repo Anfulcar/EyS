@@ -4,7 +4,7 @@ import { notFoundResponse, routeUser } from "@/lib/auth";
 import { activityRows, errorRows } from "@/lib/logs";
 
 export async function GET(req: Request) {
-  const user = await routeUser(["admin"]);
+  const user = await routeUser("g.log");
   if (!user) return notFoundResponse();
   const sp = Object.fromEntries(new URL(req.url).searchParams);
   const errors = sp.tab === "errors";

@@ -7,16 +7,17 @@ import { SectionTitle, StatusBadge } from "@/components/ui";
 import { db } from "@/db";
 import { campaigns } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
+import { can } from "@/lib/permissions";
 import { DICTS, type Dict } from "@/lib/i18n";
 import { getDict } from "@/lib/i18n-server";
 import { deleteCampaignAction, setCampaignStatusAction, updateCampaignAction, updateScriptAction } from "../../../actions";
 
 export default async function SettingsPage({ params }: { params: Promise<{ id: string }> }) {
-  const me = await requireUser(["admin", "supervisor"]);
+  const me = await requireUser(["c.edit", "c.settings"]);
   const id = Number((await params).id);
   const c = (await db.query.campaigns.findFirst({ where: eq(campaigns.id, id) }))!;
   const { t } = await getDict();
-  // Administrators and supervisors edit the call script; the rest of the settings are for administrators.
+  // «Configuración · Llamadas» edits the call script; the rest needs «Crear, editar y cerrar campañas».
   const script = (
     <ActionForm action={updateScriptAction} className="card space-y-4">
       <SectionTitle icon={<FileText className="h-4 w-4" />}>{t.scriptTitle}</SectionTitle>
@@ -33,7 +34,7 @@ export default async function SettingsPage({ params }: { params: Promise<{ id: s
       <div className="flex justify-end"><SubmitButton>{t.save}</SubmitButton></div>
     </ActionForm>
   );
-  if (me.role !== "admin") return script;
+  if (!can(me, "c.edit")) return script;
   const statusLabel = t[`campaignStatus_${c.status}` as keyof Dict];
   return (
     <div className="space-y-6">

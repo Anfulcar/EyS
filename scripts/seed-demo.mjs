@@ -4,6 +4,7 @@
 //   2. the database already has data and was never marked as a demo database (protects real data), or
 //   3. DEMO_PASSWORD is missing (no password is ever written in the code).
 import bcrypt from "bcryptjs";
+import { ensureProfiles } from "../src/lib/permissions-core.mjs";
 
 export const DEMO_USERS = [
   { username: "demo.admin", name: "Adriana Admin (demo)", role: "admin" },
@@ -19,7 +20,7 @@ export const DEMO_USERS = [
 const QR_LEVELS = { "demo.supervisor": "supervise", "demo.agente1": "register" };
 
 // Tables in delete order (children first).
-const TABLES = ["qr_file_parts", "qr_files", "qr_reports", "qr_referrals", "qr_steps", "qr_cases", "removed_tasks", "data_changes", "sigtur_outbox", "history_archive", "integration_log", "api_keys", "generated_reports", "report_templates", "absences", "activity_log", "error_log", "call_results", "call_attempts", "visits", "status_changes", "phones", "establishments", "companies", "import_logs", "campaigns", "users"];
+const TABLES = ["qr_file_parts", "qr_files", "qr_reports", "qr_referrals", "qr_steps", "qr_cases", "removed_tasks", "data_changes", "sigtur_outbox", "history_archive", "integration_log", "api_keys", "generated_reports", "report_templates", "absences", "activity_log", "error_log", "call_results", "call_attempts", "visits", "status_changes", "phones", "establishments", "companies", "import_logs", "campaigns", "users", "permission_profiles"];
 
 function rng(seed) {
   return () => {
@@ -127,6 +128,8 @@ export async function seedDemo(client, env = process.env) {
     });
     userIds[u.username] = Number(res.rows[0].id);
   }
+  // «Perfiles de permisos»: the day-one profiles, one per demo person.
+  await ensureProfiles(client);
   const camp = await client.execute({
     sql: "INSERT INTO campaigns (name, description, start_date, end_date, status, max_attempts, followup_days, created_by) VALUES (?, ?, ?, ?, 'active', 3, 5, ?) RETURNING id",
     args: ["Campaña demo – Región Este", "Datos ficticios para probar la aplicación. Se recargan en cada despliegue.", shiftDays(-10), shiftDays(60), userIds["demo.admin"]],

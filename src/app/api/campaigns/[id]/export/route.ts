@@ -3,7 +3,7 @@ import ExcelJS from "exceljs";
 import { db } from "@/db";
 import { logActivity } from "@/lib/audit";
 import { callAttempts, callResults, campaigns, companies, establishments, phones, statusChanges, users, visits } from "@/db/schema";
-import { MANAGERS, notFoundResponse, routeUser } from "@/lib/auth";
+import { notFoundResponse, routeUser } from "@/lib/auth";
 import { codeMatrixText, label, MATRIX_COLUMNS, OBSTACLES, operationOf, PHONE_KINDS, PHONE_REASONS } from "@/lib/catalog";
 import { localDayEnd, localDayStart } from "@/lib/dates";
 import { EXPORT_SHEETS, parseExportChoice, type ExportSheetKey } from "@/lib/export-spec";
@@ -16,7 +16,7 @@ const d = (v: string | null | undefined) =>
 const DATE_TIME_COLS = new Set(["Fecha y hora", "Revisada", "Llamada 1 fecha", "Llamada 2 fecha", "Llamada 3 fecha"]);
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const user = await routeUser(MANAGERS);
+  const user = await routeUser("c.excel");
   if (!user) return notFoundResponse();
   const id = Number((await params).id);
   const c = await db.query.campaigns.findFirst({ where: eq(campaigns.id, id) });

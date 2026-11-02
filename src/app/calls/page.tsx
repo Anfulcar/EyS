@@ -9,6 +9,7 @@ import { Empty, PriorityBadge, SigturTag, StatusBadge } from "@/components/ui";
 import { db } from "@/db";
 import { campaigns, companies, establishments, phones, users } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
+import { can } from "@/lib/permissions";
 import { CLOSED_STATUSES, codeLabel, COMPANY_STATUSES, label } from "@/lib/catalog";
 import { fmtDateTime, nowIso, todayLocal } from "@/lib/dates";
 import { getDict } from "@/lib/i18n-server";
@@ -24,13 +25,14 @@ const rncKey = sql<string>`replace(replace(replace(coalesce(${companies.rnc}, ''
 export default async function CallsPage({ searchParams }: { searchParams: Promise<{ tab?: string; agent?: string; campaign?: string; limit?: string; att?: string }> }) {
   // The open campaigns are read at the same time as the account (nothing is shown before the role check).
   const [me, sp, { t, lang }, open] = await Promise.all([
-    requireUser(["agent", "admin", "supervisor"]),
+    requireUser("c.call"),
     searchParams,
     getDict(),
     db.select().from(campaigns).where(and(ne(campaigns.status, "closed"), ne(campaigns.kind, "email"))),
   ]);
   const tab = (TABS as readonly string[]).includes(sp.tab ?? "") ? sp.tab! : "due";
-  const isManager = me.role !== "agent";
+  // With «Asignar y mover tareas» the person can open another agent's queue.
+  const isManager = can(me, "c.assign");
   const agentId = isManager && sp.agent ? Number(sp.agent) : me.id;
   const limit = Math.min(2000, Math.max(PAGE, Number(sp.limit) || PAGE));
   const today = todayLocal();

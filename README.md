@@ -7,14 +7,27 @@ UI in Spanish and English.
 
 Stack: Next.js 15 (App Router) · Turso (libSQL/SQLite) with Drizzle ORM · local username/password users · Tailwind · ExcelJS.
 
-## Roles
+## Permission profiles
 
-| Role | Can do |
+Each person has one **permission profile**: a checklist of actions (list and dependencies in
+`src/lib/permissions-core.mjs`, texts in `src/lib/permissions-text.ts`). Every screen, server action and download
+checks an action on the server (`requireUser` / `assertUser` / `routeUser` in `src/lib/auth.ts`, `can()` in
+`src/lib/permissions.ts`); anything not allowed answers "not found". Profiles are managed in «Administración general →
+Permisos» by the locked **Administrador** profile only.
+
+Day-one profiles copy the old roles (`users.role`, `calls_access`, `qr_level`, kept only as the starting point):
+
+| Profile | Can do |
 |---|---|
-| **admin** | Everything: users, campaigns, uploads, assignment, dashboards, exports, activity and error log ("Registro") |
-| **supervisor** | Campaigns (except create/delete/settings), uploads, assignment, visits, dashboards, exports |
-| **agent** | Only "Mis llamadas": the companies assigned to them in active campaigns within their dates |
-| **inspector** | Only "Visitas": pending field visits, register V1–V7, download route sheet |
+| **Administrador** | Everything, including profiles (locked) |
+| **Supervisor** | Calls: everything except create/edit/close/delete campaigns and remove RUTs; complaints: everything |
+| **Agente de llamadas** | "Mis llamadas" and their own calls |
+| **Agente · registra quejas** | The same, plus registering complaints |
+| **Inspector** | "Visitas" |
+| **Gestor de quejas** | Complaints only: all cases, work assigned ones, personal data, proof, statistics |
+
+`scripts/migrate.mjs` runs `ensureProfiles()` on every deploy: it creates these once and gives anyone without a profile
+the one matching their old access (or an extra profile with exactly that access).
 
 ## How the call workflow works (plan §5.4–5.5, §6)
 

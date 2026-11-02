@@ -3,18 +3,19 @@ import { and, desc, eq, gte, inArray, isNotNull, isNull, lte, or, sql, type SQL 
 import { alias } from "drizzle-orm/sqlite-core";
 import { db } from "@/db";
 import { callAttempts, callResults, campaigns, companies, establishments, users, type User } from "@/db/schema";
+import { can, type Who } from "./permissions";
 import { localDayEnd, localDayStart } from "./dates";
 import { many, manyIds } from "./multi";
 
 export type CallFilters = { campaign?: string; agent?: string; code?: string; from?: string; to?: string; review?: string };
 
-// Agents only ever see their own calls; administrators and supervisors see everyone's.
+// With «Revisar las llamadas de todos» a person sees everyone's calls; otherwise only their own.
 function scope(me: User): SQL | undefined {
-  return me.role === "agent" ? eq(callAttempts.userId, me.id) : undefined;
+  return canSeeAllCalls(me) ? undefined : eq(callAttempts.userId, me.id);
 }
 
-export function canSeeAllCalls(me: User) {
-  return me.role === "admin" || me.role === "supervisor";
+export function canSeeAllCalls(me: Who) {
+  return can(me, "c.review");
 }
 
 function where(me: User, f: CallFilters): SQL | undefined {

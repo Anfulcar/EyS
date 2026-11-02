@@ -6,8 +6,9 @@ import { NewCaseForm } from "@/components/qr/NewCaseForm";
 import { Empty } from "@/components/ui";
 import { fmtDate } from "@/lib/dates";
 import { getDict } from "@/lib/i18n-server";
-import { atLeast, caseCounters, deadlineOf, handlers, listCases, qrSettings, QR_CHANNELS, QR_MANUAL_CHANNELS, QR_PRIORITIES, QR_STATUSES, QR_TYPES, type CaseFilters } from "@/lib/qr";
-import { requireQr } from "@/lib/qr-auth";
+import { caseCounters, deadlineOf, handlers, listCases, qrSettings, QR_CHANNELS, QR_MANUAL_CHANNELS, QR_PRIORITIES, QR_STATUSES, QR_TYPES, type CaseFilters } from "@/lib/qr";
+import { can } from "@/lib/permissions";
+import { requireUser } from "@/lib/auth";
 import { QR_CHANNEL_TEXT, QR_CHANNEL_TONE, QR_PRIORITY_TEXT, QR_STATUS_TEXT, QR_STATUS_TONE, QR_TEXT, QR_TYPE_TEXT } from "@/lib/qr-i18n";
 import { createCaseAction, lookupRutAction } from "./actions";
 
@@ -15,7 +16,7 @@ const DOT = { ok: "bg-emerald-500", warn: "bg-amber-500", late: "bg-mitur-red", 
 
 // «Casos»: counters, one row of filters and the list, as in the approved preview.
 export default async function CasesPage({ searchParams }: { searchParams: Promise<CaseFilters & Record<string, string | undefined>> }) {
-  const u = await requireQr("register");
+  const u = await requireUser("q.register");
   const raw = await searchParams;
   const { t: common, lang } = await getDict();
   const t = QR_TEXT[lang];
@@ -23,7 +24,7 @@ export default async function CasesPage({ searchParams }: { searchParams: Promis
   const sp: CaseFilters & Record<string, string | undefined> = Object.values(raw).some(Boolean) ? raw : { status: "open" };
   const [rows, counters, s, people] = await Promise.all([listCases(u, sp), caseCounters(u), qrSettings(), handlers()]);
   const nameOf = new Map(people.map((p) => [p.id, p.name]));
-  const manager = atLeast(u, "manage");
+  const manager = can(u, "q.seeAll");
   const groups = [
     { key: "status", label: t.fStatus, options: [["open", t.cOpen], ["late", t.cLate], ["unassigned", t.cUnassigned], ["mine", t.cMine], ...QR_STATUSES.map((x) => [x, QR_STATUS_TEXT[lang][x]])].map(([value, label]) => ({ value, label })) },
     { key: "type", label: t.fType, options: QR_TYPES.map((x) => ({ value: x, label: QR_TYPE_TEXT[lang][x] })) },
@@ -49,7 +50,7 @@ export default async function CasesPage({ searchParams }: { searchParams: Promis
             channels={QR_MANUAL_CHANNELS.map((x) => ({ value: x, label: QR_CHANNEL_TEXT[lang][x] }))}
             priorities={QR_PRIORITIES.map((x) => ({ value: x, label: QR_PRIORITY_TEXT[lang][x] }))}
             handlers={people.map((p) => ({ value: String(p.id), label: p.name }))}
-            canAssign={atLeast(u, "supervise")}
+            canAssign={can(u, "q.assign")}
             cancelLabel={common.cancel}
             action={createCaseAction}
             lookup={lookupRutAction}

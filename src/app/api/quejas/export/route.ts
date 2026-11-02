@@ -3,16 +3,15 @@ import { and, desc, gte, inArray, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { qrCases, users } from "@/db/schema";
 import { logActivity } from "@/lib/audit";
-import { notFoundResponse } from "@/lib/auth";
+import { notFoundResponse, routeUser } from "@/lib/auth";
 import { localDateOf } from "@/lib/dates";
 import { many } from "@/lib/multi";
 import { channelText, qrStats, QR_TYPES, STATUS_TEXT } from "@/lib/qr";
-import { routeQr } from "@/lib/qr-auth";
 import { styleHeader, workbookResponse } from "@/lib/sheets";
 
-// «Estadísticas» → «Excel»: the figures by type and the list of cases of the period (handlers and supervisors).
+// «Estadísticas» → «Excel»: the figures by type and the list of cases of the period («Estadísticas y Excel» in the profile).
 export async function GET(req: Request) {
-  const u = await routeQr("manage");
+  const u = await routeUser("q.stats");
   if (!u) return notFoundResponse();
   const sp = new URL(req.url).searchParams;
   const days = [30, 90, 180, 365].includes(Number(sp.get("days"))) ? Number(sp.get("days")) : 90;

@@ -8,7 +8,7 @@ import { getDict } from "@/lib/i18n-server";
 import { drillDown, parseDrill } from "@/lib/stats";
 
 export default async function GlobalListPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  await requireUser(["admin", "supervisor"]);
+  await requireUser("c.stats");
   const sp = await searchParams;
   const { t, lang } = await getDict();
   const f = parseDrill(sp);

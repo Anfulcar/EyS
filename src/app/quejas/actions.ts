@@ -10,10 +10,11 @@ import { logActivity } from "@/lib/audit";
 import { toIsoDate } from "@/lib/dates";
 import { getDict } from "@/lib/i18n-server";
 import {
-  addStep, answerReferral, approveClose, assign, atLeast, canSee, canWork, cleanCaseInput, createCase, findSigturParty, proposeClose, qrSettings, QR_MANUAL_CHANNELS,
+  addStep, answerReferral, approveClose, assign, canSee, canSeePersonal, canWork, cleanCaseInput, createCase, findSigturParty, proposeClose, qrSettings, QR_MANUAL_CHANNELS,
   QR_TYPES, recentFromSender, refer, reopen, returnClose, saveQrSettings, senderFingerprint, setStatus, uploadToken, type CaseInput, type PartyFromSigtur, type QrSettings,
 } from "@/lib/qr";
-import { assertQr } from "@/lib/qr-auth";
+import { assertUser } from "@/lib/auth";
+import { can, canAny } from "@/lib/permissions";
 import { QR_TEXT } from "@/lib/qr-i18n";
 import { generateCaseReport } from "@/lib/qr-report";
 
@@ -23,7 +24,7 @@ const str = (v: FormDataEntryValue | null, n = 3000) => String(v ?? "").trim().s
 
 // The case named in the form, if this person may see it (and work it, when asked).
 async function caseFrom(form: FormData, mustWork: boolean) {
-  const u = await assertQr("register");
+  const u = await assertUser("q.register");
   const [c] = await db.select().from(qrCases).where(eq(qrCases.number, str(form.get("number"), 30)));
   if (!c || !canSee(u, c) || (mustWork && !canWork(u, c))) throw new Error("Not found");
   return { u, c };
@@ -34,12 +35,12 @@ const touch = (number: string) => {
 };
 
 export async function lookupRutAction(key: string): Promise<PartyFromSigtur | null> {
-  await assertQr("register");
+  await assertUser("q.register");
   return findSigturParty(String(key ?? "").slice(0, 40));
 }
 
 export async function createCaseAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const u = await assertQr("register");
+  const u = await assertUser("q.register");
   const t = await txt();
   let raw: CaseInput;
   try {
@@ -47,8 +48,8 @@ export async function createCaseAction(_: ActionState, form: FormData): Promise<
   } catch {
     return { error: t.errSubject };
   }
-  // Only supervisors choose the handler; a handler's own case is assigned to them.
-  raw.assignedUserId = atLeast(u, "supervise") ? Number(raw.assignedUserId) || null : atLeast(u, "manage") ? u.id : null;
+  // With «Asignar casos» the person chooses the handler; a handler's own case is assigned to them.
+  raw.assignedUserId = can(u, "q.assign") ? Number(raw.assignedUserId) || null : can(u, "q.workMine") ? u.id : null;
   if (!(QR_MANUAL_CHANNELS as readonly string[]).includes(raw.channel)) raw.channel = "app";
   const s = await qrSettings();
   const clean = cleanCaseInput(raw, s);
@@ -77,7 +78,7 @@ export async function setStatusAction(_: ActionState, form: FormData): Promise<A
 }
 
 export async function assignAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const u = await assertQr("supervise");
+  const u = await assertUser("q.assign");
   const { c } = await caseFrom(form, false);
   if (c.status === "cerrada") return { error: "Not found" };
   const ok = await assign(c, Number(form.get("userId")) || null, who(u));
@@ -130,7 +131,7 @@ export async function proposeCloseAction(_: ActionState, form: FormData): Promis
 }
 
 export async function approveCloseAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const u = await assertQr("supervise");
+  const u = await assertUser("q.approve");
   const { c } = await caseFrom(form, false);
   if (!(await approveClose(c, who(u)))) return { error: "Not found" };
   // The report is made when the case closes.
@@ -141,7 +142,7 @@ export async function approveCloseAction(_: ActionState, form: FormData): Promis
 }
 
 export async function returnCloseAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const u = await assertQr("supervise");
+  const u = await assertUser("q.approve");
   const { c } = await caseFrom(form, false);
   const reason = str(form.get("reason"), 500);
   if (!reason) return { error: (await txt()).returnWhy };
@@ -152,7 +153,7 @@ export async function returnCloseAction(_: ActionState, form: FormData): Promise
 }
 
 export async function reopenAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const u = await assertQr("supervise");
+  const u = await assertUser("q.reopen");
   const { c } = await caseFrom(form, false);
   const reason = str(form.get("reason"), 500);
   if (!reason) return { error: (await txt()).reopenWhy };
@@ -164,16 +165,17 @@ export async function reopenAction(_: ActionState, form: FormData): Promise<Acti
 
 export async function generateReportAction(_: ActionState, form: FormData): Promise<ActionState> {
   const { u, c } = await caseFrom(form, false);
-  if (!atLeast(u, "manage")) return { error: "Not found" };
+  // The report carries the presenter's personal data.
+  if (!canAny(u, ["q.seeAll", "q.workMine"]) || !canSeePersonal(u, c)) return { error: "Not found" };
   const r = await generateCaseReport(c.id, "request", u.name);
   await logActivity(u, "qr.report_generated", { entity: "qr_case", entityId: c.id, summary: `${c.number} · v${r?.version}` });
   touch(c.number);
   return { ok: true, message: (await txt()).saved };
 }
 
-// «Configuración del módulo» (supervisors): deadlines, the two lists and the public form, each saved on its own.
+// «Configuración del módulo» («Configuración del módulo» in the profile): deadlines, the two lists and the public form, each saved on its own.
 async function saveSettings(patch: (cur: QrSettings, form: FormData) => QrSettings, form: FormData, summary: (s: QrSettings) => string) {
-  const u = await assertQr("supervise");
+  const u = await assertUser("q.settings");
   const next = patch(await qrSettings(), form);
   await saveQrSettings(next);
   await logActivity(u, "qr.settings_changed", { entity: "settings", summary: summary(next).slice(0, 500) });

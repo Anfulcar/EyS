@@ -8,10 +8,10 @@ import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
-import { absences, apiKeys, campaigns, companies, establishments, generatedReports, importLogs, phones, reportTemplates, users } from "@/db/schema";
+import { absences, apiKeys, permissionProfiles, campaigns, companies, establishments, generatedReports, importLogs, phones, reportTemplates, users } from "@/db/schema";
 import { logActivity, logError } from "@/lib/audit";
-import { assertUser, clearSession, homeFor, MANAGERS, recentlyAuthenticated, setSessionCookie } from "@/lib/auth";
-import { CLOSED_STATUSES, CALL_CODES, PHONE_KINDS, PHONE_REASONS, ROLES, SIGTUR_STATUSES, VISIT_CODES } from "@/lib/catalog";
+import { assertUser, clearSession, homeFor, recentlyAuthenticated, setSessionCookie, type Me } from "@/lib/auth";
+import { CLOSED_STATUSES, CALL_CODES, PHONE_KINDS, PHONE_REASONS, SIGTUR_STATUSES, VISIT_CODES } from "@/lib/catalog";
 import { nowIso, toIsoDate, todayLocal } from "@/lib/dates";
 import { DICTS } from "@/lib/i18n";
 import { getDict } from "@/lib/i18n-server";
@@ -31,6 +31,9 @@ import { countTransfer, transferToNewCampaign, type TransferFilter } from "@/lib
 import { ABSENCE_KINDS, coverTasks, distribute, moveTasks, syncCoverage, workload } from "@/lib/team";
 import { formatPhone, normalizePhone, readTable, str } from "@/lib/sheets";
 import { applyStatusUpdates, canWorkCompany, logCall, logVisit, relatedTasks, type CallInput, type CallOutcome } from "@/lib/workflow";
+import { grantable, idsWho, listProfiles } from "@/lib/permissions";
+import { ACTION_IDS, ADMIN_KEY, legacyActions, parseActions, withRequirements } from "@/lib/permissions-core.mjs";
+import { ACTION_TEXT } from "@/lib/permissions-text";
 
 // keep: the message stays in the form (a password, a key, an import summary) instead of the passing notice.
 export type ActionState = { ok?: boolean; error?: string; message?: string; keep?: boolean; data?: unknown; needsReauth?: boolean } | null;
@@ -98,8 +101,9 @@ export async function changePasswordAction(_: ActionState, form: FormData): Prom
 }
 
 // Sensitive actions answer this when the password must be typed again.
-async function reauthRequired(): Promise<ActionState | null> {
-  if (await recentlyAuthenticated()) return null;
+// minutes: how recent the password must be (permission changes ask for it practically every time).
+async function reauthRequired(minutes?: number): Promise<ActionState | null> {
+  if (await recentlyAuthenticated(minutes)) return null;
   const { t } = await getDict();
   return { needsReauth: true, error: t.reauthNeeded };
 }
@@ -137,14 +141,21 @@ function defaultPassword(username: string) {
   return `${username}123`;
 }
 
-// «Gestor de quejas» works only in complaints: no call campaigns, and at least «Gestionar» there.
-function roleDefaults(role: string, qrLevel = "none") {
-  if (role === "complaints") return { callsAccess: false, qrLevel: qrLevel === "supervise" ? "supervise" : "manage" };
-  return { callsAccess: true };
+// Profiles a person may give in «Personas» (see grantable).
+async function grantableProfiles(me: Me) {
+  return grantable(me, await listProfiles());
+}
+
+// There must always be at least one active person with the Administrador profile.
+async function otherActiveAdmins(exceptId: number) {
+  const [admin] = await db.select().from(permissionProfiles).where(eq(permissionProfiles.key, ADMIN_KEY));
+  if (!admin) return 1;
+  const rows = await db.select({ id: users.id }).from(users).where(and(eq(users.profileId, admin.id), eq(users.active, true)));
+  return rows.filter((r) => r.id !== exceptId).length;
 }
 
 export async function createUserAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const me = await assertUser(["admin"]);
+  const me = await assertUser("g.people");
   const reauth = await reauthRequired();
   if (reauth) return reauth;
   const { t } = await getDict();
@@ -152,36 +163,39 @@ export async function createUserAction(_: ActionState, form: FormData): Promise<
     .object({
       username: z.string().trim().toLowerCase().regex(USERNAME_RE),
       name: z.string().trim().min(2).max(80),
-      role: z.enum(Object.keys(ROLES) as [string, ...string[]]),
+      profileId: z.coerce.number().int(),
       password: z.string().optional().default(""),
     })
     .safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") };
+  const profile = (await grantableProfiles(me)).find((p) => p.id === parsed.data.profileId);
+  if (!profile) return { error: t.profileNotAllowed };
   const exists = await db.query.users.findFirst({ where: eq(users.username, parsed.data.username) });
   if (exists) return { error: t.usernameTaken };
   const password = parsed.data.password.trim() || defaultPassword(parsed.data.username);
   const [created] = await db.insert(users).values({
     username: parsed.data.username,
     name: parsed.data.name,
-    role: parsed.data.role,
+    role: profile.key === ADMIN_KEY ? "admin" : "agent",
+    profileId: profile.id,
     passwordHash: await bcrypt.hash(password, 10),
     mustChangePassword: true,
-    ...roleDefaults(parsed.data.role),
   }).returning({ id: users.id });
-  await logActivity(me, "user.created", { entity: "user", entityId: created.id, summary: `${parsed.data.username} (${parsed.data.role})` });
+  await logActivity(me, "user.created", { entity: "user", entityId: created.id, summary: `${parsed.data.username} (${profile.name})` });
   revalidatePath("/users");
+  revalidatePath("/admin/permissions");
   return { ok: true, keep: true, message: `${t.saved}: ${parsed.data.username} / ${password}` };
 }
 
 export async function editUserAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const me = await assertUser(["admin"]);
+  const me = await assertUser("g.people");
   const { t } = await getDict();
   const parsed = z
     .object({
       id: z.coerce.number().int(),
       username: z.string().trim().toLowerCase().regex(USERNAME_RE),
       name: z.string().trim().min(2).max(80),
-      role: z.enum(Object.keys(ROLES) as [string, ...string[]]),
+      profileId: z.coerce.number().int(),
       active: z.enum(["1", "0"]),
       password: z.string().optional().default(""),
       resetDefault: z.string().optional(),
@@ -191,23 +205,39 @@ export async function editUserAction(_: ActionState, form: FormData): Promise<Ac
   const d = parsed.data;
   const target = await db.query.users.findFirst({ where: eq(users.id, d.id) });
   if (!target) return { error: "Not found" };
+  // People whose profile allows more than the editor's own can't be edited by them (not found).
+  const grantable = await grantableProfiles(me);
+  const reachable = target.profileId !== null
+    ? grantable.some((p) => p.id === target.profileId)
+    : me.isAdmin || legacyActions(target.role, target.callsAccess, target.qrLevel).every((x) => me.actions.includes(x));
+  if (d.id !== me.id && !reachable) return { error: "Not found" };
+  const profile = grantable.find((p) => p.id === d.profileId);
+  const profileChanged = d.id !== me.id && d.profileId !== target.profileId;
+  if (profileChanged && !profile) return { error: t.profileNotAllowed };
   if (d.username !== target.username) {
     const taken = await db.query.users.findFirst({ where: eq(users.username, d.username) });
     if (taken) return { error: t.usernameTaken };
   }
+  // Removing the Administrador profile from someone, or deactivating them, needs another active administrator.
+  const [adminProfile] = await db.select().from(permissionProfiles).where(eq(permissionProfiles.key, ADMIN_KEY));
+  const wasAdmin = !!adminProfile && target.profileId === adminProfile.id && target.active;
+  const staysAdmin = (profileChanged ? profile?.key === ADMIN_KEY : wasAdmin) && d.active === "1";
+  if (d.id !== me.id && wasAdmin && !staysAdmin && (await otherActiveAdmins(d.id)) === 0) return { error: t.lastAdmin };
   const sensitive =
     !!d.resetDefault || !!d.password.trim() || d.username !== target.username ||
-    (d.id !== me.id && (d.role !== target.role || (d.active === "1") !== target.active));
+    (d.id !== me.id && (profileChanged || (d.active === "1") !== target.active));
   if (sensitive) {
     const reauth = await reauthRequired();
     if (reauth) return reauth;
   }
   const set: Partial<typeof users.$inferInsert> = { username: d.username, name: d.name };
-  // An admin cannot demote or deactivate themselves (avoids locking everyone out).
+  // Nobody changes their own profile or deactivates themselves (avoids locking everyone out).
   if (d.id !== me.id) {
-    set.role = d.role;
     set.active = d.active === "1";
-    if (d.role !== target.role) Object.assign(set, roleDefaults(d.role, target.qrLevel));
+    if (profileChanged && profile) {
+      set.profileId = profile.id;
+      set.role = profile.key === ADMIN_KEY ? "admin" : target.role === "admin" ? "agent" : target.role;
+    }
   }
   let newPassword: string | null = null;
   if (d.resetDefault) newPassword = defaultPassword(d.username);
@@ -220,11 +250,15 @@ export async function editUserAction(_: ActionState, form: FormData): Promise<Ac
   }
   await db.update(users).set(set).where(eq(users.id, d.id));
   const who = { entity: "user", entityId: d.id };
-  if (set.role && set.role !== target.role) await logActivity(me, "user.role_changed", { ...who, summary: `${d.username}: ${target.role} → ${set.role}` });
+  if (set.profileId) {
+    const before = target.profileId ? (await db.select().from(permissionProfiles).where(eq(permissionProfiles.id, target.profileId)))[0]?.name : null;
+    await logActivity(me, "user.profile_changed", { ...who, summary: `${d.username}: perfil «${before ?? "—"}» → «${profile!.name}»` });
+  }
   if (set.active != null && set.active !== target.active) await logActivity(me, "user.status_changed", { ...who, summary: `${d.username}: ${set.active ? "activado" : "desactivado"}` });
   if (newPassword) await logActivity(me, "user.password_reset", { ...who, summary: `${d.username}${d.resetDefault ? " (contraseña predeterminada)" : ""}` });
   if (d.username !== target.username || d.name !== target.name) await logActivity(me, "user.updated", { ...who, summary: `${target.username} → ${d.username}, ${d.name}` });
   revalidatePath("/users");
+  revalidatePath("/admin/permissions");
   return { ok: true, keep: !!newPassword, message: newPassword ? `${t.saved}. ${t.password}: ${newPassword}` : t.saved };
 }
 
@@ -242,7 +276,7 @@ const campaignSchema = z
   .refine((v) => v.endDate >= v.startDate, { message: "endDate < startDate", path: ["endDate"] });
 
 export async function createCampaignAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const u = await assertUser(["admin"]);
+  const u = await assertUser("c.edit");
   const parsed = campaignSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") };
   // The standard script of «Configuración · Llamadas» is copied when it differs from the built-in text.
@@ -254,7 +288,7 @@ export async function createCampaignAction(_: ActionState, form: FormData): Prom
 }
 
 export async function updateCampaignAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const u = await assertUser(["admin"]);
+  const u = await assertUser("c.edit");
   const { t } = await getDict();
   const id = Number(form.get("id"));
   const parsed = campaignSchema.safeParse(Object.fromEntries(form));
@@ -266,7 +300,7 @@ export async function updateCampaignAction(_: ActionState, form: FormData): Prom
 }
 
 export async function setCampaignStatusAction(form: FormData) {
-  const u = await assertUser(["admin"]);
+  const u = await assertUser("c.edit");
   const id = Number(form.get("id"));
   const status = String(form.get("status"));
   if (!["draft", "active", "closed"].includes(status)) return;
@@ -280,7 +314,7 @@ export async function setCampaignStatusAction(form: FormData) {
 }
 
 export async function deleteCampaignAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const u = await assertUser(["admin"]);
+  const u = await assertUser("c.edit");
   const reauth = await reauthRequired();
   if (reauth) return reauth;
   const id = Number(form.get("id"));
@@ -299,7 +333,7 @@ export async function deleteCampaignAction(_: ActionState, form: FormData): Prom
 const WANTED = ["ID SIGTUR", "Identificador"];
 
 export async function previewUploadAction(_: ActionState, form: FormData): Promise<ActionState> {
-  await assertUser(MANAGERS);
+  await assertUser("c.upload");
   const campaignId = Number(form.get("campaignId"));
   const file = form.get("file");
   if (!(file instanceof File) || file.size === 0) return { error: "No file" };
@@ -331,7 +365,7 @@ export async function previewUploadAction(_: ActionState, form: FormData): Promi
 }
 
 export async function commitUploadAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const u = await assertUser(MANAGERS);
+  const u = await assertUser("c.upload");
   const { t } = await getDict();
   const campaignId = Number(form.get("campaignId"));
   const file = form.get("file");
@@ -355,7 +389,7 @@ export async function commitUploadAction(_: ActionState, form: FormData): Promis
 // ---------- Assignment ----------
 
 export async function assignAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const me = await assertUser(MANAGERS);
+  const me = await assertUser("c.assign");
   const { t } = await getDict();
   const campaignId = Number(form.get("campaignId"));
   const strategy = String(form.get("strategy"));
@@ -404,7 +438,7 @@ export async function assignAction(_: ActionState, form: FormData): Promise<Acti
 }
 
 export async function reassignCompanyAction(form: FormData) {
-  const me = await assertUser(MANAGERS);
+  const me = await assertUser("c.assign");
   const id = Number(form.get("companyId"));
   const userId = Number(form.get("userId")) || null;
   const [c] = await db.update(companies).set({ assignedUserId: userId, assignedAt: nowIso() }).where(eq(companies.id, id)).returning();
@@ -414,7 +448,7 @@ export async function reassignCompanyAction(form: FormData) {
 }
 
 export async function bulkAssignAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const me = await assertUser(MANAGERS);
+  const me = await assertUser("c.assign");
   const { t } = await getDict();
   const campaignId = Number(form.get("campaignId"));
   const ids = form.getAll("ids").map(Number).filter(Boolean);
@@ -434,7 +468,7 @@ export async function bulkAssignAction(_: ActionState, form: FormData): Promise<
 // ---------- Calls ----------
 
 export async function logCallAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const u = await assertUser(["admin", "supervisor", "agent"]);
+  const u = await assertUser("c.call");
   const { lang } = await getDict();
   const t = DICTS[lang];
   try {
@@ -496,7 +530,7 @@ async function afterCallSaved(u: { id: number; name: string }, outcomes: CallOut
 
 // Supervisors and administrators mark a call as reviewed, with an optional comment the agent will see.
 export async function reviewCallAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const u = await assertUser(MANAGERS);
+  const u = await assertUser("c.review");
   const { t } = await getDict();
   const id = Number(form.get("attemptId"));
   const comment = String(form.get("comment") ?? "");
@@ -512,7 +546,7 @@ export async function reviewCallAction(_: ActionState, form: FormData): Promise<
 }
 
 export async function addPhoneAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const u = await assertUser(["admin", "supervisor", "agent"]);
+  const u = await assertUser("c.call");
   const { t } = await getDict();
   const companyId = Number(form.get("companyId"));
   const company = await canWorkCompany(u, companyId);
@@ -565,7 +599,7 @@ export async function addPhoneAction(_: ActionState, form: FormData): Promise<Ac
 // ---------- Visits ----------
 
 export async function logVisitAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const u = await assertUser(["admin", "supervisor", "inspector"]);
+  const u = await assertUser("c.visits");
   const { t } = await getDict();
   const code = String(form.get("code"));
   if (!VISIT_CODES[code]) return { error: t.visitResult };
@@ -597,7 +631,7 @@ export async function logVisitAction(_: ActionState, form: FormData): Promise<Ac
 // ---------- Email tracking ----------
 
 export async function markEmailsSentAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const u = await assertUser(MANAGERS);
+  const u = await assertUser("c.upload");
   const { t } = await getDict();
   const campaignId = Number(form.get("campaignId"));
   const date = toIsoDate(String(form.get("date"))) ?? todayLocal();
@@ -616,7 +650,7 @@ export async function markEmailsSentAction(_: ActionState, form: FormData): Prom
 }
 
 export async function uploadBouncesAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const u = await assertUser(MANAGERS);
+  const u = await assertUser("c.upload");
   const { t } = await getDict();
   const campaignId = Number(form.get("campaignId"));
   const file = form.get("file");
@@ -639,7 +673,7 @@ export async function uploadBouncesAction(_: ActionState, form: FormData): Promi
 // ---------- SIGTUR status update ----------
 
 export async function uploadStatusAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const u = await assertUser(MANAGERS);
+  const u = await assertUser("c.upload");
   const { t } = await getDict();
   const target = String(form.get("target"));
   const file = form.get("file");
@@ -682,12 +716,13 @@ function receivers(form: FormData) {
 
 async function activeAssignees(ids: number[]) {
   if (!ids.length) return [];
-  const rows = await db.select({ id: users.id }).from(users).where(and(inArray(users.id, ids), eq(users.active, true), inArray(users.role, ["agent", "supervisor", "admin"])));
+  const callers = new Set(await idsWho("c.call"));
+  const rows = (await db.select({ id: users.id }).from(users).where(and(inArray(users.id, ids), eq(users.active, true)))).filter((r) => callers.has(r.id));
   return rows.map((r) => r.id);
 }
 
 export async function moveTasksAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const me = await assertUser(MANAGERS);
+  const me = await assertUser("c.assign");
   const { t } = await getDict();
   const campaignId = Number(form.get("campaignId"));
   const fromUserId = Number(form.get("fromUserId"));
@@ -702,7 +737,7 @@ export async function moveTasksAction(_: ActionState, form: FormData): Promise<A
 }
 
 export async function coverTasksAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const me = await assertUser(MANAGERS);
+  const me = await assertUser("c.assign");
   const { t } = await getDict();
   const campaignId = Number(form.get("campaignId"));
   const absenceId = Number(form.get("absenceId"));
@@ -719,7 +754,7 @@ export async function coverTasksAction(_: ActionState, form: FormData): Promise<
 // ---------- Absences (administrators) ----------
 
 export async function addAbsenceAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const me = await assertUser(["admin"]);
+  const me = await assertUser("g.people");
   const { t } = await getDict();
   const parsed = z
     .object({
@@ -741,7 +776,7 @@ export async function addAbsenceAction(_: ActionState, form: FormData): Promise<
 }
 
 export async function deleteAbsenceAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const me = await assertUser(["admin"]);
+  const me = await assertUser("g.people");
   const { t } = await getDict();
   const id = Number(form.get("absenceId"));
   const a = await db.query.absences.findFirst({ where: eq(absences.id, id) });
@@ -758,7 +793,7 @@ export async function deleteAbsenceAction(_: ActionState, form: FormData): Promi
 // ---------- Call script ----------
 
 export async function updateScriptAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const me = await assertUser(MANAGERS);
+  const me = await assertUser("c.settings");
   const { t } = await getDict();
   const id = Number(form.get("campaignId"));
   const c = await db.query.campaigns.findFirst({ where: eq(campaigns.id, id) });
@@ -774,7 +809,7 @@ export async function updateScriptAction(_: ActionState, form: FormData): Promis
 // ---------- Report templates ("Estadísticas globales" → informe) ----------
 
 export async function saveReportTemplateAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const me = await assertUser(MANAGERS);
+  const me = await assertUser("c.reports");
   const { t } = await getDict();
   const name = String(form.get("name") ?? "").trim().slice(0, 80);
   if (!name) return { error: t.reportNameRequired };
@@ -809,7 +844,7 @@ export async function saveReportTemplateAction(_: ActionState, form: FormData): 
 }
 
 export async function deleteReportTemplateAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const me = await assertUser(MANAGERS);
+  const me = await assertUser("c.reports");
   const { t } = await getDict();
   const id = Number(form.get("templateId"));
   const tpl = await db.query.reportTemplates.findFirst({ where: eq(reportTemplates.id, id) });
@@ -822,7 +857,7 @@ export async function deleteReportTemplateAction(_: ActionState, form: FormData)
 }
 
 export async function pauseReportTemplateAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const me = await assertUser(MANAGERS);
+  const me = await assertUser("c.reports");
   const { t } = await getDict();
   const id = Number(form.get("templateId"));
   const tpl = await db.query.reportTemplates.findFirst({ where: eq(reportTemplates.id, id) });
@@ -839,7 +874,7 @@ export async function pauseReportTemplateAction(_: ActionState, form: FormData):
 }
 
 export async function generateReportNowAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const me = await assertUser(MANAGERS);
+  const me = await assertUser("c.reports");
   const { t } = await getDict();
   const id = Number(form.get("templateId"));
   try {
@@ -854,7 +889,7 @@ export async function generateReportNowAction(_: ActionState, form: FormData): P
 
 // Only administrators delete reports kept in «Informes».
 export async function deleteGeneratedReportAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const me = await assertUser(["admin"]);
+  const me = await assertUser("c.edit");
   const { t } = await getDict();
   const id = Number(form.get("reportId"));
   const [r] = await db.select({ id: generatedReports.id, name: generatedReports.name, periodLabel: generatedReports.periodLabel }).from(generatedReports).where(eq(generatedReports.id, id));
@@ -874,12 +909,12 @@ function transferFilter(form: FormData): TransferFilter {
 
 // Live count shown while choosing.
 export async function countTransferAction(campaignId: number, f: TransferFilter): Promise<number> {
-  await assertUser(MANAGERS);
+  await assertUser("c.transfer");
   return countTransfer(Number(campaignId), { statuses: Array.isArray(f.statuses) ? f.statuses.map(String) : [], code: f.code || undefined, zone: f.zone || undefined, priority: f.priority || undefined, agent: f.agent || undefined, mail: f.mail || undefined });
 }
 
 export async function transferCampaignAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const me = await assertUser(MANAGERS);
+  const me = await assertUser("c.transfer");
   const { t } = await getDict();
   const fromId = Number(form.get("campaignId"));
   const from = await db.query.campaigns.findFirst({ where: eq(campaigns.id, fromId) });
@@ -899,7 +934,7 @@ export async function transferCampaignAction(_: ActionState, form: FormData): Pr
 // ---------- «Configuración · Llamadas» and «Permisos por módulo» ----------
 
 export async function saveCampaignDefaultsAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const me = await assertUser(MANAGERS);
+  const me = await assertUser("c.settings");
   const { t } = await getDict();
   const num = (k: string, min: number, max: number, dflt: number) => Math.min(max, Math.max(min, Number(form.get(k)) || dflt));
   const text = (k: string) => String(form.get(k) ?? "").slice(0, 8000);
@@ -909,34 +944,112 @@ export async function saveCampaignDefaultsAction(_: ActionState, form: FormData)
   return { ok: true, message: t.saved };
 }
 
-const QR_LEVELS = ["none", "register", "manage", "supervise"] as const;
+// ---------- «Perfiles de permisos» (Administrador profile only) ----------
 
-export async function savePermissionsAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const me = await assertUser(["admin"]);
-  const reauth = await reauthRequired();
-  if (reauth) return reauth;
+// Permission changes always ask for the password again (unless it was typed in the last minute).
+const PERM_REAUTH_MINUTES = 1;
+
+function actionNames(list: string[]) {
+  return list.map((a) => ACTION_TEXT.es[a]?.[0] ?? a).join(", ");
+}
+
+async function uniqueProfileName(base: string) {
+  const names = new Set((await listProfiles()).map((p) => p.name.toLowerCase()));
+  let name = base.slice(0, 60);
+  for (let n = 2; names.has(name.toLowerCase()); n++) name = `${base.slice(0, 55)} (${n})`;
+  return name;
+}
+
+export async function saveProfileAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const me = await assertUser("g.perms");
   const { t } = await getDict();
-  const people = await db.select().from(users);
-  const changes: string[] = [];
-  for (const p of people) {
-    if (!form.has(`present-${p.id}`)) continue;
-    // Administrators always keep access to the call campaigns.
-    const callsAccess = p.role === "admin" ? true : form.get(`calls-${p.id}`) === "1";
-    const level = String(form.get(`qr-${p.id}`) ?? p.qrLevel);
-    const qrLevel = (QR_LEVELS as readonly string[]).includes(level) ? level : p.qrLevel;
-    if (callsAccess === p.callsAccess && qrLevel === p.qrLevel) continue;
-    await db.update(users).set({ callsAccess, qrLevel }).where(eq(users.id, p.id));
-    changes.push(`${p.username}: llamadas ${callsAccess ? "sí" : "no"}, quejas ${qrLevel}`);
-  }
-  if (changes.length) await logActivity(me, "user.permissions_changed", { entity: "user", summary: changes.join(" · ").slice(0, 500) });
+  const id = Number(form.get("profileId"));
+  const [p] = await db.select().from(permissionProfiles).where(eq(permissionProfiles.id, id));
+  if (!p || p.key === ADMIN_KEY) return { error: "Not found" };
+  const name = String(form.get("name") ?? "").trim().slice(0, 60);
+  if (!name) return { error: t.permNameNeeded };
+  const others = (await listProfiles()).filter((x) => x.id !== id);
+  if (others.some((x) => x.name.toLowerCase() === name.toLowerCase())) return { error: t.permNameTaken };
+  const reauth = await reauthRequired(PERM_REAUTH_MINUTES);
+  if (reauth) return reauth;
+  const description = String(form.get("description") ?? "").trim().slice(0, 300) || null;
+  // Ticked actions plus everything they need; actions only the Administrador profile has are never added.
+  const actions = withRequirements(form.getAll("actions").map(String));
+  const before = parseActions(p.actions);
+  await db.update(permissionProfiles).set({ name, description, actions: JSON.stringify(actions), updatedAt: nowIso() }).where(eq(permissionProfiles.id, id));
+  const added = actions.filter((a) => !before.includes(a));
+  const removed = before.filter((a) => !actions.includes(a));
+  const parts = [p.name !== name && `antes «${p.name}»`, added.length && `añadió: ${actionNames(added)}`, removed.length && `quitó: ${actionNames(removed)}`, (p.description ?? null) !== description && "descripción cambiada"].filter(Boolean);
+  await logActivity(me, "profile.updated", { entity: "profile", entityId: id, summary: `«${name}»${parts.length ? ": " + parts.join("; ") : ""}`.slice(0, 1000) });
   revalidatePath("/admin/permissions");
   return { ok: true, message: t.permSaved };
+}
+
+// «Nuevo perfil» (empty) or «Duplicar» (a copy of another): created at once, without people.
+export async function createProfileAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const me = await assertUser("g.perms");
+  const { t } = await getDict();
+  const fromId = Number(form.get("fromId")) || null;
+  const [from] = fromId ? await db.select().from(permissionProfiles).where(eq(permissionProfiles.id, fromId)) : [];
+  if (fromId && !from) return { error: "Not found" };
+  const name = await uniqueProfileName(from ? t.permCopyOf.replace("{p}", from.name) : t.permNewName);
+  const actions = from ? withRequirements(from.key === ADMIN_KEY ? ACTION_IDS : parseActions(from.actions)) : [];
+  const [created] = await db.insert(permissionProfiles).values({ name, description: from?.description ?? null, actions: JSON.stringify(actions) }).returning({ id: permissionProfiles.id });
+  await logActivity(me, "profile.created", { entity: "profile", entityId: created.id, summary: from ? `«${name}» duplicando «${from.name}»` : `«${name}» (sin acciones)` });
+  redirect(`/admin/permissions?p=${created.id}`);
+}
+
+export async function deleteProfileAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const me = await assertUser("g.perms");
+  const { t } = await getDict();
+  const id = Number(form.get("profileId"));
+  const [p] = await db.select().from(permissionProfiles).where(eq(permissionProfiles.id, id));
+  if (!p || p.key === ADMIN_KEY) return { error: "Not found" };
+  const used = await db.select({ id: users.id }).from(users).where(eq(users.profileId, id)).limit(1);
+  if (used.length) return { error: t.permInUse };
+  const reauth = await reauthRequired(PERM_REAUTH_MINUTES);
+  if (reauth) return reauth;
+  await db.delete(permissionProfiles).where(eq(permissionProfiles.id, id));
+  await logActivity(me, "profile.deleted", { entity: "profile", entityId: id, summary: `«${p.name}»` });
+  redirect("/admin/permissions");
+}
+
+// «Personas y perfiles»: one profile per person. Nobody changes their own; an active Administrador must remain.
+export async function assignProfilesAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const me = await assertUser("g.perms");
+  const { t } = await getDict();
+  const [people, profiles] = await Promise.all([db.select().from(users), listProfiles()]);
+  const byId = new Map(profiles.map((p) => [p.id, p]));
+  const admin = profiles.find((p) => p.key === ADMIN_KEY);
+  const changes: { user: (typeof people)[number]; to: number }[] = [];
+  for (const u of people) {
+    const v = form.get(`profile-${u.id}`);
+    if (v === null || u.id === me.id) continue;
+    const to = Number(v);
+    if (!byId.has(to) || to === u.profileId) continue;
+    changes.push({ user: u, to });
+  }
+  if (!changes.length) return { ok: true, message: t.permNoChanges };
+  const after = new Map(people.map((u) => [u.id, u.profileId]));
+  for (const c of changes) after.set(c.user.id, c.to);
+  if (admin && !people.some((u) => u.active && after.get(u.id) === admin.id)) return { error: t.lastAdmin };
+  const reauth = await reauthRequired(PERM_REAUTH_MINUTES);
+  if (reauth) return reauth;
+  for (const c of changes) {
+    const to = byId.get(c.to)!;
+    await db.update(users).set({ profileId: to.id, role: to.key === ADMIN_KEY ? "admin" : c.user.role === "admin" ? "agent" : c.user.role }).where(eq(users.id, c.user.id));
+    const from = c.user.profileId ? byId.get(c.user.profileId)?.name ?? "—" : "—";
+    await logActivity(me, "user.profile_changed", { entity: "user", entityId: c.user.id, summary: `${c.user.username}: perfil «${from}» → «${to.name}»` });
+  }
+  revalidatePath("/admin/permissions");
+  revalidatePath("/users");
+  return { ok: true, message: t.permAssignSaved.replace("{n}", String(changes.length)) };
 }
 
 // ---------- «Reporte de cambios» ----------
 
 export async function markChangesSigturAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const me = await assertUser(MANAGERS);
+  const me = await assertUser("c.changes");
   const { t } = await getDict();
   const ids = form.getAll("ids").map(Number);
   const n = await markSigturDone(ids, me);
@@ -948,7 +1061,7 @@ export async function markChangesSigturAction(_: ActionState, form: FormData): P
 // ---------- Integraciones (SIGTUR) — administrators ----------
 
 export async function createApiKeyAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const me = await assertUser(["admin"]);
+  const me = await assertUser("g.sigtur");
   const reauth = await reauthRequired();
   if (reauth) return reauth;
   const { t } = await getDict();
@@ -961,7 +1074,7 @@ export async function createApiKeyAction(_: ActionState, form: FormData): Promis
 }
 
 export async function revokeApiKeyAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const me = await assertUser(["admin"]);
+  const me = await assertUser("g.sigtur");
   const { t } = await getDict();
   const id = Number(form.get("keyId"));
   const [k] = await db.select().from(apiKeys).where(eq(apiKeys.id, id));
@@ -974,7 +1087,7 @@ export async function revokeApiKeyAction(_: ActionState, form: FormData): Promis
 
 // The permanent «Solicitudes SIGTUR» campaign: on = receives new requests, off = SIGTUR is told "en pausa".
 export async function setSigturRequestsAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const me = await assertUser(MANAGERS);
+  const me = await assertUser("c.assign");
   const { t } = await getDict();
   const on = form.get("on") === "1";
   await setRequestsPaused(!on, me.id);
@@ -986,7 +1099,7 @@ export async function setSigturRequestsAction(_: ActionState, form: FormData): P
 
 // «Envío automático a SIGTUR» (administrators). It only turns on once SIGTUR's address and key are set.
 export async function setSigturPushAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const me = await assertUser(["admin"]);
+  const me = await assertUser("g.sigtur");
   const { t } = await getDict();
   const on = form.get("on") === "1";
   if (on && !(await pushSettings()).ready) return { error: t.pushNotReady };
@@ -998,7 +1111,7 @@ export async function setSigturPushAction(_: ActionState, form: FormData): Promi
 }
 
 export async function saveSigturPushUrlAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const me = await assertUser(["admin"]);
+  const me = await assertUser("g.sigtur");
   const { t } = await getDict();
   const url = String(form.get("url") ?? "").trim();
   if (url && !validPushUrl(url)) return { error: t.pushUrlInvalid };
@@ -1011,7 +1124,7 @@ export async function saveSigturPushUrlAction(_: ActionState, form: FormData): P
 
 export async function retrySigturPushAction(_: ActionState, form: FormData): Promise<ActionState> {
   void form;
-  const me = await assertUser(["admin"]);
+  const me = await assertUser("g.sigtur");
   const { t } = await getDict();
   const s = await pushSettings();
   if (!s.enabled || !s.ready) return { error: t.pushNotReady };
@@ -1022,7 +1135,7 @@ export async function retrySigturPushAction(_: ActionState, form: FormData): Pro
 }
 
 export async function saveAutoAssigneesAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const me = await assertUser(MANAGERS);
+  const me = await assertUser("c.assign");
   const { t } = await getDict();
   const ids = form.getAll("people").map(Number).filter((n) => Number.isInteger(n) && n > 0);
   await setAutoAssignees(ids);
@@ -1034,7 +1147,7 @@ export async function saveAutoAssigneesAction(_: ActionState, form: FormData): P
 
 // Same path as a real SIGTUR request, to try it before SIGTUR connects.
 export async function simulateCallRequestAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const me = await assertUser(MANAGERS);
+  const me = await assertUser("c.assign");
   const { t } = await getDict();
   const r = parseCallRequest({
     idSigtur: form.get("idSigtur"), nombreComercial: form.get("nombreComercial"), telefonos: [String(form.get("telefono") ?? "")].filter(Boolean),
@@ -1055,7 +1168,7 @@ type RemovalSelection = { ids?: number[]; filters?: Record<string, string> };
 
 // Counts shown before anything is deleted (from ticked tasks or "all filtered").
 export async function previewRemovalAction(campaignId: number, sel: RemovalSelection): Promise<RemovalPreview | null> {
-  await assertUser(["admin"]);
+  await assertUser("c.remove");
   const id = Number(campaignId);
   const ids = sel.filters ? await idsByFilters(id, cleanTaskFilters(sel.filters)) : Array.isArray(sel.ids) ? sel.ids.map(Number) : [];
   return previewRemoval(id, ids);
@@ -1063,7 +1176,7 @@ export async function previewRemovalAction(campaignId: number, sel: RemovalSelec
 
 // Same, from a file with «RUT» or «ID SIGTUR» (screen «Actualizar estatus»).
 export async function previewRemovalFileAction(_: ActionState, form: FormData): Promise<ActionState> {
-  await assertUser(["admin"]);
+  await assertUser("c.remove");
   const { t } = await getDict();
   const campaignId = Number(form.get("campaignId"));
   const file = form.get("file");
@@ -1078,7 +1191,7 @@ export async function previewRemovalFileAction(_: ActionState, form: FormData): 
 }
 
 export async function removeTasksAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const me = await assertUser(["admin"]);
+  const me = await assertUser("c.remove");
   const reauth = await reauthRequired();
   if (reauth) return reauth;
   const { t } = await getDict();

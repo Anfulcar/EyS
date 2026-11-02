@@ -5,13 +5,14 @@ import { StatusBadge } from "@/components/ui";
 import { db } from "@/db";
 import { campaigns } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
+import { can, canAny } from "@/lib/permissions";
 import { fmtDate } from "@/lib/dates";
 import type { Dict } from "@/lib/i18n";
 import { getDict } from "@/lib/i18n-server";
 import { CampaignTabs } from "./tabs";
 
 export default async function CampaignLayout({ children, params }: { children: React.ReactNode; params: Promise<{ id: string }> }) {
-  await requireUser(["admin", "supervisor"]);
+  const me = await requireUser("c.view");
   const { id } = await params;
   const c = await db.query.campaigns.findFirst({ where: eq(campaigns.id, Number(id)) });
   if (!c) notFound();
@@ -33,6 +34,9 @@ export default async function CampaignLayout({ children, params }: { children: R
     { href: "/export", label: t.tabExport },
     { href: "/settings", label: t.tabSettings },
   ];
+  // Tabs the person's profile doesn't allow are not shown (the pages check again on the server).
+  const allowed: Record<string, boolean> = { "/import": can(me, "c.upload"), "/status": can(me, "c.upload"), "/export": can(me, "c.excel"), "/settings": canAny(me, ["c.edit", "c.settings"]) };
+  const visible = tabs.filter((x) => allowed[x.href] ?? true);
   return (
     <div className="space-y-6">
       <div>
@@ -45,7 +49,7 @@ export default async function CampaignLayout({ children, params }: { children: R
         </div>
         {c.description && <p className="mt-1 max-w-3xl text-sm text-slate-600">{c.description}</p>}
       </div>
-      <CampaignTabs base={`/campaigns/${c.id}`} tabs={tabs} />
+      <CampaignTabs base={`/campaigns/${c.id}`} tabs={visible} />
       {children}
     </div>
   );

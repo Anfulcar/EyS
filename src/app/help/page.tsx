@@ -4,16 +4,19 @@ import { ROLES } from "@/lib/catalog";
 import { fmtDate } from "@/lib/dates";
 import { getDict } from "@/lib/i18n-server";
 import { MANUAL, WHATS_NEW } from "@/lib/manual";
+import { manualKinds } from "@/lib/permissions";
 
 export default async function HelpPage() {
   const me = await requireUser();
   const { t, lang } = await getDict();
-  const sections = MANUAL[lang].filter((s) => s.roles.includes(me.role));
+  // The manual's sections are written per kind of work; a profile reads every kind of work it allows.
+  const kinds = manualKinds(me);
+  const sections = MANUAL[lang].filter((s) => s.roles.some((r) => kinds.includes(r)));
   return (
     <div className="space-y-6">
       <div>
         <h1 className="flex items-center gap-2"><BookOpen className="h-6 w-6 text-brand-600" />{t.helpTitle}</h1>
-        <p className="subtitle">{t.helpSubtitle} <b>{ROLES[me.role]?.[lang]}</b>.</p>
+        <p className="subtitle">{t.helpSubtitle} <b>{me.profileName || ROLES[me.role]?.[lang]}</b>.</p>
       </div>
       <div className="grid gap-6 lg:grid-cols-[14rem_minmax(0,1fr)]">
         <nav className="card h-fit space-y-1 p-3 text-sm lg:sticky lg:top-6">

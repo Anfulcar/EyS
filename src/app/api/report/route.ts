@@ -2,7 +2,7 @@ import JSZip from "jszip";
 import { db } from "@/db";
 import { generatedReports } from "@/db/schema";
 import { logActivity } from "@/lib/audit";
-import { MANAGERS, notFoundResponse, routeUser } from "@/lib/auth";
+import { notFoundResponse, routeUser } from "@/lib/auth";
 import { todayLocal } from "@/lib/dates";
 import { getDict } from "@/lib/i18n-server";
 import { optionsFromQuery } from "@/lib/report-options";
@@ -13,7 +13,7 @@ export const maxDuration = 60;
 // Report from «Generar informe», generated now with the chosen options (PDF or PowerPoint).
 // With several agents: one report per agent, downloaded together in a .zip.
 export async function GET(req: Request) {
-  const user = await routeUser(MANAGERS);
+  const user = await routeUser("c.reports");
   if (!user) return notFoundResponse();
   const o = optionsFromQuery(new URL(req.url).searchParams);
   const { lang } = await getDict();
