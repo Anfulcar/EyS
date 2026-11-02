@@ -1,7 +1,7 @@
 import type { Lang } from "./catalog";
 
 const es = {
-  appName: "Campañas de Formalización",
+  appName: "Atención al Cliente EyS",
   login: "Iniciar sesión",
   logout: "Cerrar sesión",
   username: "Usuario",
@@ -753,7 +753,7 @@ const es = {
 export type Dict = typeof es;
 
 const en: Dict = {
-  appName: "Formalization Campaigns",
+  appName: "Atención al Cliente EyS",
   login: "Sign in",
   logout: "Sign out",
   username: "Username",

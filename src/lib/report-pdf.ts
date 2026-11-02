@@ -21,7 +21,7 @@ const TXT = {
 
 export async function renderPdf(d: ReportData, sections: ReportSection[]): Promise<Buffer> {
   const t = TXT[d.lang];
-  const doc = new PDFDocument({ size: "A4", margins: { top: TOP, bottom: 20, left: M, right: M }, bufferPages: true, info: { Title: d.title, Author: "Ministerio de Turismo – EyS Campañas" } });
+  const doc = new PDFDocument({ size: "A4", margins: { top: TOP, bottom: 20, left: M, right: M }, bufferPages: true, info: { Title: d.title, Author: "Ministerio de Turismo – Atención al Cliente EyS" } });
   doc.registerFont("R", Buffer.from(INTER_400, "base64"));
   doc.registerFont("S", Buffer.from(INTER_600, "base64"));
   doc.registerFont("B", Buffer.from(INTER_700, "base64"));

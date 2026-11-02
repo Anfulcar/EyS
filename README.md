@@ -1,4 +1,4 @@
-# EyS – Campañas de Formalización
+# Atención al Cliente EyS
 
 Web app for running call campaigns from the *Plan de Formalización* and its *Matriz de seguimiento*:
 agents see their assigned calls, record each call with the guided script (codes 01–10), add or replace phone numbers,

@@ -1,6 +1,6 @@
 # How to work on this repository
 
-App: **EyS – Campañas de Formalización**, a call-campaign app (call agents, field inspectors, supervisors,
+App: **Atención al Cliente EyS** (formerly «EyS – Campañas de Formalización»), a call-campaign and complaints app (call agents, field inspectors, supervisors,
 administrators) built from the *Plan de Formalización Región Este* and its *Matriz de seguimiento*.
 Technical overview: `README.md`.
 
