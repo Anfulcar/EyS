@@ -422,6 +422,8 @@ test("delete a report, new campaign from results, and the SIGTUR connection", as
   const created = page.getByText(/Clave creada\./);
   await expect(created).toBeVisible();
   const key = (await created.textContent())!.match(/eys_[A-Za-z0-9_-]+/)![0];
+  // Who receives the call requests is set in «Configuración · Llamadas» (the calls module's own panel)
+  await page.goto("/calls-settings");
   await page.locator("label.choice", { hasText: "Admin Prueba" }).locator("input").check();
   await page.locator("form", { has: page.locator("input[name=people]") }).getByRole("button", { name: "Guardar" }).click();
   await expect(page.getByTestId("notices").getByText("Guardado")).toBeVisible();
@@ -475,7 +477,7 @@ test("delete a report, new campaign from results, and the SIGTUR connection", as
   // Open requests keep going while paused
   await page.goto("/calls");
   await expect(page.locator("a.card").first()).toContainText("Hotel Solicitado");
-  await page.goto("/integrations");
+  await page.goto("/calls-settings");
   const sim = page.locator("form", { has: page.locator("input[name=motivo]") });
   await sim.locator("input[name=idSigtur]").fill("SIG-E2E-3");
   await sim.locator("input[name=motivo]").fill("Prueba en pausa");
@@ -698,4 +700,43 @@ test("easier screens: folding menu, multi-choice filters, bar for ticked rows, p
   await drawer.getByRole("link", { name: "Informes" }).click();
   await expect(page).toHaveURL(/\/reports$/);
   await expect(drawer).toHaveCount(0);
+});
+
+test("general administration and per-module permissions; calls settings for the module", async ({ page }) => {
+  await signIn(page, "admin", NEW_PW);
+
+  // «Administración general»: one menu entry with its tabs
+  await page.locator("aside nav a", { hasText: "Administración general" }).click();
+  await expect(page).toHaveURL(/\/users$/);
+  for (const tab of ["Personas", "Permisos por módulo", "Conexión con SIGTUR", "Registro"]) await expect(page.getByRole("link", { name: tab, exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Permisos por módulo", exact: true }).click();
+  const perms = page.getByTestId("permissions");
+  const bruno = perms.locator("tr", { hasText: "Bruno Agente" });
+  await bruno.getByLabel("Bruno Agente: Campañas de llamadas").uncheck();
+  await bruno.getByLabel("Bruno Agente: Quejas y reclamaciones").selectOption("register");
+  await page.getByRole("button", { name: "Guardar" }).click();
+  await expect(page.getByTestId("notices").getByText("Permisos guardados.")).toBeVisible();
+
+  // Without «Campañas de llamadas» the call screens answer "not found", also on the server
+  await signIn(page, "agente2", "Bruno-Clave-1");
+  await expect(page).toHaveURL(/\/help/);
+  await expect(page.locator("aside nav a", { hasText: "Mis llamadas" })).toHaveCount(0);
+  await page.goto("/calls");
+  await expect(page.getByRole("heading", { name: "No encontrado" })).toBeVisible();
+
+  // «Configuración · Llamadas»: values for new campaigns
+  await signIn(page, "admin", NEW_PW);
+  await page.locator("aside nav a", { hasText: "Configuración · Llamadas" }).click();
+  await page.locator("#d-attempts").fill("4");
+  await page.getByRole("button", { name: "Guardar" }).first().click();
+  await expect(page.getByTestId("notices").getByText("Guardado")).toBeVisible();
+  await page.goto("/campaigns");
+  await page.getByRole("button", { name: "Nueva campaña" }).click();
+  await expect(page.getByRole("dialog", { name: "Nueva campaña" }).locator("input[name=maxAttempts]")).toHaveValue("4");
+
+  // Back as it was, so access can be given again
+  await page.goto("/admin/permissions");
+  await page.getByTestId("permissions").locator("tr", { hasText: "Bruno Agente" }).getByLabel("Bruno Agente: Campañas de llamadas").check();
+  await page.getByRole("button", { name: "Guardar" }).click();
+  await expect(page.getByTestId("notices").getByText("Permisos guardados.")).toBeVisible();
 });

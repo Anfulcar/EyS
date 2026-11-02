@@ -21,6 +21,7 @@ import { generateAndStore } from "@/lib/report-run";
 import { reviewCall } from "@/lib/reviews";
 import { archiveCampaignHistory } from "@/lib/history";
 import { markSigturDone } from "@/lib/changes";
+import { campaignDefaults, saveCampaignDefaults } from "@/lib/settings";
 import { emailInUse, HAS_EMAIL } from "@/lib/email";
 import { idsByFilters, idsByKeys, MAX_REMOVE, previewRemoval, removeTasks, type RemovalPreview } from "@/lib/remove";
 import { cleanTaskFilters } from "@/lib/task-filters";
@@ -61,7 +62,7 @@ export async function loginAction(form: FormData) {
   await db.update(users).set({ failedLogins: 0, lockedUntil: null }).where(eq(users.id, u.id));
   await setSessionCookie(u);
   await logActivity(u, "login.success", { entity: "user", entityId: u.id, summary: u.username });
-  redirect(u.mustChangePassword ? "/account?force=1" : homeFor(u.role));
+  redirect(u.mustChangePassword ? "/account?force=1" : homeFor(u));
 }
 
 export async function logoutAction() {
@@ -91,7 +92,7 @@ export async function changePasswordAction(_: ActionState, form: FormData): Prom
   await db.update(users).set({ passwordHash: await bcrypt.hash(next, 10), mustChangePassword: false }).where(eq(users.id, u.id));
   await setSessionCookie({ ...u, mustChangePassword: false });
   await logActivity(u, "password.changed", { entity: "user", entityId: u.id, summary: u.mustChangePassword ? "Cambio obligatorio del primer ingreso" : "Cambio voluntario" });
-  if (u.mustChangePassword) redirect(homeFor(u.role));
+  if (u.mustChangePassword) redirect(homeFor(u));
   revalidatePath("/account");
   return { ok: true, message: t.passwordChanged };
 }
@@ -236,7 +237,10 @@ export async function createCampaignAction(_: ActionState, form: FormData): Prom
   const u = await assertUser(["admin"]);
   const parsed = campaignSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") };
-  const [c] = await db.insert(campaigns).values({ ...parsed.data, status: "active", createdBy: u.id }).returning();
+  // The standard script of «Configuración · Llamadas» is copied when it differs from the built-in text.
+  const d = await campaignDefaults();
+  const script = { scriptEs: d.scriptEs.trim() && d.scriptEs !== DICTS.es.scriptText ? d.scriptEs : null, scriptEn: d.scriptEn.trim() || null };
+  const [c] = await db.insert(campaigns).values({ ...parsed.data, ...script, status: "active", createdBy: u.id }).returning();
   await logActivity(u, "campaign.created", { campaignId: c.id, entity: "campaign", entityId: c.id, summary: c.name });
   redirect(`/campaigns/${c.id}/import`);
 }
@@ -884,6 +888,43 @@ export async function transferCampaignAction(_: ActionState, form: FormData): Pr
   redirect(`/campaigns/${r.campaign.id}/${kind === "email" ? "email" : "companies"}`);
 }
 
+// ---------- «Configuración · Llamadas» and «Permisos por módulo» ----------
+
+export async function saveCampaignDefaultsAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const me = await assertUser(MANAGERS);
+  const { t } = await getDict();
+  const num = (k: string, min: number, max: number, dflt: number) => Math.min(max, Math.max(min, Number(form.get(k)) || dflt));
+  const text = (k: string) => String(form.get(k) ?? "").slice(0, 8000);
+  await saveCampaignDefaults({ maxAttempts: num("maxAttempts", 1, 10, 3), followupDays: num("followupDays", 1, 30, 5), scriptEs: text("scriptEs"), scriptEn: text("scriptEn") });
+  await logActivity(me, "settings.calls_updated", { entity: "settings", summary: "Valores para las campañas nuevas" });
+  revalidatePath("/calls-settings");
+  return { ok: true, message: t.saved };
+}
+
+const QR_LEVELS = ["none", "register", "manage", "supervise"] as const;
+
+export async function savePermissionsAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const me = await assertUser(["admin"]);
+  const reauth = await reauthRequired();
+  if (reauth) return reauth;
+  const { t } = await getDict();
+  const people = await db.select().from(users);
+  const changes: string[] = [];
+  for (const p of people) {
+    if (!form.has(`present-${p.id}`)) continue;
+    // Administrators always keep access to the call campaigns.
+    const callsAccess = p.role === "admin" ? true : form.get(`calls-${p.id}`) === "1";
+    const level = String(form.get(`qr-${p.id}`) ?? p.qrLevel);
+    const qrLevel = (QR_LEVELS as readonly string[]).includes(level) ? level : p.qrLevel;
+    if (callsAccess === p.callsAccess && qrLevel === p.qrLevel) continue;
+    await db.update(users).set({ callsAccess, qrLevel }).where(eq(users.id, p.id));
+    changes.push(`${p.username}: llamadas ${callsAccess ? "sí" : "no"}, quejas ${qrLevel}`);
+  }
+  if (changes.length) await logActivity(me, "user.permissions_changed", { entity: "user", summary: changes.join(" · ").slice(0, 500) });
+  revalidatePath("/admin/permissions");
+  return { ok: true, message: t.permSaved };
+}
+
 // ---------- «Reporte de cambios» ----------
 
 export async function markChangesSigturAction(_: ActionState, form: FormData): Promise<ActionState> {
@@ -925,13 +966,13 @@ export async function revokeApiKeyAction(_: ActionState, form: FormData): Promis
 
 // The permanent «Solicitudes SIGTUR» campaign: on = receives new requests, off = SIGTUR is told "en pausa".
 export async function setSigturRequestsAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const me = await assertUser(["admin"]);
+  const me = await assertUser(MANAGERS);
   const { t } = await getDict();
   const on = form.get("on") === "1";
   await setRequestsPaused(!on, me.id);
   await logActivity(me, on ? "sigtur.requests_on" : "sigtur.requests_off", { entity: "campaign", summary: REQUESTS_CAMPAIGN });
   revalidatePath("/campaigns");
-  revalidatePath("/integrations");
+  revalidatePath("/calls-settings");
   return { ok: true, message: on ? t.sigturSwitchedOn : t.sigturSwitchedOff };
 }
 
@@ -973,19 +1014,19 @@ export async function retrySigturPushAction(_: ActionState, form: FormData): Pro
 }
 
 export async function saveAutoAssigneesAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const me = await assertUser(["admin"]);
+  const me = await assertUser(MANAGERS);
   const { t } = await getDict();
   const ids = form.getAll("people").map(Number).filter((n) => Number.isInteger(n) && n > 0);
   await setAutoAssignees(ids);
   const names = ids.length ? (await db.select({ name: users.name }).from(users).where(inArray(users.id, ids))).map((x) => x.name) : [];
   await logActivity(me, "sigtur.assignees_saved", { entity: "integration", summary: names.join(", ") || "Nadie" });
-  revalidatePath("/integrations");
+  revalidatePath("/calls-settings");
   return { ok: true, message: t.saved };
 }
 
 // Same path as a real SIGTUR request, to try it before SIGTUR connects.
 export async function simulateCallRequestAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const me = await assertUser(["admin"]);
+  const me = await assertUser(MANAGERS);
   const { t } = await getDict();
   const r = parseCallRequest({
     idSigtur: form.get("idSigtur"), nombreComercial: form.get("nombreComercial"), telefonos: [String(form.get("telefono") ?? "")].filter(Boolean),

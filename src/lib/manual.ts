@@ -6,6 +6,7 @@ type Section = { id: string; roles: string[]; title: string; intro?: string; ste
 type L<T> = Record<Lang, T>;
 
 export const WHATS_NEW: { date: string; es: string; en: string }[] = [
+  { date: "2026-11-02", es: "Un panel por módulo y uno general: «Administración general» (solo administradores) reúne «Personas», «Permisos por módulo», «Conexión con SIGTUR» y «Registro»; «Configuración · Llamadas» (administradores y supervisores) tiene los valores para las campañas nuevas (intentos, días de seguimiento, guion estándar) y las solicitudes de llamada de SIGTUR (encender o pausar, quién las recibe, simular). Nuevo: «Permisos por módulo», para dar o quitar a cada persona el acceso a las campañas de llamadas.", en: "One panel per module plus a general one: “General administration” (administrators only) gathers “People”, “Permissions per module”, “SIGTUR connection” and “Log”; “Settings · Calls” (administrators and supervisors) has the values for new campaigns (attempts, follow-up days, standard script) and SIGTUR call requests (switch on or pause, who receives them, simulate). New: “Permissions per module”, to give or remove each person's access to the call campaigns." },
   { date: "2026-10-30", es: "Correo: en la llamada el correo aparece ya escrito y se puede corregir, con la nueva pregunta «¿Recibió el correo?»; en la visita, «Nuevo correo». Filtro «¿Recibió el correo?» en «Tareas y asignación» y dos botones: «Nueva campaña de llamadas con estas tareas» y «Nueva campaña de correo con estas tareas» (sin llamadas; las tareas originales siguen). Nuevo «Reporte de cambios» en «Informes»: cada dato cambiado, con su historia, para actualizar SIGTUR a mano y marcarlo como hecho.", en: "Email: in the call the email is already filled in and can be corrected, with the new question “Did they receive the email?”; in the visit, “New email”. “Did they receive the email?” filter in “Tasks and assignment” and two buttons: “New call campaign from these tasks” and “New email campaign from these tasks” (no calls; the original tasks keep going). New “Change report” in “Reports”: every changed detail, with its history, to update SIGTUR by hand and mark it done." },
   { date: "2026-10-30", es: "Pantallas más cómodas: el menú lateral se puede plegar a solo iconos («Plegar menú») y queda a la vista al bajar; todos los filtros aceptan varias opciones, que se ven como etiquetas que se quitan con ×; en «Tareas y asignación» la barra para asignar o eliminar aparece abajo al marcar filas; las confirmaciones usan una ventana propia de la aplicación y «Guardado» aparece como aviso verde arriba a la derecha; en el celular el menú se abre con ☰; «?» explica cada indicador y «↑ Arriba» vuelve al inicio en páginas largas.", en: "Easier screens: the side menu folds down to icons (“Collapse menu”) and stays in view when scrolling; every filter accepts several choices, shown as labels you remove with ×; in “Tasks and assignment” the bar to assign or remove appears at the bottom when rows are ticked; confirmations use the app's own window and “Saved” appears as a green notice at the top right; on phones the menu opens with ☰; “?” explains each indicator and “↑ Top” goes back up on long pages." },
   { date: "2026-10-29", es: "Informes por agente: en «Generar informe», «Elegir agentes» crea un informe por persona (sus tareas y sus llamadas), también programado. Botón «Generar informe» en «Resumen del agente».", en: "Reports per agent: in “Generate report”, “Choose agents” makes one report per person (their tasks and their calls), also scheduled. “Generate report” button in “Agent summary”." },
@@ -166,12 +167,12 @@ const ES: Section[] = [
   {
     id: "sigtur-requests", roles: ["agent", "supervisor", "admin"], title: "Solicitudes SIGTUR",
     bullets: [
-      "Otros analistas pueden pedir una llamada desde SIGTUR. Llega a la campaña «Solicitudes SIGTUR» (siempre abierta) y se asigna sola, según la carga de trabajo, a las personas elegidas en «Integraciones» (quien está de ausencia no recibe).",
+      "Otros analistas pueden pedir una llamada desde SIGTUR. Llega a la campaña «Solicitudes SIGTUR» (siempre abierta) y se asigna sola, según la carga de trabajo, a las personas elegidas en «Configuración · Llamadas» (quien está de ausencia no recibe).",
       "Estas tareas llevan la etiqueta morada «Solicitud SIGTUR» con quién la pidió y por qué, y salen primero en «Para hoy».",
       "Si la empresa ya tenía una tarea abierta, no se crea otra: esa tarea recibe la etiqueta y vuelve a «Para hoy».",
       "Plazo: 2 días laborables (lunes a viernes) desde que llega, o la fecha que mande SIGTUR. La etiqueta muestra «vence dd/mm», luego «Vence mañana» (naranja) y «Vencida hace N días» (rojo); las más urgentes salen primero. «Seguimiento» cuenta las «Solicitudes SIGTUR vencidas» por persona.",
       "Queda resuelta cuando alguien contesta (resultados 01–06) o la tarea pasa a visita; entonces se avisa a SIGTUR con el resultado («Solicitud resuelta»).",
-      "Un administrador puede apagar o encender las solicitudes con el interruptor del bloque «Campaña permanente» (en «Campañas» o «Integraciones»). Apagada, SIGTUR recibe «Solicitudes de llamada en pausa» y no llegan llamadas nuevas; las tareas abiertas siguen con sus agentes y se pueden terminar. Los supervisores ven si está encendida o en pausa. Esta campaña no se cierra ni se elimina.",
+      "Administradores y supervisores pueden apagar o encender las solicitudes con el interruptor del bloque «Campaña permanente» (en «Campañas» o «Configuración · Llamadas»). Apagada, SIGTUR recibe «Solicitudes de llamada en pausa» y no llegan llamadas nuevas; las tareas abiertas siguen con sus agentes y se pueden terminar. Los supervisores ven si está encendida o en pausa. Esta campaña no se cierra ni se elimina.",
       "Las campañas que se creen desde SIGTUR llegan como «Borrador» con sus establecimientos; un supervisor o administrador las revisa, asigna y activa.",
     ],
   },
@@ -186,7 +187,7 @@ const ES: Section[] = [
   {
     id: "integrations", roles: ["admin"], title: "Integraciones (SIGTUR)",
     steps: [
-      "Menú «Integraciones» → «Crear clave». La clave se muestra una sola vez: cópiela y entréguela al equipo de SIGTUR junto con la guía «docs/sigtur-integracion.md». La aplicación solo guarda una huella, no la clave.",
+      "«Administración general» → «Conexión con SIGTUR» → «Crear clave». La clave se muestra una sola vez: cópiela y entréguela al equipo de SIGTUR junto con la guía «docs/sigtur-integracion.md». La aplicación solo guarda una huella, no la clave.",
       "Si la clave se pierde o se filtra, pulse «Revocar» y cree otra. SIGTUR deja de entrar con la anterior al instante.",
       "Marque quién recibe las solicitudes de llamada y pulse «Guardar».",
       "«Recibir solicitudes de llamada»: interruptor Encendida / Apagada (pide confirmación para apagar). Apagada, SIGTUR recibe «en pausa» y la simulación tampoco crea tareas.",
@@ -197,7 +198,7 @@ const ES: Section[] = [
   {
     id: "sigtur-push", roles: ["admin"], title: "Envío automático a SIGTUR",
     steps: [
-      "Desde ahora cada llamada, visita y correo (interacciones), cada cambio de datos que decide una persona (solicitudes de cambio) y cada solicitud SIGTUR resuelta quedan en «Integraciones» → «Envío automático a SIGTUR» → «Pendientes de envío».",
+      "Desde ahora cada llamada, visita y correo (interacciones), cada cambio de datos que decide una persona (solicitudes de cambio) y cada solicitud SIGTUR resuelta quedan en «Administración general» → «Conexión con SIGTUR» → «Envío automático a SIGTUR» → «Pendientes de envío».",
       "El envío está apagado mientras se completa la conexión: nada sale y nada se pierde.",
       "Cuando SIGTUR entregue su dirección, escríbala en «Dirección de SIGTUR para recibir» y pulse «Guardar».",
       "Cuando SIGTUR entregue su clave, péguela en Vercel → su proyecto → Settings → Environment Variables con el nombre SIGTUR_PUSH_KEY y vuelva a desplegar. Nunca la escriba en la aplicación ni la envíe por mensaje.",
@@ -259,7 +260,7 @@ const ES: Section[] = [
   {
     id: "absences", roles: ["admin"], title: "Ausencias (vacaciones, días libres)",
     steps: [
-      "«Usuarios» → «Ausencias» en la fila de la persona.",
+      "«Administración general» → «Personas» → «Ausencias» en la fila de la persona.",
       "Elija desde, hasta y el tipo (Vacaciones, Día libre o No disponible); la nota es opcional. Son días completos.",
       "Mientras está ausente, la persona aparece como «Ausente» y queda fuera de la asignación automática. Si elimina la ausencia, las tareas cubiertas vuelven a ella de inmediato.",
     ],
@@ -267,7 +268,10 @@ const ES: Section[] = [
   {
     id: "admin", roles: ["admin"], title: "Administración: usuarios, seguridad y registro",
     bullets: [
-      "«Usuarios»: «+ Nuevo usuario» abre una ventana (si deja la contraseña vacía será usuario + 123). «Editar» abre la misma ventana para cambiar nombre, usuario, rol, estado o contraseña.",
+      "Menú «Administración general», con sus pestañas «Personas», «Permisos por módulo», «Conexión con SIGTUR» y «Registro». Lo propio de las campañas de llamadas está en «Configuración · Llamadas».",
+      "«Permisos por módulo»: además del rol, marque si cada persona usa las campañas de llamadas y su nivel en «Quejas y reclamaciones» (se usa cuando llegue ese módulo). Sin acceso a llamadas, esas pantallas le responden «no encontrado». Los administradores tienen acceso a todo. Guardar pide confirmar la contraseña si hace rato que entró.",
+      "«Configuración · Llamadas» (administradores y supervisores): valores para las campañas nuevas (intentos máximos, días de seguimiento y guion estándar, que se copia a cada campaña nueva) y las solicitudes de llamada de SIGTUR (encender o pausar, quién las recibe, simular una).",
+      "«Personas»: «+ Nuevo usuario» abre una ventana (si deja la contraseña vacía será usuario + 123). «Editar» abre la misma ventana para cambiar nombre, usuario, rol, estado o contraseña.",
       "Por seguridad, eliminar una campaña, crear usuarios o cambiar rol, estado o contraseña pide confirmar su contraseña si su último ingreso fue hace más de 10 minutos.",
       "«Registro» → «Actividad»: quién hizo qué y cuándo (ingresos, cambios de usuarios, cargas, asignaciones, llamadas, visitas, descargas de datos). «Errores»: fallos de la aplicación. Se puede filtrar y descargar en CSV. Arriba, «Ubicación y velocidad» muestra dónde están la base de datos y los servidores y cuánto tarda una respuesta; si dice que están lejos, avise a soporte.",
       "«Registro» también muestra las decisiones de la propia aplicación con «Aplicación» como autor: pasada a visita, seguimiento programado, solicitud SIGTUR asignada, resuelta o vencida, tareas cubiertas o devueltas por ausencias y envíos a SIGTUR.",
@@ -415,12 +419,12 @@ const EN: Section[] = [
   {
     id: "sigtur-requests", roles: ["agent", "supervisor", "admin"], title: "SIGTUR requests",
     bullets: [
-      "Other analysts can request a call from SIGTUR. It arrives in the «Solicitudes SIGTUR» campaign (always open) and is assigned automatically, by workload, to the people chosen in “Integrations” (people on leave are skipped).",
+      "Other analysts can request a call from SIGTUR. It arrives in the «Solicitudes SIGTUR» campaign (always open) and is assigned automatically, by workload, to the people chosen in “Settings · Calls” (people on leave are skipped).",
       "These tasks carry the purple “SIGTUR request” tag with who asked and why, and come first in “Due today”.",
       "If the company already had an open task, no new one is created: that task gets the tag and goes back to “Due today”.",
       "Deadline: 2 working days (Monday to Friday) from arrival, or the date SIGTUR sends. The tag shows “due dd/mm”, then “Due tomorrow” (orange) and “Overdue by N days” (red); the most urgent come first. “Follow-up” counts “Overdue SIGTUR requests” per person.",
       "It is solved when someone answers (results 01–06) or the task goes to visit; SIGTUR is then told the result (“Request solved”).",
-      "An administrator can switch requests off or on with the switch in the “Permanent campaign” block (in “Campaigns” or “Integrations”). When off, SIGTUR is told “call requests paused” and no new calls arrive; open tasks stay with their agents and can be finished. Supervisors see whether it is on or paused. This campaign can’t be closed or deleted.",
+      "Administrators and supervisors can switch requests off or on with the switch in the “Permanent campaign” block (in “Campaigns” or “Settings · Calls”). When off, SIGTUR is told “call requests paused” and no new calls arrive; open tasks stay with their agents and can be finished. Supervisors see whether it is on or paused. This campaign can’t be closed or deleted.",
       "Campaigns created from SIGTUR arrive as “Draft” with their establishments; a supervisor or administrator reviews, assigns and activates them.",
     ],
   },
@@ -435,7 +439,7 @@ const EN: Section[] = [
   {
     id: "integrations", roles: ["admin"], title: "Integrations (SIGTUR)",
     steps: [
-      "“Integrations” menu → “Create key”. The key is shown only once: copy it and give it to SIGTUR's team together with the guide «docs/sigtur-integracion.md». The app keeps only a fingerprint, not the key.",
+      "“General administration” → “SIGTUR connection” → “Create key”. The key is shown only once: copy it and give it to SIGTUR's team together with the guide «docs/sigtur-integracion.md». The app keeps only a fingerprint, not the key.",
       "If the key is lost or leaked, press “Revoke” and create another. SIGTUR can no longer get in with the old one, immediately.",
       "Tick who receives call requests and press “Save”.",
       "“Receive call requests”: On / Off switch (asks for confirmation to switch off). When off, SIGTUR is told “paused” and the simulation doesn’t create tasks either.",
@@ -446,7 +450,7 @@ const EN: Section[] = [
   {
     id: "sigtur-push", roles: ["admin"], title: "Automatic sending to SIGTUR",
     steps: [
-      "From now on every call, visit and email (interactions), every data change a person decides (change requests) and every solved SIGTUR request goes to “Integrations” → “Automatic sending to SIGTUR” → “Waiting to be sent”.",
+      "From now on every call, visit and email (interactions), every data change a person decides (change requests) and every solved SIGTUR request goes to “General administration” → “SIGTUR connection” → “Automatic sending to SIGTUR” → “Waiting to be sent”.",
       "Sending is off while the connection is completed: nothing leaves and nothing is lost.",
       "When SIGTUR gives you its address, type it in “SIGTUR's receiving address” and press “Save”.",
       "When SIGTUR gives you its key, paste it in Vercel → your project → Settings → Environment Variables named SIGTUR_PUSH_KEY and redeploy. Never type it in the app or send it in a message.",
@@ -508,7 +512,7 @@ const EN: Section[] = [
   {
     id: "absences", roles: ["admin"], title: "Absences (vacations, days off)",
     steps: [
-      "“Users” → “Absences” on the person's row.",
+      "“General administration” → “People” → “Absences” on the person's row.",
       "Choose from, to and the type (Vacation, Day off or Unavailable); the note is optional. Whole days only.",
       "While absent, the person shows as “Absent” and is left out of automatic assignment. If you delete the absence, covered tasks go back to them at once.",
     ],
@@ -516,7 +520,10 @@ const EN: Section[] = [
   {
     id: "admin", roles: ["admin"], title: "Administration: users, security and log",
     bullets: [
-      "“Users”: “+ New user” opens a pop-up (an empty password becomes username + 123). “Edit” opens the same pop-up to change name, username, role, status or password.",
+      "“General administration” menu, with its tabs “People”, “Permissions per module”, “SIGTUR connection” and “Log”. What belongs to the call campaigns is in “Settings · Calls”.",
+      "“Permissions per module”: besides the role, tick whether each person uses the call campaigns and their level in “Complaints and claims” (used once that module arrives). Without calls access those screens answer “not found”. Administrators have access to everything. Saving asks to confirm the password if it has been a while since signing in.",
+      "“Settings · Calls” (administrators and supervisors): values for new campaigns (max attempts, follow-up days and standard script, copied to each new campaign) and SIGTUR call requests (switch on or pause, who receives them, simulate one).",
+      "“People”: “+ New user” opens a pop-up (an empty password becomes username + 123). “Edit” opens the same pop-up to change name, username, role, status or password.",
       "For security, deleting a campaign, creating users or changing a role, status or password asks you to confirm your password if your last sign-in was more than 10 minutes ago.",
       "“Log” → “Activity”: who did what and when (sign-ins, user changes, uploads, assignments, calls, visits, data downloads). “Errors”: app failures. Filter and download as CSV. On top, “Location and speed” shows where the database and servers are and how long a response takes; if it says they are far apart, tell support.",
       "“Log” also shows the app's own decisions with “App” as author: sent to visit, follow-up scheduled, SIGTUR request assigned, solved or overdue, tasks covered or handed back for absences, and sending to SIGTUR.",

@@ -1,6 +1,7 @@
 import { asc, gte } from "drizzle-orm";
 import { CalendarOff, Pencil, Plus } from "lucide-react";
 import { ActionForm, SubmitButton } from "@/components/ActionForm";
+import { AdminTabs } from "@/components/AdminTabs";
 import { Avatar } from "@/components/Avatar";
 import { Overlay } from "@/components/Overlay";
 import { StatusBadge } from "@/components/ui";
@@ -25,8 +26,9 @@ export default async function UsersPage() {
   const roleOptions = Object.entries(ROLES).map(([k, v]) => <option key={k} value={k}>{v[lang]}</option>);
   return (
     <div className="space-y-6">
+      <AdminTabs t={t} />
       <div className="page-title">
-        <h1>{t.navUsers}</h1>
+        <h2>{t.adminTabPeople}</h2>
         <Overlay trigger={<><Plus className="h-4 w-4" />{t.newUser}</>} title={t.newUser} width="max-w-lg">
           <ActionForm action={createUserAction} className="space-y-4" resetOnSuccess>
             <div className="grid gap-4 sm:grid-cols-2">
