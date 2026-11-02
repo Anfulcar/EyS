@@ -76,9 +76,10 @@ export function notFoundResponse() {
 
 export const MANAGERS: Role[] = ["admin", "supervisor"];
 
-export function homeFor(u: Pick<User, "role" | "callsAccess">) {
+export function homeFor(u: Pick<User, "role" | "callsAccess" | "qrLevel">) {
   const role = u.role;
-  if (!hasCalls(u)) return "/help";
+  // Without the call campaigns: «Quejas y reclamaciones» if the person uses it, otherwise the help page.
+  if (!hasCalls(u)) return u.qrLevel && u.qrLevel !== "none" ? "/quejas" : "/help";
   if (role === "agent") return "/calls";
   if (role === "inspector") return "/visits";
   return "/campaigns";

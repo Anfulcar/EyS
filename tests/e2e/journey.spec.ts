@@ -719,7 +719,8 @@ test("general administration and per-module permissions; calls settings for the 
 
   // Without «Campañas de llamadas» the call screens answer "not found", also on the server
   await signIn(page, "agente2", "Bruno-Clave-1");
-  await expect(page).toHaveURL(/\/help/);
+  // With «Registrar» in complaints but no calls, the person starts in «Quejas y reclamaciones»
+  await expect(page).toHaveURL(/\/quejas$/);
   await expect(page.locator("aside nav a", { hasText: "Mis llamadas" })).toHaveCount(0);
   await page.goto("/calls");
   await expect(page.getByRole("heading", { name: "No encontrado" })).toBeVisible();
@@ -739,4 +740,86 @@ test("general administration and per-module permissions; calls settings for the 
   await page.getByTestId("permissions").locator("tr", { hasText: "Bruno Agente" }).getByLabel("Bruno Agente: Campañas de llamadas").check();
   await page.getByRole("button", { name: "Guardar" }).click();
   await expect(page.getByTestId("notices").getByText("Permisos guardados.")).toBeVisible();
+});
+
+test("«Quejas y reclamaciones»: case linked to a RUT, steps, proof, closing approved by another person, report, public form and SIGTUR", async ({ page, request }) => {
+  await signIn(page, "admin", NEW_PW);
+  // Bruno handles complaints (and keeps calls access); administrators always supervise.
+  await page.goto("/admin/permissions");
+  await page.getByTestId("permissions").locator("tr", { hasText: "Bruno Agente" }).getByLabel("Bruno Agente: Quejas y reclamaciones").selectOption("manage");
+  await page.getByRole("button", { name: "Guardar" }).click();
+  await expect(page.getByTestId("notices").getByText("Permisos guardados.")).toBeVisible();
+
+  // New case linked to a RUT from SIGTUR, assigned to Bruno, with a photo
+  await page.locator("aside nav a", { hasText: "Quejas y reclamaciones" }).click();
+  await expect(page).toHaveURL(/\/quejas$/);
+  await page.getByRole("button", { name: "+ Nuevo caso" }).click();
+  const nc = page.getByRole("dialog", { name: "Nuevo caso" });
+  await nc.getByLabel("RUT o ID SIGTUR").fill("TA-DEMO-0001");
+  await nc.getByRole("button", { name: "Buscar" }).click();
+  await expect(nc.getByTestId("rut-found")).toContainText("Buceo Uno");
+  await nc.getByLabel("Nombre", { exact: true }).fill("Hannah Becker");
+  await nc.getByLabel("Tipo *").selectOption("Reclamación");
+  await nc.getByLabel("Asunto (la incidencia en una línea) *").fill("Le cobraron dos veces la excursión");
+  await nc.getByLabel("Descripción *").fill("Pagó en el hotel y le volvieron a cobrar.");
+  await nc.getByLabel("Asignar a").selectOption({ label: "Bruno Agente" });
+  await nc.locator("#nc-files").setInputFiles({ name: "recibo.png", mimeType: "image/png", buffer: Buffer.from("89504e470d0a1a0a0000000d4948445200000001000000010806000000", "hex") });
+  await nc.getByRole("button", { name: "Crear caso" }).click();
+  await expect(page).toHaveURL(/\/quejas\/QR-\d{4}-\d{4}$/);
+  const caseUrl = page.url();
+  const number = caseUrl.split("/").pop()!;
+  await expect(page.getByText("Le cobraron dos veces la excursión").first()).toBeVisible();
+  await page.getByRole("link", { name: /^Pruebas/ }).click();
+  await expect(page.getByTestId("qr-files")).toContainText("recibo.png");
+
+  // Bruno works it: a step, then proposes closing; he can't approve, the administrator does
+  await signIn(page, "agente2", "Bruno-Clave-1");
+  await page.goto(caseUrl + "?tab=pasos");
+  await page.getByLabel("Nuevo paso").fill("Se llamó al establecimiento; devolverán el cargo.");
+  await page.getByRole("button", { name: "Agregar paso" }).click();
+  await expect(page.getByTestId("qr-steps")).toContainText("devolverán el cargo");
+  await page.goto(caseUrl + "?tab=solucion");
+  await page.getByLabel("Solución dada").fill("El establecimiento devolvió el cargo duplicado.");
+  await page.getByRole("button", { name: "Proponer cierre" }).click();
+  await expect(page.getByText(/Falta la aprobación de un supervisor/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Aprobar y cerrar" })).toHaveCount(0);
+
+  await signIn(page, "admin", NEW_PW);
+  await page.goto(caseUrl + "?tab=solucion");
+  await page.getByRole("button", { name: "Aprobar y cerrar" }).click();
+  await expect(page.getByText(/Cerrado el/)).toBeVisible();
+  await page.goto(caseUrl + "?tab=informes");
+  const pdfHref = await page.getByTestId("qr-reports").getByRole("link", { name: "Descargar PDF" }).first().getAttribute("href");
+  const pdf = await page.request.get(pdfHref!);
+  expect((await pdf.body()).subarray(0, 4).toString()).toBe("%PDF");
+
+  // Statistics and settings
+  await page.goto("/quejas/estadisticas");
+  await expect(page.getByTestId("qr-by-type")).toContainText("Reclamación");
+  await page.goto("/quejas/configuracion");
+  await page.getByLabel("Queja: Respuesta").fill("20");
+  await page.getByRole("button", { name: "Guardar" }).click();
+  await expect(page.getByTestId("notices").getByText("Guardado.")).toBeVisible();
+
+  // Public form, without an account
+  await page.context().clearCookies();
+  await page.goto("/formulario-quejas");
+  await page.getByLabel("Nombre del negocio o persona *").fill("Hotel Arena Mangle");
+  await page.getByLabel("Nombre *").fill("Sofía Herrera");
+  await page.getByLabel("Correo").fill("sofia@example.es");
+  await page.getByLabel("En una línea *").fill("No respetaron el precio de la reserva");
+  await page.getByLabel("Cuéntenos los detalles *").fill("Reservé a 120 USD y me cobraron 160.");
+  await page.getByLabel(/Acepto que el Ministerio/).check();
+  await page.waitForTimeout(3100);
+  await page.getByRole("button", { name: "Enviar" }).click();
+  await expect(page.getByTestId("pf-ticket")).toContainText(/QR-\d{4}-\d{4}/);
+
+  // SIGTUR sends a complaint with its key; without the key the address answers "not found"
+  expect((await request.post("/api/integrations/sigtur/complaints", { data: {} })).status()).toBe(404);
+
+  // Someone without a level doesn't see the module, and a case they can't see answers "not found"
+  await signIn(page, "inspector1", "Inspector-Clave-1");
+  await expect(page.locator("aside nav a", { hasText: "Quejas y reclamaciones" })).toHaveCount(0);
+  await page.goto(`/quejas/${number}`);
+  await expect(page.getByRole("heading", { name: "No encontrado" })).toBeVisible();
 });

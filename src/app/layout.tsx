@@ -13,6 +13,8 @@ import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { companies } from "@/db/schema";
 import { currentUser, hasCalls } from "@/lib/auth";
+import { atLeast } from "@/lib/qr";
+import { QR_TEXT } from "@/lib/qr-i18n";
 import { attentionSummary } from "@/lib/queue";
 import { newReportsCount } from "@/lib/report-run";
 import { syncCoverage } from "@/lib/team";
@@ -56,6 +58,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     ...(calls && isManager ? [{ href: "/stats", label: t.navStats, icon: "stats" as const }] : []),
     ...(calls && isManager ? [{ href: "/reports", label: t.navReports, icon: "reports" as const, badge: newReports }] : []),
     ...(calls && isManager ? [{ href: "/calls-settings", label: t.navCallsSettings, icon: "settings" as const }] : []),
+    ...(user && atLeast(user, "register") ? [{ href: "/quejas", label: QR_TEXT[lang].module, icon: "complaints" as const }] : []),
     ...(role === "admin" ? [{ href: "/users", label: t.navAdmin, icon: "admin" as const, match: ["/users", "/admin", "/logs", "/integrations"] }] : []),
     ...(role ? [{ href: "/help", label: t.navHelp, icon: "help" as const }] : []),
   ];

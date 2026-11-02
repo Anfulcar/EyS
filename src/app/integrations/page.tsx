@@ -32,7 +32,7 @@ export default async function IntegrationsPage() {
   );
   const h = await headers();
   const origin = `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host") ?? ""}`;
-  const KIND: Record<string, string> = { call_request: t.integrationKindCall, campaign: t.integrationKindCampaign, interactions: t.integrationKindInteractions };
+  const KIND: Record<string, string> = { call_request: t.integrationKindCall, campaign: t.integrationKindCampaign, interactions: t.integrationKindInteractions, complaint: lang === "es" ? "Queja o reclamación" : "Complaint or claim" };
 
   return (
     <div className="space-y-6">
@@ -80,6 +80,7 @@ export default async function IntegrationsPage() {
             <div className="break-all font-mono">POST {origin}/api/integrations/sigtur/call-requests</div>
             <div className="break-all font-mono">POST {origin}/api/integrations/sigtur/campaigns</div>
             <div className="break-all font-mono">GET {origin}/api/integrations/sigtur/interactions</div>
+            <div className="break-all font-mono">POST {origin}/api/integrations/sigtur/complaints</div>
             <div className="mt-1">{t.integrationDocHint}</div>
           </div>
         </div>

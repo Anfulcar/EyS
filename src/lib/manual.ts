@@ -6,6 +6,7 @@ type Section = { id: string; roles: string[]; title: string; intro?: string; ste
 type L<T> = Record<Lang, T>;
 
 export const WHATS_NEW: { date: string; es: string; en: string }[] = [
+  { date: "2026-11-02", es: "Nuevo módulo «Quejas y reclamaciones»: un expediente por caso (enlazado a un RUT de SIGTUR o con los datos de quien esté involucrado), pasos, referencias a otras instituciones, pruebas, solución y cierre aprobado por un supervisor, informe en PDF automático al cerrar y a pedido, plazos por tipo, estadísticas, configuración propia, formulario público y casos enviados desde SIGTUR. Quién lo usa y con qué nivel se decide en «Permisos por módulo».", en: "New “Complaints and claims” module: one file per case (linked to a SIGTUR RUT or with the details of whoever is involved), steps, referrals to other institutions, proof, solution and closing approved by a supervisor, PDF report automatically at closing and on request, deadlines per type, statistics, its own settings, a public form and cases sent from SIGTUR. Who uses it, and at which level, is set in “Permissions per module”." },
   { date: "2026-11-02", es: "Un panel por módulo y uno general: «Administración general» (solo administradores) reúne «Personas», «Permisos por módulo», «Conexión con SIGTUR» y «Registro»; «Configuración · Llamadas» (administradores y supervisores) tiene los valores para las campañas nuevas (intentos, días de seguimiento, guion estándar) y las solicitudes de llamada de SIGTUR (encender o pausar, quién las recibe, simular). Nuevo: «Permisos por módulo», para dar o quitar a cada persona el acceso a las campañas de llamadas.", en: "One panel per module plus a general one: “General administration” (administrators only) gathers “People”, “Permissions per module”, “SIGTUR connection” and “Log”; “Settings · Calls” (administrators and supervisors) has the values for new campaigns (attempts, follow-up days, standard script) and SIGTUR call requests (switch on or pause, who receives them, simulate). New: “Permissions per module”, to give or remove each person's access to the call campaigns." },
   { date: "2026-10-30", es: "Correo: en la llamada el correo aparece ya escrito y se puede corregir, con la nueva pregunta «¿Recibió el correo?»; en la visita, «Nuevo correo». Filtro «¿Recibió el correo?» en «Tareas y asignación» y dos botones: «Nueva campaña de llamadas con estas tareas» y «Nueva campaña de correo con estas tareas» (sin llamadas; las tareas originales siguen). Nuevo «Reporte de cambios» en «Informes»: cada dato cambiado, con su historia, para actualizar SIGTUR a mano y marcarlo como hecho.", en: "Email: in the call the email is already filled in and can be corrected, with the new question “Did they receive the email?”; in the visit, “New email”. “Did they receive the email?” filter in “Tasks and assignment” and two buttons: “New call campaign from these tasks” and “New email campaign from these tasks” (no calls; the original tasks keep going). New “Change report” in “Reports”: every changed detail, with its history, to update SIGTUR by hand and mark it done." },
   { date: "2026-10-30", es: "Pantallas más cómodas: el menú lateral se puede plegar a solo iconos («Plegar menú») y queda a la vista al bajar; todos los filtros aceptan varias opciones, que se ven como etiquetas que se quitan con ×; en «Tareas y asignación» la barra para asignar o eliminar aparece abajo al marcar filas; las confirmaciones usan una ventana propia de la aplicación y «Guardado» aparece como aviso verde arriba a la derecha; en el celular el menú se abre con ☰; «?» explica cada indicador y «↑ Arriba» vuelve al inicio en páginas largas.", en: "Easier screens: the side menu folds down to icons (“Collapse menu”) and stays in view when scrolling; every filter accepts several choices, shown as labels you remove with ×; in “Tasks and assignment” the bar to assign or remove appears at the bottom when rows are ticked; confirmations use the app's own window and “Saved” appears as a green notice at the top right; on phones the menu opens with ☰; “?” explains each indicator and “↑ Top” goes back up on long pages." },
@@ -278,6 +279,22 @@ const ES: Section[] = [
     ],
   },
   {
+    id: "complaints", roles: ["admin", "supervisor", "agent", "inspector"], title: "Quejas y reclamaciones",
+    intro: "Un módulo aparte para quejas, reclamaciones, denuncias y sugerencias. Se ve si en «Permisos por módulo» tiene un nivel: Registrar (crea casos y ve los suyos), Gestionar (ve todos y trabaja los asignados) o Supervisar (además asigna, aprueba cierres, reabre y cambia la configuración). Los administradores pueden todo.",
+    steps: [
+      "Menú «Quejas y reclamaciones» → «Casos»: arriba los contadores (abiertos, fuera de plazo, vencen pronto, sin asignar, cierres por aprobar, asignados a mí) y la lista con su plazo de respuesta (punto verde, ámbar o rojo). Los filtros aceptan varias opciones.",
+      "«+ Nuevo caso»: primero a quién se refiere (busque el RUT o ID SIGTUR y los datos se traen solos, o elija «No está en SIGTUR» y escríbalos), luego quién lo presenta (o anónimo), qué pasó (tipo, tema, canal, prioridad, asunto, descripción) y las pruebas (fotos, PDF, Word, Excel, audio; hasta 8 MB cada uno). Cada caso recibe un número: QR-2026-0001.",
+      "En el caso: «Pasos dados» (cada paso es «Visible para la persona» o «Nota interna»; no se borran), «Referencias» (enviar a Pro Consumidor, CESTUR, Licencias… con fecha de respuesta esperada y la respuesta recibida), «Pruebas» (no se borran; se marcan «reemplazada») y el estado.",
+      "Plazos: la primera atención (asignar y registrar el primer paso) y la respuesta (cerrar) se cuentan en días hábiles según el tipo, como diga «Configuración».",
+      "Cierre: quien gestiona escribe la solución y pulsa «Proponer cierre»; un supervisor lo aprueba o lo devuelve con un motivo. Nadie aprueba su propio cierre. Un supervisor puede reabrir un caso cerrado.",
+      "«Informes»: al aprobar el cierre se genera el informe en PDF; «Generar informe» crea una versión nueva cuando el caso cambia (las anteriores se conservan). Las notas internas no salen en el informe.",
+      "«Estadísticas» (Gestionar y Supervisar): recibidos, en plazo, días hasta cerrar, por semana, tema, canal, tipo, establecimiento y responsable.",
+      "«Configuración» (Supervisar): plazos por tipo, días de aviso, temas, instituciones para referir y el formulario público (encendido o apagado, con su dirección para publicar).",
+      "Formulario público («/formulario-quejas»): cualquier persona presenta un caso sin cuenta y ve su número al terminar. Por ahora no se envían correos.",
+      "SIGTUR también puede enviar casos con la clave de la conexión; llegan con el RUT enlazado y el canal «SIGTUR».",
+    ],
+  },
+  {
     id: "messages", roles: ["admin", "supervisor", "agent", "inspector"], title: "Mensajes que puede ver",
     bullets: [
       "«No se pudo conectar con el servidor»: revise su internet y pulse «Intentar de nuevo». Lo que estaba guardando no se guardó.",
@@ -527,6 +544,22 @@ const EN: Section[] = [
       "For security, deleting a campaign, creating users or changing a role, status or password asks you to confirm your password if your last sign-in was more than 10 minutes ago.",
       "“Log” → “Activity”: who did what and when (sign-ins, user changes, uploads, assignments, calls, visits, data downloads). “Errors”: app failures. Filter and download as CSV. On top, “Location and speed” shows where the database and servers are and how long a response takes; if it says they are far apart, tell support.",
       "“Log” also shows the app's own decisions with “App” as author: sent to visit, follow-up scheduled, SIGTUR request assigned, solved or overdue, tasks covered or handed back for absences, and sending to SIGTUR.",
+    ],
+  },
+  {
+    id: "complaints", roles: ["admin", "supervisor", "agent", "inspector"], title: "Complaints and claims",
+    intro: "A separate module for complaints, claims, reports and suggestions. You see it if “Permissions per module” gives you a level: Register (creates cases and sees their own), Handle (sees every case and works the assigned ones) or Supervise (also assigns, approves closings, reopens and changes the settings). Administrators can do everything.",
+    steps: [
+      "“Complaints and claims” menu → “Cases”: counters at the top (open, out of time, due soon, unassigned, closings to approve, assigned to me) and the list with each answer deadline (green, amber or red dot). Filters accept several choices.",
+      "“+ New case”: first who it is about (search the RUT or SIGTUR ID and the details come by themselves, or choose “Not in SIGTUR” and type them), then who brings it (or anonymous), what happened (type, topic, channel, priority, subject, description) and the proof (photos, PDF, Word, Excel, audio; up to 8 MB each). Each case gets a number: QR-2026-0001.",
+      "In the case: “Steps taken” (each step is “Visible to the person” or “Internal note”; never deleted), “Referrals” (send to Pro Consumidor, CESTUR, Licences… with an expected answer date and the answer received), “Proof” (never deleted; marked “replaced”) and the status.",
+      "Deadlines: first attention (assign and record the first step) and answer (close) are counted in business days per type, as set in “Settings”.",
+      "Closing: the handler writes the solution and presses “Propose closing”; a supervisor approves it or returns it with a reason. Nobody approves their own closing. A supervisor can reopen a closed case.",
+      "“Reports”: approving the closing generates the PDF report; “Generate report” makes a new version when the case changes (earlier ones are kept). Internal notes never appear in the report.",
+      "“Statistics” (Handle and Supervise): received, on time, days to close, per week, topic, channel, type, establishment and handler.",
+      "“Settings” (Supervise): deadlines per type, warning days, topics, institutions for referrals and the public form (on or off, with its address to publish).",
+      "Public form (“/formulario-quejas”): anyone submits a case without an account and sees its number at the end. No emails are sent for now.",
+      "SIGTUR can also send cases with the connection key; they arrive linked to the RUT with the “SIGTUR” channel.",
     ],
   },
   {
