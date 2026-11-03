@@ -10,7 +10,7 @@ import { MobileNav, SideNav } from "@/components/SideNav";
 import { Toasts } from "@/components/Toasts";
 import { NavProgress } from "@/components/NavProgress";
 import { eq, sql } from "drizzle-orm";
-import { db } from "@/db";
+import { afterResponse, db, isDemoRequest } from "@/db";
 import { companies } from "@/db/schema";
 import { currentUser } from "@/lib/auth";
 import { can, canAny } from "@/lib/permissions";
@@ -21,11 +21,11 @@ import { newReportsCount } from "@/lib/report-run";
 import { syncCoverage } from "@/lib/team";
 import { NAV_COOKIE } from "@/lib/ui-prefs";
 import { cookies } from "next/headers";
-import { after } from "next/server";
 import { sigturBackground } from "@/lib/sigtur-push";
 import { ROLES } from "@/lib/catalog";
 import { getDict } from "@/lib/i18n-server";
-import { logoutAction, setLangAction } from "./actions";
+import { leaveDemoAction, logoutAction, resetDemoAction, setLangAction } from "./actions";
+import { ActionForm, ConfirmButton } from "@/components/ActionForm";
 import "./globals.css";
 
 export const metadata: Metadata = { title: "Atención al Cliente EyS" };
@@ -34,7 +34,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // Covers for absences start and end by date (throttled; never blocks the page on failure).
   const [{ lang, t }, user] = await Promise.all([getDict(), currentUser(), syncCoverage().catch((e) => console.error("[coverage]", e))]);
   // Overdue SIGTUR requests and sending to SIGTUR, after the page is sent (never slows it down).
-  after(() => sigturBackground().catch((e) => console.error("[sigtur]", e)));
+  afterResponse(() => sigturBackground().catch((e) => console.error("[sigtur]", e)));
+  const inDemo = isDemoRequest();
   const c = (a: string) => can(user, a);
   // People who direct the campaigns («Asignar y mover tareas») see "Mis llamadas" only when they have calls
   // assigned; everyone else who makes calls always sees it. Both menu numbers are asked for at the same time.
@@ -151,6 +152,17 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 </div>
               </div>
             </header>
+            {inDemo && (
+              <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 bg-amber-100 px-4 py-2 text-center text-xs font-semibold text-amber-900" data-testid="demo-bar">
+                <span className="flex items-center gap-2"><FlaskConical className="h-4 w-4 shrink-0" /> {t.demoBar}</span>
+                {user?.isAdmin && (
+                  <ActionForm action={resetDemoAction}>
+                    <ConfirmButton message={t.demoResetConfirm} className="rounded-lg bg-white/70 px-2.5 py-1 text-amber-900 ring-1 ring-amber-300 hover:bg-white" confirmLabel={t.demoReset}>{t.demoReset}</ConfirmButton>
+                  </ActionForm>
+                )}
+                <form action={leaveDemoAction}><button className="rounded-lg bg-amber-900 px-2.5 py-1 text-white hover:bg-amber-800">{t.demoLeave}</button></form>
+              </div>
+            )}
             {process.env.SEED_DEMO === "true" && (
               <div className="flex items-center justify-center gap-2 bg-amber-100 px-4 py-2 text-center text-xs font-medium text-amber-900">
                 <FlaskConical className="h-4 w-4 shrink-0" /> {t.demoBanner}

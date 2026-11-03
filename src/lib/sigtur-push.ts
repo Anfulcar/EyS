@@ -1,6 +1,6 @@
 import "server-only";
 import { and, desc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
-import { db } from "@/db";
+import { db, isDemoRequest } from "@/db";
 import { appMeta, companies, establishments, sigturOutbox } from "@/db/schema";
 import { logActivity } from "./audit";
 import { codeLabel } from "./catalog";
@@ -134,6 +134,8 @@ let lastFlush = 0;
 
 // Sends what is waiting (oldest first). Failures wait longer each time (2, 4, 8 … up to 60 minutes).
 export async function flushOutbox(force = false, limit = 50) {
+  // The demo never sends anything to SIGTUR.
+  if (isDemoRequest()) return { sent: 0, failed: 0 };
   if (!force && Date.now() - lastFlush < 60_000) return { sent: 0, failed: 0 };
   lastFlush = Date.now();
   const s = await pushSettings();

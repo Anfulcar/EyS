@@ -1,4 +1,7 @@
+import { FlaskConical } from "lucide-react";
+import Link from "next/link";
 import { redirect } from "next/navigation";
+import { demoOpen } from "@/lib/demo";
 import { DEMO_USERS } from "../../../scripts/seed-demo.mjs";
 import { currentUser, homeFor } from "@/lib/auth";
 import { ROLES } from "@/lib/catalog";
@@ -8,6 +11,8 @@ import { loginAction } from "../actions";
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const u = await currentUser();
   if (u) redirect(homeFor(u));
+  // «Entrar a la demo»: visible when the Administrador switched the demo on (it asks for the demo password).
+  const demo = await demoOpen();
   const { t, lang } = await getDict();
   const { error } = await searchParams;
   return (
@@ -30,6 +35,11 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         </div>
         <button className="btn w-full">{t.login}</button>
       </form>
+      {demo && (
+        <Link href="/login/demo" className="mt-4 flex items-center justify-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 transition hover:bg-amber-100" data-testid="demo-link">
+          <FlaskConical className="h-4 w-4" /> {t.demoEnterLink}
+        </Link>
+      )}
       {process.env.SEED_DEMO === "true" && (
         <div className="mt-4 rounded-2xl bg-amber-50 p-4 text-sm text-amber-900 ring-1 ring-amber-200">
           <p className="font-medium">{t.demoUsers}</p>

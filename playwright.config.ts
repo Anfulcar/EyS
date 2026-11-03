@@ -24,6 +24,9 @@ export default defineConfig({
       E2E_PORT: String(PORT),
       TURSO_DATABASE_URL: "file:e2e.db",
       TURSO_AUTH_TOKEN: "",
+      // «Demo» inside the app, on its own throw-away database
+      TURSO_DEMO_DATABASE_URL: "file:e2e-demo.db",
+      TURSO_DEMO_AUTH_TOKEN: "",
       AUTH_SECRET: process.env.E2E_AUTH_SECRET!,
       ADMIN_USERNAME: "admin",
       ADMIN_PASSWORD: process.env.E2E_ADMIN_PASSWORD!,

@@ -853,3 +853,53 @@ test("«Quejas y reclamaciones»: case linked to a RUT, steps, proof, closing ap
   await page.goto(`/quejas/${number}`);
   await expect(page.getByRole("heading", { name: "No encontrado" })).toBeVisible();
 });
+
+test("«Demo» inside the app: switched on with its password, one-click entry, made-up data apart from the real data, reset", async ({ page }) => {
+  const DEMO_PW = "Demo-Capacita-1";
+  await signIn(page, "admin", NEW_PW);
+  await page.goto("/admin/demo");
+  await page.getByLabel("Demo activa").check();
+  await page.getByLabel("Nueva contraseña de la demo").fill(DEMO_PW);
+  await page.getByRole("button", { name: "Guardar" }).click();
+  await expect(page.getByTestId("notices").getByText("Demo guardada.")).toBeVisible();
+  await expect(page.getByText(/\/login\/demo/)).toBeVisible();
+
+  // From the sign-in page: the demo password, then one button per kind of work
+  await page.context().clearCookies();
+  await page.goto("/login");
+  await page.getByTestId("demo-link").click();
+  await page.getByLabel("Contraseña de la demo").fill("equivocada");
+  await page.getByRole("button", { name: "Entrar", exact: true }).click();
+  await expect(page.getByText("Contraseña de la demo incorrecta.")).toBeVisible();
+  await page.getByLabel("Contraseña de la demo").fill(DEMO_PW);
+  await page.getByRole("button", { name: "Entrar", exact: true }).click();
+  await page.getByRole("button", { name: /Entrar como Supervisor/ }).click();
+  await expect(page).toHaveURL(/\/campaigns$/);
+  await expect(page.getByTestId("demo-bar")).toBeVisible();
+  await expect(page.getByText("Campaña demo – Región Este").first()).toBeVisible();
+  await expect(page.getByText("Campaña de prueba")).toHaveCount(0);
+  // The demo's settings can't be changed from inside the demo
+  await page.goto("/admin/demo");
+  await expect(page.getByRole("heading", { name: "No encontrado" })).toBeVisible();
+
+  // Leaving the demo: the real app is as it was
+  await page.goto("/campaigns");
+  await page.getByRole("button", { name: "Salir de la demo" }).click();
+  await expect(page).toHaveURL(/\/login$/);
+  await signIn(page, "admin", NEW_PW);
+  await page.goto("/campaigns");
+  await expect(page.getByText("Campaña de prueba").first()).toBeVisible();
+  await expect(page.getByText("Campaña demo – Región Este")).toHaveCount(0);
+  await expect(page.getByTestId("demo-bar")).toHaveCount(0);
+
+  // The demo's Administrador resets it from the yellow bar
+  await page.context().clearCookies();
+  await page.goto("/login/demo");
+  await page.getByLabel("Contraseña de la demo").fill(DEMO_PW);
+  await page.getByRole("button", { name: "Entrar", exact: true }).click();
+  await page.getByRole("button", { name: /Entrar como Administrador/ }).click();
+  await page.getByTestId("demo-bar").getByRole("button", { name: "Reiniciar demo" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Reiniciar demo" }).click();
+  await expect(page).toHaveURL(/\/login\/demo$/);
+  await expect(page.getByTestId("demo-choose")).toBeVisible();
+});

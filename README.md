@@ -112,6 +112,21 @@ One-time setup:
 `SEED_DEMO` must **never** be set for Production. If it is, the live deployment stops with an error instead
 of touching data.
 
+### Demo inside the live app («Administración general → Demo»)
+
+The live app can host a demo with made-up data: the Administrador switches it on and chooses its password;
+the sign-in page then shows «Entrar a la demo» (demo password → one-click «Entrar como …»). The demo runs on
+its **own database**: a request is a demo request only with a server-signed demo pass (`eys_demo` cookie),
+and `db` (`src/db/index.ts`) then points to the demo database; demo sign-ins are marked in the session and
+never count in the real app (and the reverse). The demo never sends anything to SIGTUR.
+
+One-time setup:
+1. **Turso** → create a **third** database, e.g. `eys-training` (not the preview one: previews reload theirs
+   on every deploy). Copy its URL and generate a token.
+2. **Vercel** → Settings → Environment Variables → add, with **only "Production"** ticked:
+   `TURSO_DEMO_DATABASE_URL` (its URL) and `TURSO_DEMO_AUTH_TOKEN` (its token). Redeploy.
+3. Every deploy brings the demo database up to date and fills it the first time. «Reiniciar demo» reloads it.
+
 ## Health check
 
 `/api/health` answers `{"status":"ok","database":"ok"}` when the app and its database are reachable, or

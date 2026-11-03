@@ -5,9 +5,12 @@ import { and, eq, inArray, isNull, ne, notInArray } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { after } from "next/server";
 import { z } from "zod";
-import { db } from "@/db";
+import { afterResponse, db, demoConfigured, isDemoRequest, onReal } from "@/db";
+import { DEMO_COOKIE, DEMO_HOURS, demoToken } from "@/lib/demo-token";
+import { SESSION_COOKIE } from "@/lib/session";
+import { checkDemoPassword, DEMO_ENTRIES, demoOpen, demoSettings, resetDemo, saveDemoSettings } from "@/lib/demo";
+import { headers } from "next/headers";
 import { absences, apiKeys, permissionProfiles, campaigns, companies, establishments, generatedReports, importLogs, phones, reportTemplates, users } from "@/db/schema";
 import { logActivity, logError } from "@/lib/audit";
 import { assertUser, clearSession, homeFor, recentlyAuthenticated, setSessionCookie, type Me } from "@/lib/auth";
@@ -41,6 +44,15 @@ export type ActionState = { ok?: boolean; error?: string; message?: string; keep
 // ---------- Session ----------
 
 export async function loginAction(form: FormData) {
+  // Signing in to the real app ends any demo visit in this browser.
+  if (isDemoRequest()) {
+    (await cookies()).delete(DEMO_COOKIE);
+    return onReal(() => realLogin(form));
+  }
+  return realLogin(form);
+}
+
+async function realLogin(form: FormData) {
   const username = String(form.get("username") ?? "").trim().toLowerCase();
   const password = String(form.get("password") ?? "");
   const u = await db.query.users.findFirst({ where: eq(users.username, username) });
@@ -499,7 +511,7 @@ export async function logCallAction(_: ActionState, form: FormData): Promise<Act
     const failed = !input.contacted || input.attended === false;
     const result = failed ? (input.contacted ? "10" : input.noContactCode) : [...new Set(input.results.map((r) => r.code))].join(", ");
     // Written right after the answer is sent, so the agent doesn't wait for the activity log.
-    after(() =>
+    afterResponse(() =>
       logActivity(u, "call.logged", {
         campaignId: main.campaignId, entity: "task", entityId: main.id,
         summary: `${main.key}${extra.length ? ` (+${extra.length} misma empresa)` : ""} · resultado: ${result}`,
@@ -590,7 +602,7 @@ export async function addPhoneAction(_: ActionState, form: FormData): Promise<Ac
   const old = kind === "substitute" && replaces ? await db.query.phones.findFirst({ where: eq(phones.id, replaces) }) : null;
   const [firstEst] = await db.select({ id: establishments.id }).from(establishments).where(eq(establishments.companyId, companyId)).limit(1);
   if (firstEst) {
-    after(async () => {
+    afterResponse(async () => {
       await queueChanges([{ establishmentId: firstEst.id, field: "telefono", label: kind === "substitute" ? "Teléfono (sustituye)" : "Teléfono (adicional)", from: old?.number ?? null, to: `${formatPhone(raw)} · ${PHONE_REASONS[reason]?.es ?? reason}` }], u, "Llamada");
       await flushOutbox();
     });
@@ -621,7 +633,7 @@ export async function logVisitAction(_: ActionState, form: FormData): Promise<Ac
     newEmail: field("newEmail"),
   });
   await logActivity(u, "visit.logged", { campaignId: v.campaignId, entity: "establishment", entityId: establishmentId, summary: `${v.sigturId} · ${visitDate} · resultado: ${code}` });
-  after(async () => {
+  afterResponse(async () => {
     if (v.followupAt) await logActivity(null, "task.followup_scheduled", { campaignId: v.campaignId, entity: "task", entityId: v.companyId, summary: `${v.sigturId} · después de la visita · ${v.followupAt}` });
     await queueVisitInteraction(v.visitId);
     await queueChanges(v.changes, u, "Visita");
@@ -644,7 +656,7 @@ export async function markEmailsSentAction(_: ActionState, form: FormData): Prom
   if (form.get("onlyUnsent")) where.push(isNull(establishments.correoEnviadoFecha));
   const res = await db.update(establishments).set({ correoEnviadoFecha: date }).where(and(...where)).returning({ id: establishments.id });
   await logActivity(u, "emails.marked_sent", { campaignId, summary: `${res.length} establecimientos · fecha ${date}${status ? ` · ${status}` : ""}` });
-  after(async () => {
+  afterResponse(async () => {
     for (let i = 0; i < res.length; i += 500) await queueEmailInteractions(res.slice(i, i + 500).map((r) => r.id));
     await flushOutbox();
   });
@@ -1108,7 +1120,7 @@ export async function setSigturPushAction(_: ActionState, form: FormData): Promi
   if (on && !(await pushSettings()).ready) return { error: t.pushNotReady };
   await setPushEnabled(on);
   await logActivity(me, on ? "sigtur.push_on" : "sigtur.push_off", { entity: "integration" });
-  if (on) after(() => flushOutbox(true));
+  if (on) afterResponse(() => flushOutbox(true));
   revalidatePath("/integrations");
   return { ok: true, message: on ? t.pushSwitchedOn : t.pushSwitchedOff };
 }
@@ -1217,4 +1229,77 @@ export async function removeTasksAction(_: ActionState, form: FormData): Promise
   revalidatePath(`/campaigns/${campaignId}`, "layout");
   revalidatePath("/calls", "layout");
   return { ok: true, message: t.removeDone.replace("{n}", String(r.removed)) };
+}
+
+// ---------- «Demo» inside the app ----------
+
+// «Entrar a la demo»: the demo password gives a demo pass for a few hours (this browser only).
+export async function enterDemoAction(form: FormData) {
+  if (!(await demoOpen())) redirect("/login");
+  const h = await headers();
+  const ip = (h.get("x-forwarded-for") ?? "").split(",")[0].trim() || h.get("x-real-ip") || "local";
+  const r = await onReal(() => checkDemoPassword(String(form.get("password") ?? ""), ip));
+  if (r !== "ok") redirect(`/login/demo?error=${r}`);
+  const jar = await cookies();
+  // Any real sign-in in this browser ends: the demo and the real app never mix.
+  jar.delete(SESSION_COOKIE);
+  jar.set(DEMO_COOKIE, demoToken(), { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: DEMO_HOURS * 3600 });
+  redirect("/login/demo");
+}
+
+// «Entrar como …»: one click, only with a valid demo pass and only to the demo's made-up people.
+export async function demoSignInAction(form: FormData) {
+  if (!isDemoRequest() || !(await demoOpen())) redirect("/login/demo");
+  const entry = DEMO_ENTRIES.find((e) => e.key === form.get("as"));
+  if (!entry) redirect("/login/demo");
+  const u = await db.query.users.findFirst({ where: eq(users.username, entry.username) });
+  if (!u || !u.active) redirect("/login/demo?error=missing");
+  await setSessionCookie({ ...u, mustChangePassword: false });
+  await logActivity(u, "login.success", { entity: "user", entityId: u.id, summary: `${u.username} (demo)` });
+  const [withProfile] = await withActions([u]);
+  redirect(homeFor(withProfile));
+}
+
+export async function leaveDemoAction() {
+  const jar = await cookies();
+  jar.delete(SESSION_COOKIE);
+  jar.delete(DEMO_COOKIE);
+  redirect("/login");
+}
+
+// «Reiniciar demo»: from «Administración general → Demo» (real app), or by the demo's Administrador inside it.
+export async function resetDemoAction(): Promise<ActionState> {
+  const { t } = await getDict();
+  if (!demoConfigured) return { error: "Not found" };
+  const me = await assertUser("g.perms");
+  const inDemo = isDemoRequest();
+  await resetDemo(inDemo ? `${me.name} (dentro de la demo)` : me.name);
+  if (inDemo) {
+    // The demo's people were made again: enter again with a button.
+    (await cookies()).delete(SESSION_COOKIE);
+    redirect("/login/demo");
+  }
+  await logActivity(me, "demo.reset", { entity: "settings", summary: "Demo reiniciada" });
+  revalidatePath("/admin/demo");
+  return { ok: true, message: t.demoResetDone };
+}
+
+// «Administración general → Demo»: on/off and the demo password (real app only, Administrador profile).
+export async function saveDemoSettingsAction(_: ActionState, form: FormData): Promise<ActionState> {
+  if (isDemoRequest()) return { error: "Not found" };
+  const me = await assertUser("g.perms");
+  const { t } = await getDict();
+  const enabled = form.get("enabled") === "1";
+  const password = String(form.get("password") ?? "");
+  if (password && password.length < 8) return { error: t.demoShort };
+  const s = await demoSettings();
+  if (enabled && !password && !s.hash) return { error: t.demoNeedPassword };
+  if (password || enabled !== s.enabled) {
+    const reauth = await reauthRequired(PERM_REAUTH_MINUTES);
+    if (reauth) return reauth;
+  }
+  await saveDemoSettings(enabled, password || null);
+  await logActivity(me, "demo.settings_changed", { entity: "settings", summary: `Demo ${enabled ? "activa" : "apagada"}${password ? " · contraseña cambiada" : ""}` });
+  revalidatePath("/admin/demo");
+  return { ok: true, message: t.demoSaved };
 }

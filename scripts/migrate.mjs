@@ -41,6 +41,25 @@ if (Number(rows[0].n) === 0) {
     console.log(`[migrate] created admin user "${username}"`);
   }
 }
+// «Demo» inside the app («Administración general → Demo»): its own database, kept up to date on every deploy and
+// filled with the made-up data the first time.
+if (process.env.TURSO_DEMO_DATABASE_URL) {
+  const demoUrl = process.env.TURSO_DEMO_DATABASE_URL;
+  if (demoUrl === url) throw new Error("[demo] TURSO_DEMO_DATABASE_URL must be a different database from TURSO_DATABASE_URL");
+  const demoClient = createClient({ url: demoUrl, authToken: process.env.TURSO_DEMO_AUTH_TOKEN });
+  await migrate(drizzle(demoClient), { migrationsFolder: "./drizzle" });
+  const n = Number((await demoClient.execute("SELECT COUNT(*) AS n FROM users")).rows[0].n);
+  if (n === 0) {
+    const { seedDemo } = await import("./seed-demo.mjs");
+    const { randomBytes } = await import("node:crypto");
+    await seedDemo(demoClient, { DEMO_PASSWORD: randomBytes(18).toString("base64url") }, { inApp: true });
+    console.log("[demo] demo database filled with made-up data");
+  } else {
+    await ensureProfiles(demoClient);
+  }
+  demoClient.close();
+}
+
 // «Perfiles de permisos»: day-one profiles and a profile for anyone who doesn't have one yet.
 const p = await ensureProfiles(client);
 if (p.created || p.assigned) console.log(`[migrate] permission profiles: ${p.created} created, ${p.assigned} people assigned`);

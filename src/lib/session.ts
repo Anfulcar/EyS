@@ -5,7 +5,8 @@ export const SESSION_COOKIE = "eys_session";
 export const SESSION_HOURS = 12;
 
 // authAt: when the person last typed their password (sign-in or confirmation), in milliseconds.
-export type SessionPayload = { uid: number; role: string; name: string; mcp: boolean; authAt?: number };
+// demo: a sign-in inside the demo (made-up data); it never counts in the real app, and the reverse.
+export type SessionPayload = { uid: number; role: string; name: string; mcp: boolean; authAt?: number; demo?: boolean };
 
 // Sensitive actions ask for the password again when the last confirmation is older than this.
 export function reauthWindowMinutes() {

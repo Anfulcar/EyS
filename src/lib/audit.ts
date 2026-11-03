@@ -15,7 +15,7 @@ export const ACTIONS = [
   "task.to_visit", "task.followup_scheduled", "task.cover_started", "task.cover_returned", "sigtur.request_assigned", "sigtur.request_resolved", "sigtur.request_overdue", "sigtur.sent", "sigtur.send_failed", "sigtur.push_on", "sigtur.push_off", "sigtur.push_url", "sigtur.retry", "sigtur.assignees_saved", "report.template_paused", "establishment.updated", "phone.marked",
   "export.downloaded",
   "changes.sigtur_done",
-  "user.permissions_changed", "user.profile_changed", "profile.created", "profile.updated", "profile.deleted", "profile.backfill",
+  "user.permissions_changed", "user.profile_changed", "profile.created", "profile.updated", "profile.deleted", "profile.backfill", "demo.reset", "demo.settings_changed",
   "settings.calls_updated",
   "qr.case_created", "qr.case_updated", "qr.close_proposed", "qr.closed", "qr.close_returned", "qr.reopened", "qr.report_generated", "qr.settings_changed", "qr.public_case", "qr.sigtur_case", "qr.file_added",
 ] as const;
