@@ -206,6 +206,8 @@ export const ACTIVITY_LABELS: Record<string, L> = {
   "profile.updated": { es: "Perfil de permisos cambiado", en: "Permission profile changed" },
   "profile.deleted": { es: "Perfil de permisos eliminado", en: "Permission profile deleted" },
   "profile.backfill": { es: "Perfiles creados a partir de los roles", en: "Profiles created from the roles" },
+  "demo.reset": { es: "Demo reiniciada", en: "Demo reset" },
+  "demo.settings_changed": { es: "Demo: activación o contraseña", en: "Demo: switched or password changed" },
   "user.status_changed": { es: "Usuario activado/desactivado", en: "User activated/deactivated" },
   "user.password_reset": { es: "Contraseña restablecida", en: "Password reset" },
   "campaign.created": { es: "Campaña creada", en: "Campaign created" },

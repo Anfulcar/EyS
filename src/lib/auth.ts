@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { cache } from "react";
-import { db } from "@/db";
+import { db, isDemoRequest } from "@/db";
 import { users, type User } from "@/db/schema";
 import { can, canAny, profileOf, type Who } from "./permissions";
 import { isRecentAuth, readSession, SESSION_COOKIE, SESSION_HOURS, signSession } from "./session";
@@ -11,7 +11,7 @@ import { isRecentAuth, readSession, SESSION_COOKIE, SESSION_HOURS, signSession }
 
 // Call only right after the person typed their password: it restarts the "recent sign-in" clock.
 export async function setSessionCookie(user: User) {
-  const token = await signSession({ uid: user.id, role: user.role, name: user.name, mcp: user.mustChangePassword, authAt: Date.now() });
+  const token = await signSession({ uid: user.id, role: user.role, name: user.name, mcp: user.mustChangePassword, authAt: Date.now(), demo: isDemoRequest() });
   (await cookies()).set(SESSION_COOKIE, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
@@ -32,6 +32,9 @@ export type Me = User & { actions: string[]; profileName: string; isAdmin: boole
 export const currentUser = cache(async (): Promise<Me | null> => {
   const s = await readSession((await cookies()).get(SESSION_COOKIE)?.value);
   if (!s) return null;
+  // A demo sign-in only counts inside the demo, and a real one only outside it (the two databases have
+  // different people under the same numbers).
+  if (!!s.demo !== isDemoRequest()) return null;
   const u = await db.query.users.findFirst({ where: eq(users.id, s.uid) });
   if (!u || !u.active) return null;
   const p = await profileOf(u);

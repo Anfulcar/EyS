@@ -103,8 +103,10 @@ export function buildDemoData() {
   return ests;
 }
 
-export async function seedDemo(client, env = process.env) {
-  if (env.VERCEL_ENV === "production") throw new Error("[demo] Refused: SEED_DEMO is not allowed on the live (production) site.");
+// opts.inApp: the demo inside the app («Administración general → Demo»), on its own demo database
+// (TURSO_DEMO_DATABASE_URL); the live-site lock is for SEED_DEMO, which would wipe the live database.
+export async function seedDemo(client, env = process.env, opts = {}) {
+  if (env.VERCEL_ENV === "production" && !opts.inApp) throw new Error("[demo] Refused: SEED_DEMO is not allowed on the live (production) site.");
   const password = env.DEMO_PASSWORD ?? "";
   if (password.length < 8) throw new Error("[demo] Refused: set DEMO_PASSWORD (8+ characters) in Vercel → Preview environment.");
 

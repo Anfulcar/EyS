@@ -10,6 +10,7 @@ local.db*
 .vercel
 .DS_Store
 e2e.db*
+e2e-demo.db*
 tests/e2e/.fixtures/
 playwright-report/
 test-results/
